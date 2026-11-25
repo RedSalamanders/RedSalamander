@@ -1407,6 +1407,7 @@ BEGIN
     IDS_ARCHIVE_UNPACK_CONFLICT_LABEL                    "Existující soubory:"
     IDS_ARCHIVE_UNPACK_CONFLICT_SKIP                     "Přeskočit existující soubory"
     IDS_ARCHIVE_UNPACK_CONFLICT_REPLACE                  "Nahradit existující soubory"
+    IDS_MSG_ARCHIVE_UNPACK_ARCHIVES_KEPT                 "Rozbalení je neúplné. Vybrané archivy zůstaly zachovány."
     IDS_FMT_ARCHIVE_DELETE_ARCHIVE_FAILED                "Archiv {0} byl extrahován, ale smazání archivu se nezdařilo.\r\n\r\nChyba: 0x{1:08X}"
     IDS_FMT_FILEOPS_CONFIRM_COPY                         "Kopírovat {0}:\r\nod: {1}\r\n\r\nkomu: {2}"
     IDS_FMT_FILEOPS_CONFIRM_MOVE                         "Přesunout {0}:\r\nod: {1}\r\n\r\nkomu: {2}"

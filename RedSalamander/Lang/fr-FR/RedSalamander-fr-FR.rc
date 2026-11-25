@@ -1373,6 +1373,7 @@ BEGIN
     IDS_ARCHIVE_UNPACK_CONFLICT_LABEL                    "Fichiers existants :"
     IDS_ARCHIVE_UNPACK_CONFLICT_SKIP                     "Ignorer les fichiers existants"
     IDS_ARCHIVE_UNPACK_CONFLICT_REPLACE                  "Remplacer les fichiers existants"
+    IDS_MSG_ARCHIVE_UNPACK_ARCHIVES_KEPT                 "L’extraction est incomplète. Les archives sélectionnées ont été conservées."
     IDS_FMT_ARCHIVE_DELETE_ARCHIVE_FAILED                "L’archive {0} a été extraite, mais sa suppression a échoué.\r\n\r\nErreur : 0x{1:08X}"
     IDS_FMT_FILEOPS_CONFIRM_COPY                         "Copier {0} :\r\nde : {1}\r\n\r\nvers : {2}"
     IDS_FMT_FILEOPS_CONFIRM_MOVE                         "Déplacer {0} :\r\nde : {1}\r\n\r\nvers : {2}"

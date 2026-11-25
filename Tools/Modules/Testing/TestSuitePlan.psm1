@@ -170,7 +170,9 @@ function Get-RSTestRunPlan {
         $ownedProductGallery = $Suite -eq 'Commands' -and $CaseFilter -ceq 'cmd_product_documentation_gallery' -and
             [string]::IsNullOrEmpty($SelfTestFlakyProofCase) -and [string]::IsNullOrEmpty($SelfTestOrderProofCase)
         $ownedDirectCommandsCase = $Suite -eq 'Commands' -and
-            ($CaseFilter -ceq 'cmd_directory_cache_invalidation_during_enumeration_is_retained' -or $CaseFilter -ceq 'folderView_drop_integrity_guards') -and
+            ($CaseFilter -ceq 'cmd_directory_cache_invalidation_during_enumeration_is_retained' -or
+             $CaseFilter -ceq 'folderView_drop_integrity_guards' -or
+             $CaseFilter -ceq 'cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation') -and
             [string]::IsNullOrEmpty($SelfTestFlakyProofCase) -and [string]::IsNullOrEmpty($SelfTestOrderProofCase)
         $ownedCommandsNoActivation = $ownedProductGallery -or $ownedDirectCommandsCase
         $allowsActivation = ($selfTest.Name -eq 'Commands' -and -not $ownedCommandsNoActivation) -or

@@ -627,9 +627,10 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
 
     // These exact cases have no foreground-input or main-window isolation
     // contract. Broad Commands runs retain the existing warning and isolation.
-    const bool noActivationDirectCase = (options.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained" ||
-                                         options.caseFilter == L"folderView_drop_integrity_guards") &&
-                                        options.flakyProofCaseName.empty() && options.orderProofCaseName.empty();
+    const bool noActivationDirectCase =
+        (options.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained" ||
+         options.caseFilter == L"folderView_drop_integrity_guards" || options.caseFilter == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation") &&
+        options.flakyProofCaseName.empty() && options.orderProofCaseName.empty();
     if (! options.listCasesOnly && noActivationDirectCase && RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread())
     {
         runRegisteredCases(options);

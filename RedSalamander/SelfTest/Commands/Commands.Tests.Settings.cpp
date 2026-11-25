@@ -14276,6 +14276,26 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(ReadUtf8TextFileForCommandSelfTest(extractRoot / L"alpha.txt") == L"stale",
                   L"Unpack skip-existing policy should preserve existing destination file.");
 
+    noOverwriteUnpackOptions.deleteAfter = true;
+    g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(noOverwriteUnpackOptions);
+    const uint64_t promptCount = HostGetTestPromptRequestCount();
+    {
+        const auto previousPrompt = HostGetTestPromptResultOverride();
+        const auto restorePrompt  = wil::scope_exit([&]() noexcept { HostSetTestPromptResultOverride(previousPrompt); });
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+        state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"), L"Unpack with Skip existing and Delete after should dispatch.");
+    }
+    PumpPendingMessages();
+    const auto cleanupResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    state.Require(HostGetTestPromptRequestCount() == promptCount + 1u, L"The test must have approved the archive cleanup request.");
+    state.Require(cleanupResult.has_value() && cleanupResult->hr == S_FALSE && cleanupResult->skippedConflictCount >= 1u,
+                  L"Unpack should report that skipped entries kept the selected archive.");
+    auto* const fileOperations = g_folderWindow.DebugGetFileOperationState(false);
+    state.Require(! fileOperations || ! fileOperations->HasActiveOperations(), L"Unpack should not queue a cleanup Delete after skipping an entry.");
+    state.Require(SelfTest::PathExists(archivePath), L"Unpack should retain the original archive after a skipped entry.");
+    state.Require(ReadUtf8TextFileForCommandSelfTest(extractRoot / L"alpha.txt") == L"stale",
+                  L"Unpack should retain the conflicting destination while keeping the archive.");
+
     FolderWindow::ArchiveCommandDebugOptions replaceUnpackOptions{};
     replaceUnpackOptions.destinationPath = extractRoot;
     replaceUnpackOptions.overwrite       = true;

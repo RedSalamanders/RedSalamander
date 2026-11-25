@@ -1251,7 +1251,8 @@ public:
     {
         std::filesystem::path archivePath;
         std::filesystem::path destinationPath;
-        bool overwrite = true;
+        bool overwrite   = true;
+        bool deleteAfter = false;
     };
 
     struct ArchiveCommandDebugResult

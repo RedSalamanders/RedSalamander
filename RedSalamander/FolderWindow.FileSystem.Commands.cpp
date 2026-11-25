@@ -12436,9 +12436,10 @@ void FolderWindow::CommandUnpack(Pane pane)
 #ifdef ENABLE_TESTS
     if (debugOptions.has_value())
     {
-        destinationPath  = debugOptions->destinationPath;
-        conflictPolicy   = debugOptions->overwrite ? ArchiveExistingTargetPolicy::Replace : ArchiveExistingTargetPolicy::Skip;
-        selectedUnpacker = BuildStoredZipUnpackerDefinition();
+        destinationPath          = debugOptions->destinationPath;
+        conflictPolicy           = debugOptions->overwrite ? ArchiveExistingTargetPolicy::Replace : ArchiveExistingTargetPolicy::Skip;
+        selectedUnpacker         = BuildStoredZipUnpackerDefinition();
+        deleteArchiveAfterUnpack = debugOptions->deleteAfter;
     }
     else
 #endif
@@ -12525,7 +12526,8 @@ void FolderWindow::CommandUnpack(Pane pane)
     if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, IDS_CMD_UNPACK))
         return;
 
-    result.destinationPath = destinationPath.value();
+    result.destinationPath            = destinationPath.value();
+    bool extractedAllRequestedEntries = true;
     for (const std::filesystem::path& archivePath : selectedPaths)
     {
         ArchiveOperationResult currentResult = ExtractStoredZipArchive(archivePath, destinationPath.value(), conflictPolicy, maskText);
@@ -12563,14 +12565,24 @@ void FolderWindow::CommandUnpack(Pane pane)
         result.bytesProcessed += currentResult.bytesProcessed;
         result.skippedConflictCount += currentResult.skippedConflictCount;
         result.entries.insert(result.entries.end(), currentResult.entries.begin(), currentResult.entries.end());
+        extractedAllRequestedEntries = extractedAllRequestedEntries && currentResult.hr == S_OK && currentResult.skippedConflictCount == 0u;
     }
 
-    result.hr = S_OK;
+    const bool keepArchives = deleteArchiveAfterUnpack && ! extractedAllRequestedEntries;
+    result.hr               = keepArchives ? S_FALSE : S_OK;
 #ifdef ENABLE_TESTS
     recordDebugResult(result);
 #endif
     Debug::Perf::Emit(
         L"archive.unpack_us", selectedUnpacker.extensionNoDot, Debug::Perf::ElapsedUs(startedAt), result.entryCount, result.bytesProcessed, result.hr);
+
+    if (keepArchives)
+    {
+        RefreshFolderViewIfPathMatches(state.folderView, result.destinationPath);
+        ShowArchiveOverlay(
+            *this, pane, IDS_CMD_UNPACK, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_MSG_ARCHIVE_UNPACK_ARCHIVES_KEPT), result.hr);
+        return;
+    }
 
     if (deleteArchiveAfterUnpack)
     {

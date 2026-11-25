@@ -1407,6 +1407,7 @@ BEGIN
     IDS_ARCHIVE_UNPACK_CONFLICT_LABEL                    "既存のファイル:"
     IDS_ARCHIVE_UNPACK_CONFLICT_SKIP                     "既存のファイルをスキップ"
     IDS_ARCHIVE_UNPACK_CONFLICT_REPLACE                  "既存のファイルを置き換える"
+    IDS_MSG_ARCHIVE_UNPACK_ARCHIVES_KEPT                 "展開が完了しなかったため、選択したアーカイブを保持しました。"
     IDS_FMT_ARCHIVE_DELETE_ARCHIVE_FAILED                "アーカイブ {0} は抽出されましたが、アーカイブの削除に失敗しました。\r\n\r\nエラー: 0x{1:08X}"
     IDS_FMT_FILEOPS_CONFIRM_COPY                         "{0}:\r\nを次から: {1}\r\n\r\n にコピーします: {2}"
     IDS_FMT_FILEOPS_CONFIRM_MOVE                         "{0}:\r\n を {1}\r\n\r\n から {2} に移動します"

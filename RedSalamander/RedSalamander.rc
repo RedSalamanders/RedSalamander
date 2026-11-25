@@ -1667,6 +1667,7 @@ BEGIN
     IDS_ARCHIVE_UNPACK_CONFLICT_LABEL                    "Existing files:"
     IDS_ARCHIVE_UNPACK_CONFLICT_SKIP                     "Skip existing files"
     IDS_ARCHIVE_UNPACK_CONFLICT_REPLACE                  "Replace existing files"
+    IDS_MSG_ARCHIVE_UNPACK_ARCHIVES_KEPT                 "Unpack was incomplete. The selected archives were kept."
     IDS_FMT_ARCHIVE_DELETE_ARCHIVE_FAILED                "Archive {0} was extracted, but deleting the archive failed.\r\n\r\nError: 0x{1:08X}"
     IDS_FMT_FILEOPS_CONFIRM_COPY                         "Copy {0}:\r\nfrom: {1}\r\n\r\nto:   {2}"
     IDS_FMT_FILEOPS_CONFIRM_MOVE                         "Move {0}:\r\nfrom: {1}\r\n\r\nto:   {2}"
