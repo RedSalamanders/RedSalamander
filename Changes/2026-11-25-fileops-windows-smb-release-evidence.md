@@ -1,0 +1,1 @@
+- Record the Windows SMB x64 Release Rename qualification, including occupied-name and watcher refusal, exact case and batch cleanup. Refresh the I66 checklist with the merged repeat and Completed checks and the remaining validation.

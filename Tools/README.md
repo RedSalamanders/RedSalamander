@@ -332,9 +332,10 @@ The exact FileOps-only `FileOps_IdentityInterlockWaiting`, `FileOps_ReviewRemedi
 `FileOps_SmallFileCopyCost`, `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb` and
 `FileOps_SmbExactRenameProvider` and `FileOps_SmbCorroboratedRenameProvider` storage and route regressions
 run without activation or a desktop
-lease, alongside `FileOps_RepeatDecisionContracts` and the two reviewed folder-progress
+lease, alongside `FileOps_RepeatDecisionContracts`, `FileOps_AlertOverlayUxAccessibility` and the reviewed folder-progress
 witnesses. The exact `FileOps_DeferredExitRefusesNewWork` case verifies the deferred-close ingress
-gates using owned windows. Broad filters, other suites and proof injections retain normal desktop requirements.
+gates using owned windows. The exact `FileOps_ClearCompletedScope` case uses a private popup.
+Broad filters, other suites and proof injections retain normal desktop requirements.
 `FileOps_IdentityInterlockWaiting` also exercises the shared transfer budget with private sandbox
 files and simulated unsupported destination IDs, plus capacity/exclusive waiting-card captures.
 The source-contract guard retains the host bridge route for these qualified new-file jobs.
@@ -645,7 +646,7 @@ and focused tests.
 | `Modules/Build/RedMonitorDependency.psm1` | Resolves consumer-owned source-contract paths and rejects obsolete viewer ownership. |
 | `Modules/Build/DxUiUpdate.psm1` | Validated DxUi-main selection, atomic product-lock update, and caller-selected product validation. |
 | `Modules/Build/MSBuildInvocation.psm1` | MSBuild launch planning and one diagnostic-header classifier for streaming colors and captured-log counts, including unnumbered warnings/errors. |
-| `Modules/Build/ProcessStreaming.psm1` | Live stdout/stderr subprocess execution. |
+| `Modules/Build/ProcessStreaming.psm1` | Live stdout/stderr subprocess execution with the contained process PID in its timeout diagnostic. |
 | `Modules/Build/SanitizedEnvironment.psm1` | Canonical environment normalization with distinct null-removal and present-empty child overrides, kill-on-close contained process launch (the job also applies `SEM_NOGPFAULTERRORBOX`, so a crash ends the process without a Windows Error Reporting dialog), and local current-parent identity. |
 | `Modules/Build/VcpkgInstallSafety.psm1` | Pinned tool/baseline bootstrap and process-local hosted integration, manifest floor/override validation, safe triplets/merge paths, and the default-MSVC-toolset overlay shared by installer and build. |
 | `Modules/Build/VcpkgToolCheckout.psm1` | Complete vcpkg checkout for the pinned DxUi installer (the consumers' shared copy), run before it in the restore's contained child process. |
