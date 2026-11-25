@@ -1191,6 +1191,7 @@ the same synchronous reporter and counter path as the pointer overload.
   the added storage/route witnesses use owned sandbox data and the same activation blocker;
   the Curl reply-loss case runs the owned loopback FTP endpoint through a joined worker with no UI;
   the repeated non-clipboard Copy and Move cases use owned task controls and sandbox files under the activation blocker;
+  `FileOps_DeferredExitRefusesNewWork` also compares F7 prompt appearance from a displayed Dummy listing with a delayed direct read of the same parent, then verifies the worker's numbered creation and pane refresh;
   the Copy-only Move witness uses an owned provider and synthetic task decisions under the same blocker;
   `R0fGraph_FakeGraphReadWriteCreateRenameRecycle` uses a loopback Graph fixture and an owned pane;
   `Phase16_RemoteOneDrivePersonalInlineRename` uses saved sign-in and a fresh test-only fixture child, with exact file and folder Rename, case-only spelling, occupied-name refusal, and Recycle verification;
