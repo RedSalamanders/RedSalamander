@@ -2038,6 +2038,15 @@ void AlertOverlayWindow::SetOptionValue(uint32_t optionId, uint64_t value) noexc
     }
 }
 
+void AlertOverlayWindow::SetOptionChoices(uint32_t optionId, std::vector<AlertOptionChoice> choices, uint64_t selectedValue) noexcept
+{
+    if (! _visible || ! _hwnd || ! _overlay.ReplaceOptionChoices(optionId, std::move(choices), selectedValue))
+        return;
+    static_cast<void>(EnsureOverlayLayoutForInput());
+    InvalidateRect(_hwnd.get(), nullptr, FALSE);
+    RaiseUiaOptionValueChanged(optionId);
+}
+
 bool AlertOverlayWindow::RaiseUiaFocusChanged() noexcept
 {
     // The HWND keeps the system focus while focus moves between the alert's controls, so no system

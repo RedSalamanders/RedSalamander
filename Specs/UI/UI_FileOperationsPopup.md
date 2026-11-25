@@ -2070,8 +2070,8 @@ decision show no speed and add no stall samples. The same treatment applies whil
 task to finish publishing live output. The rate sampler observes a monotonic task generation, so a
 wait that starts and ends while the popup is hidden still restarts measuring when the sampler resumes.
 The previous graph history stays visible when measuring resumes. Stopping freezes recorded samples
-while actual work counters can change. Paused and stopping tasks do not contribute to the running
-transfer ETA. A deletion names no transfer stall. The stall text is part of the label's accessible text.
+while actual work counters can change. The running rate includes only actively measured tasks.
+Paused and stopping tasks contribute their completed-work counters, keep their own graph history and do not contribute to the running transfer ETA. A deletion names no transfer stall. The stall text is part of the label's accessible text.
 The idle-cadence self-test uses a paced real Copy with post-answer byte reports before requiring a
 running rate and checking that Pause settles the popup without altering the history.
 Copy/Move keeps the speed's right edge fixed on the Throughput heading; the ETA has its independent
@@ -2175,7 +2175,10 @@ selector opens the choices and it has no separate primary action.
 Preferences, explicit start options and the running card use the same bandwidth catalog. Its ordered
 values are Unlimited, 1, 5, 10, 50, 100 and 500 MiB/s, and 1 GiB/s. The choices use localized IEC
 labels and binary byte values. Custom examples use IEC units. The shared parser accepts legacy
-spellings such as `4MB` with the same binary meaning.
+spellings such as `4MB` with the same binary meaning. **Custom…** in explicit start options opens the same
+owned speed-limit editor as the running card. It starts from the currently selected value. Accepting a rate
+updates the option and its accessible value in place. Canceling the editor preserves the selection. The
+operation is admitted only after the user accepts the start options, and the rate applies only to that task.
 
 In Rainbow theme, graph history keeps per-sample colors stable as samples scroll. It MUST NOT blink or
 cycle historic samples by time.
