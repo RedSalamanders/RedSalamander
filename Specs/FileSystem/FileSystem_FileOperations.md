@@ -2129,6 +2129,10 @@ Local provider offers it for a binding provider (D-7.3); providers without bindi
 Pack and Unpack delete-after-success submit ordinary exact `DeletePlan` tasks after the archive
 contract succeeds; on an identity-less location they keep the refusal and never delete by name. With delete-after selected,
 Pack requires an error-free source listing and keeps the selected originals if any entry is omitted from the archive. For a regular-file selection, both Pack writers read from each approved source identity and revision. Their cleanup task rebinds those versions for nonrecursive Delete before removing any selected file.
+When an exact regular-file Pack or Unpack selection contains a possible leftover, the permanent-delete
+confirmation includes the leftover disclosure. Confirming accepts the exact artifact touch receipt.
+Admission compares the receipt before publishing the cleanup task and the worker checks it again after waiting.
+Cancel leaves the sources and output untouched.
 If Unpack skips a requested entry because of a destination conflict or reports
 incomplete extraction, it keeps the selected archive set and reports that in
 the pane. Before asking to delete the selected archives, Unpack captures each
