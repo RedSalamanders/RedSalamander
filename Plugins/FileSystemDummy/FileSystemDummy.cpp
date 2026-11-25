@@ -2532,7 +2532,10 @@ HRESULT ReportProgress(OperationContext& context, uint64_t currentItemTotalBytes
     return CheckCancel(context);
 }
 
-HRESULT ReportItemCompleted(OperationContext& context, unsigned long itemIndex, HRESULT status) noexcept
+HRESULT ReportItemCompleted(OperationContext& context,
+                            unsigned long itemIndex,
+                            HRESULT status,
+                            const FileSystemItemMutationResult* mutationResult = nullptr) noexcept
 {
     if (! context.callback)
     {
@@ -2542,7 +2545,7 @@ HRESULT ReportItemCompleted(OperationContext& context, unsigned long itemIndex, 
     UpdateEffectiveBandwidthLimit(context);
 
     HRESULT hr = context.callback->FileSystemItemCompleted(
-        context.type, itemIndex, context.itemSource, context.itemDestination, status, nullptr, context.options, context.callbackCookie);
+        context.type, itemIndex, context.itemSource, context.itemDestination, status, mutationResult, context.options, context.callbackCookie);
     hr = NormalizeCancellation(hr);
     if (FAILED(hr))
     {
@@ -6418,11 +6421,15 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItem(const wchar_t* sourcePath,
         return hr;
     }
 
-    uint64_t itemBytes             = 0;
-    HRESULT itemHr                 = S_OK;
-    uint64_t discoveredFiles       = 0;
-    uint64_t discoveredDirectories = 0;
-    uint64_t discoveredBytes       = 0;
+    uint64_t itemBytes                                   = 0;
+    HRESULT itemHr                                       = S_OK;
+    uint64_t discoveredFiles                             = 0;
+    uint64_t discoveredDirectories                       = 0;
+    uint64_t discoveredBytes                             = 0;
+    const FileSystemItemMutationResult* reportedMutation = nullptr;
+#ifdef ENABLE_TESTS
+    constexpr FileSystemItemMutationResult committedRelocation{sizeof(FileSystemItemMutationResult), TRUE, TRUE, FALSE};
+#endif
 
     {
         std::scoped_lock lock(_mutex);
@@ -6459,7 +6466,21 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItem(const wchar_t* sourcePath,
                     }
                     else
                     {
+#ifdef ENABLE_TESTS
+                        DummyNode* const sourceParent = sourceNode->parent;
+                        const bool proveRelocation    = _mixedMoveRootsSelfTest.load(std::memory_order_acquire) && ! sourceNode->isDirectory &&
+                                                        sourceParent != nullptr && sourceParent != destinationParent;
+#endif
                         itemHr = MoveNode(*sourceNode, *destinationParent, destinationName, flags, &itemBytes);
+#ifdef ENABLE_TESTS
+                        // Record a committed native Move only when the owned fixture proves the same
+                        // memory node reached the destination and left its original parent.
+                        if (proveRelocation && itemHr == S_OK && FindChild(destinationParent, destinationName) == sourceNode &&
+                            FindChild(sourceParent, sourceLeafText) == nullptr)
+                        {
+                            reportedMutation = &committedRelocation;
+                        }
+#endif
                     }
                 }
             }
@@ -6537,7 +6558,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItem(const wchar_t* sourcePath,
         return hr;
     }
 
-    hr = ReportItemCompleted(context, 0, itemHr);
+    hr = ReportItemCompleted(context, 0, itemHr, reportedMutation);
     if (FAILED(hr))
     {
         return hr;

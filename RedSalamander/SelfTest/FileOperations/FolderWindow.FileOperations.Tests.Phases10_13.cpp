@@ -338,11 +338,27 @@ case SelfTestState::Step::FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationPro
         const auto mixedFinished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
             return state.completedTasks.contains(admittedMixed) && ! state.fileOps->HasActiveOperations();
         }, {.timeout = SelfTest::Scale(std::chrono::seconds(10)), .operationName = L"mixed Move"});
-        if (! mixedFinished.conditionMet || state.completedTasks.at(admittedMixed).hr != S_FALSE || ! missing(nativeSource) ||
-            ! matchesBytes(copySource, copiedPayload) || ! matchesBytes(movedFile, nativePayload) || ! matchesBytes(copiedFile, copiedPayload) ||
-            HostGetTestPromptRequestCount() != mixedPrompts + 2u)
+        if (! mixedFinished.conditionMet)
         {
-            Fail(L"Mixed Move must move the qualified source and keep the Copy-only original with no second question.");
+            Fail(L"Mixed Move did not finish its only task.");
+            return true;
+        }
+        const HRESULT mixedStatus      = state.completedTasks.at(admittedMixed).hr;
+        const bool nativeSourceRemoved = missing(nativeSource);
+        const bool copySourceUnchanged = matchesBytes(copySource, copiedPayload);
+        const bool movedBytesMatch     = matchesBytes(movedFile, nativePayload);
+        const bool copiedBytesMatch    = matchesBytes(copiedFile, copiedPayload);
+        const uint64_t questions       = HostGetTestPromptRequestCount() - mixedPrompts;
+        if (mixedStatus != S_FALSE || ! nativeSourceRemoved || ! copySourceUnchanged || ! movedBytesMatch || ! copiedBytesMatch || questions != 2u)
+        {
+            Fail(std::format(L"Mixed Move expected both exact outputs and only the Copy-only original (hr=0x{:08X}, moved source removed={}, "
+                             L"copy source unchanged={}, moved bytes match={}, copied bytes match={}, questions across Cancel and Continue={}).",
+                             static_cast<unsigned long>(mixedStatus),
+                             nativeSourceRemoved,
+                             copySourceUnchanged,
+                             movedBytesMatch,
+                             copiedBytesMatch,
+                             questions));
             return true;
         }
         Debug::Perf::Emit(L"FileOps.SelfTest.MixedMoveConfirmation", L"cancel-and-continue", Debug::Perf::ElapsedUs(mixedStarted), 2u, 2u, S_OK);
