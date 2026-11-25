@@ -6662,6 +6662,11 @@ public:
     {
     }
 
+    ProbedRenameSource(const ProbedRenameSource&)            = delete;
+    ProbedRenameSource(ProbedRenameSource&&)                 = delete;
+    ProbedRenameSource& operator=(const ProbedRenameSource&) = delete;
+    ProbedRenameSource& operator=(ProbedRenameSource&&)      = delete;
+
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** value) noexcept override
     {
         if (! value)
