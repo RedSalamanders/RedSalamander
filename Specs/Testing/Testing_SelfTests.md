@@ -210,6 +210,8 @@ FolderView drop handler in the marked sandbox. The UI thread's no-activation gua
 stays active through task and pane cleanup. Physical drag and input acceptance
 remain in the interactive suite.
 
+The non-activating File Operations case `FileOps_DeferredExitRefusesNewWork` also checks Create Folder against a delayed Dummy provider. It waits on the exact second Create Folder task before mutation, navigates the pane to a sibling, then verifies that completion preserves the new pane path and creates the directory only under the original parent. `FileOps.SelfTest.CreateFolderAfterNavigationUs` records release-to-completion time and name-prompt latency.
+
 The exact Commands case `cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation` injects publication failure for the stored ZIP and 7z writers. Each attempt preserves the previous output bytes and retires only its staged sibling by handle. It also holds each Pack worker just before commit, verifies that the command has returned to the pane, and cancels the task while the previous archive remains readable. The worker reports exact rollback and a later attempt publishes a complete archive. The exact regular-file cleanup control also verifies that the published archive denies a competing write open while source revalidation is held.
 The case has the same
 admission rule. It dispatches real archive commands on sandbox fixtures through synthetic

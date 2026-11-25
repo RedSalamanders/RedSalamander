@@ -1,0 +1,1 @@
+- Verify the Create Folder worker honors its original parent after the pane navigates elsewhere during preparation.

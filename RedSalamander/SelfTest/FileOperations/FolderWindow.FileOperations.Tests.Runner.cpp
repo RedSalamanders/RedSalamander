@@ -12473,20 +12473,26 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
                 PostMessageW(prompt, WM_CLOSE, 0, 0);
         }
     };
-    PromptCheck prompt{};
-    if (! SetPropW(host.get(), property, &prompt))
-        return reject(L"could not bind the private prompt timer");
-    const UINT_PTR timer   = SetTimer(host.get(), 1u, 30u, &PromptCheck::Tick);
-    const auto retireTimer = wil::scope_exit([&]() noexcept
+    const auto acceptPrompt = [&](PromptCheck& prompt) noexcept
     {
-        if (timer)
-            KillTimer(host.get(), timer);
-        RemovePropW(host.get(), property);
-    });
-    if (! timer)
-        return reject(L"could not start the private prompt timer");
-    prompt.started = std::chrono::steady_clock::now();
-    folder.CommandCreateDirectory(pane);
+        if (! SetPropW(host.get(), property, &prompt))
+            return false;
+        const UINT_PTR timer   = SetTimer(host.get(), 1u, 30u, &PromptCheck::Tick);
+        const auto retireTimer = wil::scope_exit([&]() noexcept
+        {
+            if (timer)
+                KillTimer(host.get(), timer);
+            RemovePropW(host.get(), property);
+        });
+        if (! timer)
+            return false;
+        prompt.started = std::chrono::steady_clock::now();
+        folder.CommandCreateDirectory(pane);
+        return prompt.accepted;
+    };
+    PromptCheck prompt{};
+    if (! acceptPrompt(prompt))
+        return reject(L"could not accept the private name prompt");
 
     const bool responsive = prompt.accepted && prompt.snapshot.text == displacedName && prompt.elapsedUs < providerUs * 3u / 4u;
     Debug::Perf::Emit(L"FileOps.SelfTest.CreateFolderSlowProviderPromptUs",
@@ -12505,6 +12511,59 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
     if (! refreshed.conditionMet || ! PathExistsFsIo(io, occupied) || ! PathExistsFsIo(io, expected))
         return reject(L"the worker did not create and refresh the numbered sibling while preserving the occupied folder");
     AppendLog(std::format(L"Slow provider Create Folder displayed the suggested sibling in {} us with a {} us direct listing.", prompt.elapsedUs, providerUs));
+
+    const auto nextName  = FileOperations::BuildCreateDirectorySuggestedName(defaultName, 2u);
+    const auto nextPath  = parent / nextName;
+    auto& navigationGate = FolderWindowFileOperationsStateInternal::g_fileOpsPreparingBeforePublishPausePoint;
+    if (! navigationGate.ArmForSource(parent.native()))
+        return reject(L"could not hold the second creation during pane navigation");
+    const auto releaseNavigation = wil::scope_exit([&]() noexcept { navigationGate.Release(); });
+
+    PromptCheck secondPrompt{};
+    if (! acceptPrompt(secondPrompt) || secondPrompt.snapshot.text != nextName)
+        return reject(L"the refreshed listing did not offer the next numbered sibling");
+    const auto held       = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return navigationGate.HasEntered();
+    }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"Create Folder preparation before pane navigation"});
+    const uint64_t taskId = navigationGate.targetTask.load(std::memory_order_acquire);
+    if (! held.conditionMet || ! navigationGate.HasEnteredForTask(taskId) || PathExistsFsIo(io, nextPath))
+        return reject(L"the exact creation was not held before mutation");
+
+    std::optional<HRESULT> completion;
+    const uint64_t subscription = folder.AddFileOperationCompletedCallback([&](const FolderWindow::FileOperationCompletedEvent& event) noexcept
+    {
+        if (event.taskId == taskId && event.operation == FILESYSTEM_CREATE_DIRECTORY)
+            completion = event.hr;
+    });
+    const auto unsubscribe      = wil::scope_exit([&]() noexcept { folder.RemoveFileOperationCompletedCallback(subscription); });
+    folder.SetFolderPath(pane, MakePluginDisplayPath(metadata->shortId, unrelated.native()));
+    const auto navigated = RedSalamander::TestSupport::PumpMessagesUntil(
+        [&]() noexcept
+    {
+        const auto shown = folder.GetCurrentPluginPath(pane);
+        return shown.has_value() && shown.value() == unrelated;
+    },
+        {.timeout = SelfTest::Scale(std::chrono::seconds(10)), .operationName = L"Create Folder pane navigated while held"});
+    if (! navigated.conditionMet || completion.has_value() || navigationGate.HasTimedOut())
+        return reject(L"the pane did not reach the unrelated directory while the task remained held");
+
+    const auto releasedAt = std::chrono::steady_clock::now();
+    navigationGate.Release();
+    const auto finished            = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return completion.has_value();
+    }, {.timeout = SelfTest::Scale(std::chrono::seconds(30)), .operationName = L"Create Folder completed after pane navigation"});
+    const auto shown               = folder.GetCurrentPluginPath(pane);
+    const bool remainedInUnrelated = finished.conditionMet && completion == S_OK && shown.has_value() && shown.value() == unrelated &&
+                                     ! folder.DebugHasItemDisplayName(pane, nextName) && PathExistsFsIo(io, nextPath) &&
+                                     ! PathExistsFsIo(io, unrelated / nextName);
+    Debug::Perf::Emit(L"FileOps.SelfTest.CreateFolderAfterNavigationUs",
+                      L"held Dummy worker and pane navigation",
+                      Debug::Perf::ElapsedUs(releasedAt),
+                      secondPrompt.elapsedUs,
+                      1u,
+                      remainedInUnrelated ? S_OK : E_FAIL);
+    if (! remainedInUnrelated)
+        return reject(L"completion did not preserve the unrelated pane and mutate only the admitted parent");
     return true;
 }
 
