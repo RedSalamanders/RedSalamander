@@ -349,11 +349,28 @@ case SelfTestState::Step::FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationPro
         const auto driftFinished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
             return state.completedTasks.contains(driftedTaskId) && ! state.fileOps->HasActiveOperations();
         }, {.timeout = SelfTest::Scale(std::chrono::seconds(10)), .operationName = L"mixed Move source endpoint refusal"});
-        if (! driftFinished.conditionMet || state.completedTasks.at(driftedTaskId).hr != HRESULT_FROM_WIN32(ERROR_FILE_INVALID) ||
-            HostGetTestPromptRequestCount() != beforeDriftPrompts + 1u || ! matchesBytes(nativeSource, nativePayload) ||
-            ! matchesBytes(copySource, copiedPayload) || ! missing(movedFile) || ! missing(copiedFile) || ! setWriterProof(false, true))
+        if (! driftFinished.conditionMet)
         {
-            Fail(L"Mixed Move must refuse changed endpoint authority before any selected item can publish or move.");
+            Fail(L"Mixed Move did not finish its endpoint refusal task.");
+            return true;
+        }
+        const HRESULT driftStatus   = state.completedTasks.at(driftedTaskId).hr;
+        const uint64_t driftPrompts = HostGetTestPromptRequestCount() - beforeDriftPrompts;
+        const bool originalsIntact  = matchesBytes(nativeSource, nativePayload) && matchesBytes(copySource, copiedPayload);
+        const bool destinationEmpty = missing(movedFile) && missing(copiedFile);
+        if (driftStatus != HRESULT_FROM_WIN32(ERROR_FILE_INVALID) || driftPrompts != 1u || ! originalsIntact || ! destinationEmpty)
+        {
+            Fail(std::format(
+                L"Mixed Move must refuse a changed endpoint before publication (hr=0x{:08X}, originals intact={}, destination empty={}, questions={}).",
+                static_cast<unsigned long>(driftStatus),
+                originalsIntact,
+                destinationEmpty,
+                driftPrompts));
+            return true;
+        }
+        if (! setWriterProof(false, true))
+        {
+            Fail(L"Mixed Move could not restore its original provider routes.");
             return true;
         }
         AppendLog(L"Mixed Move rejected a changed source root before publishing either item.");
