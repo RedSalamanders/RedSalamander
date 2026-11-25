@@ -20253,20 +20253,70 @@ namespace
                   L"Record the actual pane Cut owner.");
     if (! state.failure.empty())
         return false;
-    const DWORD cutSequence = generation.sequence;
-    std::vector<FolderWindow::FileOperationState::Task*> previous;
-    fileOps->CollectTasks(previous);
-    std::unordered_set<uint64_t> existingIds;
-    for (const auto* task : previous)
-        if (task)
-            existingIds.insert(task->GetId());
-    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Right, g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Right), SelfTest::Scale(1000ms)) &&
-                      generation.MatchesCurrent(),
-                  L"Paste must use the same owned Cut generation in the exact destination pane.");
-    if (! state.failure.empty())
+    const auto collectExistingIds = [&]()
+    {
+        std::vector<FolderWindow::FileOperationState::Task*> tasks;
+        fileOps->CollectTasks(tasks);
+        std::unordered_set<uint64_t> ids;
+        for (const auto* task : tasks)
+            if (task)
+                ids.insert(task->GetId());
+        return ids;
+    };
+    const HWND sourceView      = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    const HWND destinationView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Right);
+    const auto dispatchPaste   = [&](const std::unordered_set<uint64_t>& existingIds)
+    {
+        if (! state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Right, destinationView, SelfTest::Scale(1000ms)) && generation.MatchesCurrent(),
+                            L"Paste must use the same owned Cut generation in the exact destination pane."))
+            return std::optional<uint64_t>{};
+
+        SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
+        return ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingIds, SelfTest::Scale(5000ms));
+    };
+
+    {
+        auto& preparing = FolderWindowFileOperationsStateInternal::g_fileOpsPreparingBeforePublishPausePoint;
+        if (! state.Require(preparing.ArmForSource(sourcePath.native()), L"Hold only the freshly admitted Cut in Preparing."))
+            return false;
+        const auto releasePreparing = wil::scope_exit([&]() noexcept { preparing.Release(); });
+        const auto staleMoveId      = dispatchPaste(collectExistingIds());
+        if (! state.Require(staleMoveId.has_value() && waitFor([&]() noexcept { return preparing.HasEnteredForTask(staleMoveId.value()); }),
+                            L"The first real Paste must pause before it is allowed to consume the cut list."))
+            return false;
+        if (! state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, sourceView, SelfTest::Scale(1000ms)) && generation.MatchesCurrent(),
+                            L"The new Copy must replace only the fixture's own cut list."))
+            return false;
+
+        const DWORD firstCut = generation.sequence;
+        SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_COPY, 0), 0);
+        if (! state.Require(GetClipboardSequenceNumber() != firstCut && generation.Record(sourceView, true),
+                            L"Publish a newer clipboard generation through the actual pane Copy command."))
+            return false;
+        preparing.Release();
+
+        const bool staleRefused = waitFor([&]() noexcept
+        {
+            std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
+            fileOps->CollectCompletedTasks(summaries);
+            const auto found = std::ranges::find(summaries, staleMoveId.value(), &FolderWindow::FileOperationState::CompletedTaskSummary::taskId);
+            return found != summaries.end() && found->resultHr == HRESULT_FROM_WIN32(ERROR_RETRY) && found->clipboardMoveAdmission &&
+                   ! found->clipboardMoveConsumed && ! found->startedMutation;
+        });
+        if (! state.Require(staleRefused && generation.MatchesCurrent() && IsClipboardFormatAvailable(CF_HDROP) &&
+                                ReadUtf8TextFileForCommandSelfTest(sourcePath) == L"retained source bytes" &&
+                                ReadUtf8TextFileForCommandSelfTest(destinationPath) == L"existing destination bytes",
+                            L"A new clipboard generation must veto the stale Move and preserve both files and the newer clipboard."))
+            return false;
+    }
+
+    const DWORD copySequence = generation.sequence;
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_CUT, 0), 0);
+    if (! state.Require(GetClipboardSequenceNumber() != copySequence && generation.Record(sourceView, true),
+                        L"Capture a fresh Cut generation for the normal retained-source journey."))
         return false;
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
-    const auto moveId = ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingIds, SelfTest::Scale(5000ms));
+    const DWORD cutSequence = generation.sequence;
+    const auto moveId       = dispatchPaste(collectExistingIds());
     if (! state.Require(moveId.has_value(), L"Actual pane Paste must admit one clipboard Move."))
         return false;
     FileOperationsPopupInternal::TaskSnapshot move{};

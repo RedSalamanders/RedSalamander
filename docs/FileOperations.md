@@ -350,7 +350,7 @@ Folder view supports a basic Explorer-style clipboard for **Windows paths**:
 Limitations:
 
 - Clipboard Copy and Cut are available for Windows paths in the built-in local filesystem. On other providers these shortcuts leave the current clipboard intact. Paste Shortcut also requires a local destination.
-- Clipboard paste queues a File Operations task. Destination conflicts use the same inline questions as F5 and F6.
+- Clipboard paste queues a File Operations task. Destination conflicts use the same inline questions as F5 and F6. If the clipboard changes before a cut selection's Move can start, the files stay in place and RedSalamander keeps the newer clipboard contents.
 
 ## Creating files from ShellNew templates
 

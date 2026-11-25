@@ -107,6 +107,7 @@ struct ForceWilTemplateInstantiations
 #include "FolderViewEmptyStateLayout.h"
 #include "FolderWindow.FileOperations.IssuesPane.h"
 #include "FolderWindow.FileOperations.Popup.h"
+#include "FolderWindow.FileOperations.State.Private.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.FileSystem.Private.h"
 #include "FolderWindow.h"

@@ -244,8 +244,39 @@ void ShowClipboardFormattedOverlay(FolderView& view, UINT titleStringId, UINT me
     return true;
 }
 
-[[nodiscard]] std::vector<std::filesystem::path> ReadFileDropClipboard(HWND ownerWindow) noexcept
+[[nodiscard]] std::optional<DWORD> ReadOpenClipboardDropEffect() noexcept
 {
+    const UINT format = PreferredDropEffectFormat();
+    if (format == 0u)
+    {
+        return std::nullopt;
+    }
+
+    HANDLE handle = GetClipboardData(format);
+    if (! handle)
+    {
+        return std::nullopt;
+    }
+
+    auto* effect = static_cast<DWORD*>(GlobalLock(handle));
+    if (! effect)
+    {
+        return std::nullopt;
+    }
+    const auto unlock = wil::scope_exit([&] { GlobalUnlock(handle); });
+    if (GlobalSize(handle) < sizeof(DWORD))
+    {
+        return std::nullopt;
+    }
+
+    const DWORD result = *effect;
+    return result;
+}
+
+[[nodiscard]] std::vector<std::filesystem::path> ReadFileDropClipboard(HWND ownerWindow, DWORD* moveSequence = nullptr) noexcept
+{
+    if (moveSequence)
+        *moveSequence = 0u;
     constexpr UINT kMaxClipboardDropPaths    = 65'536u;
     constexpr UINT kMaxClipboardPathChars    = 32'768u;
     constexpr size_t kMaxClipboardTotalChars = 16u * 1024u * 1024u;
@@ -280,49 +311,22 @@ void ShowClipboardFormattedOverlay(FolderView& view, UINT titleStringId, UINT me
         }
 
         std::wstring path(static_cast<size_t>(length) + 1u, L'\0');
-        if (DragQueryFileW(static_cast<HDROP>(handle), index, path.data(), length + 1u) == length)
-        {
-            path.resize(length);
-            result.emplace_back(path);
-            totalPathChars += length;
-        }
+        if (DragQueryFileW(static_cast<HDROP>(handle), index, path.data(), length + 1u) != length)
+            return {};
+
+        path.resize(length);
+        result.emplace_back(std::move(path));
+        totalPathChars += length;
     }
 
-    return result;
-}
-
-[[nodiscard]] std::optional<DWORD> ReadPreferredDropEffectClipboard(HWND ownerWindow) noexcept
-{
-    if (! OpenClipboardWithRetriesForFolderView(ownerWindow))
+    if (moveSequence && ! result.empty() && ReadOpenClipboardDropEffect() == static_cast<DWORD>(DROPEFFECT_MOVE))
     {
-        return std::nullopt;
+        // Delayed formats can advance the sequence when rendered. Sample after both
+        // reads while the same clipboard open still protects the complete list.
+        *moveSequence = GetClipboardSequenceNumber();
+        if (*moveSequence == 0u)
+            return {};
     }
-    const auto closeClipboard = wil::scope_exit([] { CloseClipboard(); });
-
-    const UINT format = PreferredDropEffectFormat();
-    if (format == 0u)
-    {
-        return std::nullopt;
-    }
-
-    HANDLE handle = GetClipboardData(format);
-    if (! handle)
-    {
-        return std::nullopt;
-    }
-
-    auto* effect = static_cast<DWORD*>(GlobalLock(handle));
-    if (! effect)
-    {
-        return std::nullopt;
-    }
-    const auto unlock = wil::scope_exit([&] { GlobalUnlock(handle); });
-    if (GlobalSize(handle) < sizeof(DWORD))
-    {
-        return std::nullopt;
-    }
-
-    const DWORD result = *effect;
     return result;
 }
 
@@ -862,7 +866,18 @@ bool FolderView::CanPasteItemsFromClipboard() const noexcept
 
 void FolderView::PasteItemsFromClipboard()
 {
-    std::vector<std::filesystem::path> sources = ReadFileDropClipboard(_hWnd.get());
+    const auto captureStarted                  = std::chrono::steady_clock::now();
+    DWORD clipboardSequenceNumber              = 0u;
+    std::vector<std::filesystem::path> sources = ReadFileDropClipboard(_hWnd.get(), &clipboardSequenceNumber);
+    const bool moveRequested                   = clipboardSequenceNumber != 0u;
+    Debug::Perf::Emit(L"clipboard.file_drop_capture_us",
+                      sources.empty() ? L"empty"
+                      : moveRequested ? L"move"
+                                      : L"copy",
+                      Debug::Perf::ElapsedUs(captureStarted),
+                      sources.size(),
+                      0u,
+                      S_OK);
     if (sources.empty())
     {
         return;
@@ -877,15 +892,11 @@ void FolderView::PasteItemsFromClipboard()
         return;
     }
 
-    const DWORD preferredDropEffect     = ReadPreferredDropEffectClipboard(_hWnd.get()).value_or(DROPEFFECT_COPY);
-    const bool moveRequested            = preferredDropEffect == DROPEFFECT_MOVE;
     const FileSystemOperation operation = moveRequested ? FILESYSTEM_MOVE : FILESYSTEM_COPY;
-    const DWORD clipboardSequenceNumber = moveRequested ? GetClipboardSequenceNumber() : 0u;
 
 #ifdef ENABLE_TESTS
-    SelfTest::AppendSelfTestTrace(std::format(L"FolderView::PasteItemsFromClipboard sources={} preferredDropEffect=0x{:X} operation={} callback={}",
+    SelfTest::AppendSelfTestTrace(std::format(L"FolderView::PasteItemsFromClipboard sources={} operation={} callback={}",
                                               sources.size(),
-                                              static_cast<unsigned>(preferredDropEffect),
                                               operation == FILESYSTEM_MOVE ? L"move" : L"copy",
                                               _fileOperationRequestCallback ? L"yes" : L"no"));
 #endif
