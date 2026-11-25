@@ -12383,6 +12383,126 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
 // exit without asking again, every admission route (main panes, FolderView prompts, Batch Rename,
 // Change Case, Find Files and a real Compare Directories window) is refused before any prompt,
 // clipboard use or breadcrumb with a pane alert, and a task queued behind the cancelled work never starts.
+[[nodiscard]] bool RunSlowProviderCreateFolderPromptCheck(const wil::com_ptr<IFileSystem>& fileSystem) noexcept
+{
+    const auto reject = [](std::wstring_view reason) noexcept
+    {
+        AppendLog(std::format(L"Slow provider Create Folder: {}", reason));
+        return false;
+    };
+    if (! fileSystem)
+        return reject(L"owned Dummy provider unavailable");
+    const auto info                = fileSystem.try_query<IInformations>();
+    const auto directories         = fileSystem.try_query<IFileSystemDirectoryOperations>();
+    const auto io                  = fileSystem.try_query<IFileSystemIO>();
+    const PluginMetaData* metadata = nullptr;
+    const char* config             = nullptr;
+    if (! info || ! directories || ! io || info->GetMetaData(&metadata) != S_OK || ! metadata || ! metadata->shortId || info->GetConfiguration(&config) != S_OK)
+        return reject(L"latency fixture provider contracts unavailable");
+
+    const std::string originalConfig = config ? config : "{}";
+    const auto restore               = wil::scope_exit([&]() noexcept { static_cast<void>(info->SetConfiguration(originalConfig.c_str())); });
+    constexpr char fast[]            = R"json({"maxChildrenPerDirectory":1,"maxDepth":2,"seed":42,"latencyMs":0})json";
+    constexpr char slow[]            = R"json({"maxChildrenPerDirectory":1,"maxDepth":2,"seed":42,"latencyMs":1000})json";
+    if (info->SetConfiguration(fast) != S_OK)
+        return reject(L"could not install the profiling fixture configuration");
+
+    const std::wstring guid        = NewGuidString();
+    const std::wstring defaultName = LoadStringResource(nullptr, IDS_NEW_FOLDER_DEFAULT_NAME);
+    if (guid.empty() || defaultName.empty())
+        return reject(L"test name unavailable");
+    const std::filesystem::path parent(std::format(L"/slow-f7-{}", guid));
+    const std::wstring displacedName = FileOperations::BuildCreateDirectorySuggestedName(defaultName, 1u);
+    if (directories->CreateDirectory(parent.c_str()) != S_OK)
+        return reject(L"could not create the owned Dummy parent");
+    const auto cleanup =
+        wil::scope_exit([&]() noexcept { static_cast<void>(fileSystem->DeleteItem(parent.c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr)); });
+    const auto occupied  = parent / defaultName;
+    const auto expected  = parent / displacedName;
+    const auto unrelated = parent / L"existing-neighbor";
+    if (directories->CreateDirectory(occupied.c_str()) != S_OK || directories->CreateDirectory(unrelated.c_str()) != S_OK || PathExistsFsIo(io, expected))
+        return reject(L"could not establish the numbered-name collision");
+
+    Common::Settings::Settings settings{};
+    wil::unique_hwnd host(
+        CreateWindowExW(0, L"STATIC", L"Owned Create Folder check", WS_POPUP, 0, 0, 640, 480, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));
+    FolderWindow folder;
+    folder.SetSettings(&settings);
+    constexpr auto pane = FolderWindow::Pane::Left;
+    if (! host || ! folder.Create(host.get(), 0, 0, 640, 480) ||
+        FAILED(folder.SetFileSystemInstanceForPane(pane, fileSystem, std::wstring(kPluginIdDummy), metadata->shortId, L"")))
+        return reject(L"could not create the private pane");
+    folder.SetFolderPath(pane, MakePluginDisplayPath(metadata->shortId, parent.native()));
+    const auto loaded = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return folder.DebugHasItemDisplayName(pane, defaultName);
+    }, {.timeout = SelfTest::Scale(std::chrono::seconds(10)), .operationName = L"slow F7 displayed listing"});
+    if (! loaded.conditionMet || info->SetConfiguration(slow) != S_OK)
+        return reject(L"pane did not display the occupied name before activating provider latency");
+
+    wil::com_ptr<IFilesInformation> listing;
+    const auto directStarted  = std::chrono::steady_clock::now();
+    const HRESULT read        = fileSystem->ReadDirectoryInfo(parent.c_str(), listing.put());
+    const uint64_t providerUs = Debug::Perf::ElapsedUs(directStarted);
+    if (read != S_OK || ! listing || providerUs < 1'800'000u)
+        return reject(std::format(
+            L"direct listing did not exercise the configured two-child delay (elapsed={} us, hr=0x{:08X})", providerUs, static_cast<unsigned long>(read)));
+    listing.reset();
+
+    constexpr wchar_t property[] = L"RedSalamander.SlowCreateFolderPrompt";
+    struct PromptCheck final
+    {
+        std::chrono::steady_clock::time_point started;
+        FolderViewCreateDirectoryPromptDebugSnapshot snapshot;
+        uint64_t elapsedUs = 0u;
+        bool accepted      = false;
+        static void CALLBACK Tick(HWND window, UINT, UINT_PTR timer, DWORD) noexcept
+        {
+            auto* check       = static_cast<PromptCheck*>(GetPropW(window, L"RedSalamander.SlowCreateFolderPrompt"));
+            const HWND prompt = GetFolderViewCreateDirectoryPromptHandle();
+            if (! check || ! prompt)
+                return;
+            KillTimer(window, timer);
+            check->elapsedUs = Debug::Perf::ElapsedUs(check->started);
+            check->accepted  = DebugGetFolderViewCreateDirectoryPromptSnapshot(check->snapshot) && DebugConfirmFolderViewCreateDirectoryPrompt();
+            if (! check->accepted)
+                PostMessageW(prompt, WM_CLOSE, 0, 0);
+        }
+    };
+    PromptCheck prompt{};
+    if (! SetPropW(host.get(), property, &prompt))
+        return reject(L"could not bind the private prompt timer");
+    const UINT_PTR timer   = SetTimer(host.get(), 1u, 30u, &PromptCheck::Tick);
+    const auto retireTimer = wil::scope_exit([&]() noexcept
+    {
+        if (timer)
+            KillTimer(host.get(), timer);
+        RemovePropW(host.get(), property);
+    });
+    if (! timer)
+        return reject(L"could not start the private prompt timer");
+    prompt.started = std::chrono::steady_clock::now();
+    folder.CommandCreateDirectory(pane);
+
+    const bool responsive = prompt.accepted && prompt.snapshot.text == displacedName && prompt.elapsedUs < providerUs * 3u / 4u;
+    Debug::Perf::Emit(L"FileOps.SelfTest.CreateFolderSlowProviderPromptUs",
+                      L"private Dummy popup and direct listing",
+                      prompt.elapsedUs,
+                      providerUs,
+                      0u,
+                      responsive ? S_OK : E_FAIL);
+    if (! responsive)
+        return reject(
+            std::format(L"prompt did not offer the displayed suggestion promptly (prompt={} us, direct listing={} us)", prompt.elapsedUs, providerUs));
+
+    const auto refreshed = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return folder.DebugHasItemDisplayName(pane, displacedName);
+    }, {.timeout = SelfTest::Scale(std::chrono::seconds(30)), .operationName = L"slow F7 creation and refresh"});
+    if (! refreshed.conditionMet || ! PathExistsFsIo(io, occupied) || ! PathExistsFsIo(io, expected))
+        return reject(L"the worker did not create and refresh the numbered sibling while preserving the occupied folder");
+    AppendLog(std::format(L"Slow provider Create Folder displayed the suggested sibling in {} us with a {} us direct listing.", prompt.elapsedUs, providerUs));
+    return true;
+}
+
 [[nodiscard]] bool RunFileOpsDeferredExitRefusesNewWorkChecks(SelfTestState& state) noexcept
 {
     constexpr FolderWindow::Pane kSource      = FolderWindow::Pane::Left;
@@ -12401,6 +12521,9 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
     RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
     if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
         return reject(L"no-activation guard unavailable");
+
+    if (! RunSlowProviderCreateFolderPromptCheck(state.fsDummy))
+        return false;
 
     const auto root            = state.tempRoot / L"deferred-exit-refusal";
     const auto breadcrumbRoot  = root / L"state";
