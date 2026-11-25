@@ -16654,8 +16654,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 Fail(L"Review remediation requires the no-activation guard.");
                 return true;
             }
-            // Owned filesystem/API and private task controls only: no foreground input,
-            // clipboard journey, public task admission or documentation capture.
+            // Owned filesystem/API and task controls under the activation guard.
+            // This case requires no foreground input or documentation capture.
             if (! RunFileOperationLocalAncestryProbeSelfTest(state))
             {
                 Fail(L"Local directory ancestry, bound cross-view or same-path folder contracts failed.");
@@ -16690,6 +16690,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             if (! RunFileOpsRecycleIngressChecks(state, recycleIngressFailure))
             {
                 Fail(std::format(L"Local Recycle ingress: {}", recycleIngressFailure));
+                return true;
+            }
+            std::wstring leftoverConsentFailure;
+            if (! RunFileOpsLeftoverPermanentConsentChecks(state, leftoverConsentFailure))
+            {
+                Fail(std::format(L"Exact Leftover Cleanup: {}", leftoverConsentFailure));
                 return true;
             }
             bool injectedFailureReached = false;

@@ -2099,7 +2099,8 @@ struct FolderWindow::FileOperationState
                                        std::optional<FileOperationArtifacts::TouchGuardReceipt> receipt = std::nullopt) noexcept;
         void StoreInitialArtifactTouchReceipt(std::optional<FileOperationArtifacts::TouchGuardReceipt> receipt) noexcept;
         [[nodiscard]] std::shared_ptr<const FileOperations::FileOperationPlanGroup> LoadPlans() const noexcept;
-        void StorePlans(std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans) noexcept;
+        void StorePlans(std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans,
+                        std::shared_ptr<const FileOperationArtifacts::TouchGuardReceipt> confirmedTouchReceipt = {}) noexcept;
         HRESULT PrepareBatchRenameAdmission() noexcept;
         HRESULT PrepareBatchRenameArtifactGuard() noexcept;
         HRESULT PrepareArtifactTouchGuard(const FileOperations::FileOperationPlanGroup& plans,
@@ -2249,6 +2250,7 @@ struct FolderWindow::FileOperationState
         FileOperations::TaskSelectionSummary _selection;
         // C1: the permanent-delete confirmation this task still owes on its card, in the modal's words.
         bool _permanentDeleteConfirmationPending = false;
+        std::unique_ptr<FileOperationArtifacts::TouchGuardRequest> _leftoverDeleteTouchRequest;
         std::wstring _permanentDeleteConsentDetail;
         std::wstring _permanentDeleteConsentFrom;
         int _permanentDeleteTestOverride = 0;
