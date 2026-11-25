@@ -12739,29 +12739,47 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
     }
     if (_leftoverDeleteTouchRequest)
     {
-        // This one-plan, complete request and the prepared scopes follow the selected root order.
-        // A changed or missing root cannot inherit the earlier listing's artifact disclosure.
-        const auto& items             = _leftoverDeleteTouchRequest->items;
-        const bool matchesPinnedRoots = items.size() == scopes.size() && std::ranges::equal(items,
-                                                                                            scopes,
-                                                                                            [](const auto& item, const auto& scope) noexcept
+        // The interlock builder sorts the one endpoint's scopes by path. The touch receipt keeps
+        // selection order so later provider revalidation can compare its original positions.
+        const auto& items          = _leftoverDeleteTouchRequest->items;
+        std::wstring_view mismatch = items.size() == scopes.size() ? L"" : L"scope-count";
+        if (mismatch.empty())
         {
-            if (! scope.exactDeleteAuthority || ! scope.root || scope.providerPath != item.path.native() || scope.endpoint.pluginId != item.endpoint.pluginId ||
-                scope.endpoint.instanceId != item.endpoint.instanceId || scope.endpoint.profileId != item.endpoint.profileId ||
-                scope.endpoint.rootId != item.endpoint.rootId)
-                return false;
-            const auto& authority = scope.root->retained.authority;
-            return authority.kind == item.identity.kind && authority.identity.objectId == item.identity.objectId &&
-                   authority.identity.revisionId == item.identity.revisionId && authority.identity.pathProfileId == item.identity.pathProfileId;
-        });
-        if (! matchesPinnedRoots)
+            for (const auto& item : items)
+            {
+                const auto key = std::tie(item.endpoint.pluginId, item.endpoint.instanceId, item.endpoint.profileId, item.endpoint.rootId, item.path.native());
+                const auto scope = std::ranges::lower_bound(scopes, key, {}, [](const FileOperations::MutationInterlockScope& value) noexcept {
+                    return std::tie(value.endpoint.pluginId, value.endpoint.instanceId, value.endpoint.profileId, value.endpoint.rootId, value.providerPath);
+                });
+                if (scope == scopes.end() || scope->providerPath != item.path.native() || scope->endpoint.pluginId != item.endpoint.pluginId ||
+                    scope->endpoint.instanceId != item.endpoint.instanceId || scope->endpoint.profileId != item.endpoint.profileId ||
+                    scope->endpoint.rootId != item.endpoint.rootId)
+                {
+                    mismatch = L"scope";
+                    break;
+                }
+                if (! scope->exactDeleteAuthority || ! scope->root)
+                {
+                    mismatch = L"pin";
+                    break;
+                }
+                const auto& authority = scope->root->retained.authority;
+                if (authority.kind != item.identity.kind || authority.identity.objectId != item.identity.objectId ||
+                    authority.identity.revisionId != item.identity.revisionId || authority.identity.pathProfileId != item.identity.pathProfileId)
+                {
+                    mismatch = L"object";
+                    break;
+                }
+            }
+        }
+        if (! mismatch.empty())
         {
             constexpr HRESULT changed = HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
             LogDiagnostic(DiagnosticSeverity::Error,
                           changed,
                           L"delete.leftover.selectionChanged",
                           L"The checked leftovers changed before confirmation; nothing was deleted.");
-            Debug::Perf::EmitValue(L"FileOps.Delete.LeftoverConsent", static_cast<uint64_t>(items.size()), changed);
+            Debug::Perf::Emit(L"FileOps.Delete.LeftoverConsent", mismatch, 0u, static_cast<uint64_t>(items.size()), 0u, changed);
             return changed;
         }
     }
