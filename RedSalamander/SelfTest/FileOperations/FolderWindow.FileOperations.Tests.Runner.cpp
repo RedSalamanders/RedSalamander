@@ -12403,7 +12403,7 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
     const std::string originalConfig = config ? config : "{}";
     const auto restore               = wil::scope_exit([&]() noexcept { static_cast<void>(info->SetConfiguration(originalConfig.c_str())); });
     constexpr char fast[]            = R"json({"maxChildrenPerDirectory":1,"maxDepth":2,"seed":42,"latencyMs":0})json";
-    constexpr char slow[]            = R"json({"maxChildrenPerDirectory":1,"maxDepth":2,"seed":42,"latencyMs":1800})json";
+    constexpr char slow[]            = R"json({"maxChildrenPerDirectory":1,"maxDepth":2,"seed":42,"latencyMs":1000})json";
     if (info->SetConfiguration(fast) != S_OK)
         return reject(L"could not install the profiling fixture configuration");
 
@@ -12417,9 +12417,10 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
         return reject(L"could not create the owned Dummy parent");
     const auto cleanup =
         wil::scope_exit([&]() noexcept { static_cast<void>(fileSystem->DeleteItem(parent.c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr)); });
-    const auto occupied = parent / defaultName;
-    const auto expected = parent / displacedName;
-    if (directories->CreateDirectory(occupied.c_str()) != S_OK || PathExistsFsIo(io, expected))
+    const auto occupied  = parent / defaultName;
+    const auto expected  = parent / displacedName;
+    const auto unrelated = parent / L"existing-neighbor";
+    if (directories->CreateDirectory(occupied.c_str()) != S_OK || directories->CreateDirectory(unrelated.c_str()) != S_OK || PathExistsFsIo(io, expected))
         return reject(L"could not establish the numbered-name collision");
 
     Common::Settings::Settings settings{};
@@ -12442,8 +12443,9 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
     const auto directStarted  = std::chrono::steady_clock::now();
     const HRESULT read        = fileSystem->ReadDirectoryInfo(parent.c_str(), listing.put());
     const uint64_t providerUs = Debug::Perf::ElapsedUs(directStarted);
-    if (read != S_OK || ! listing || providerUs < 1'700'000u)
-        return reject(L"direct listing did not exercise the configured delay");
+    if (read != S_OK || ! listing || providerUs < 1'800'000u)
+        return reject(std::format(
+            L"direct listing did not exercise the configured two-child delay (elapsed={} us, hr=0x{:08X})", providerUs, static_cast<unsigned long>(read)));
     listing.reset();
 
     constexpr wchar_t property[] = L"RedSalamander.SlowCreateFolderPrompt";
