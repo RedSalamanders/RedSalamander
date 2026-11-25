@@ -1473,6 +1473,7 @@ void MergePreferencesOwnedFileOperationsSettings(Common::Settings::Settings& lat
     applyChangedField(merged.showInformationalNotes, baseline.showInformationalNotes, working.showInformationalNotes);
     applyChangedField(merged.mirrorDecisionsInPane, baseline.mirrorDecisionsInPane, working.mirrorDecisionsInPane);
     applyChangedField(merged.verifyAfterCopy, baseline.verifyAfterCopy, working.verifyAfterCopy);
+    applyChangedField(merged.copyLinkPolicy, baseline.copyLinkPolicy, working.copyLinkPolicy);
     applyChangedField(merged.defaultBandwidthLimitBytesPerSecond, baseline.defaultBandwidthLimitBytesPerSecond, working.defaultBandwidthLimitBytesPerSecond);
     applyChangedField(merged.maxParallelTransfers, baseline.maxParallelTransfers, working.maxParallelTransfers);
     applyChangedField(merged.crossFsBridgeBufferSizeKB, baseline.crossFsBridgeBufferSizeKB, working.crossFsBridgeBufferSizeKB);
