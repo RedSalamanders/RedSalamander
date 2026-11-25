@@ -9883,6 +9883,101 @@ using TickResult = std::optional<bool>;
         request.pathCount  = static_cast<uint32_t>(rawPaths.size());
         return folder->ExecuteViewerAction(request, &taskId);
     };
+    using Task = FolderWindow::FileOperationState::Task;
+    std::vector<std::filesystem::path> mixed;
+    if (! CreateSiblingFiles(root / L"mixed", 2, 4096u, mixed))
+        return reject(L"Could not prepare the mixed Recycle selection.");
+    const auto mixedCleanup   = wil::scope_exit([&]() noexcept
+    {
+        if (operations->HasActiveOperations())
+            static_cast<void>(CancelOutstandingSelfTestOperations(operations));
+        static_cast<void>(SelfTest::RemoveAll(root / L"mixed"));
+    });
+    const auto& permanentPath = mixed[1];
+    const RedSalamander::TestSupport::ScopedEnvironmentVariable knownUnavailable(L"REDSALAMANDER_FILEOPS_RECYCLE_CAPABILITY_UNAVAILABLE_PATH",
+                                                                                 permanentPath.native());
+    wil::com_ptr<IFileSystemIO> localIo;
+    std::string firstBytes;
+    std::string secondBytes;
+    if (! local.try_query_to(localIo.put()) || ! ReadFileTextFsIo(localIo, mixed.front(), firstBytes) ||
+        ! ReadFileTextFsIo(localIo, permanentPath, secondBytes))
+        return reject(L"Could not read the mixed selection's original bytes.");
+
+    HostClearTestPromptResultOverride();
+    for (const bool consenting : {false, true})
+    {
+        const auto started  = std::chrono::steady_clock::now();
+        uint64_t taskId     = 0u;
+        const HRESULT start = operations->AdmitOperation(
+            FILESYSTEM_DELETE, Pane::Left, std::nullopt, local, mixed, {}, kFlags, false, 0u, Mode::BulkItems, true, nullptr, &taskId);
+        const auto dismiss = wil::scope_exit([&]() noexcept
+        {
+            if (taskId != 0u && ! operations->HasActiveOperations())
+            {
+                operations->DismissCompletedTask(taskId);
+                operations->DebugRemoveDiagnosticsForTask(taskId);
+                state.completedTasks.erase(taskId);
+            }
+        });
+        if (start != S_OK || taskId == 0u)
+            return reject(std::format(L"The mixed Recycle selection was refused (hr=0x{:08X}).", static_cast<uint32_t>(start)));
+        std::optional<Task::ConflictPromptState> prompt;
+        const auto waiting = RedSalamander::TestSupport::PumpMessagesUntil(
+            [&]() noexcept
+        {
+            prompt = TryGetConflictPromptCopy(operations->FindTask(taskId));
+            return prompt.has_value() || state.completedTasks.contains(taskId);
+        },
+            {.timeout = SelfTest::Scale(std::chrono::seconds(8)), .operationName = L"mixed Recycle consent"});
+
+        auto* const task    = operations->FindTask(taskId);
+        const auto plans    = task ? task->LoadPlans() : nullptr;
+        const auto hasRoute = [&](FileOperations::DeleteMode mode, const std::filesystem::path& path) noexcept
+        {
+            return plans && std::ranges::any_of(*plans,
+                                                [&](const auto& plan) noexcept
+            {
+                const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
+                return deletion && deletion->mode == mode && deletion->selectedItems.size() == 1u &&
+                       deletion->selectedItems.front().providerPath == path.native();
+            });
+        };
+        const std::wstring alsoRecycle =
+            FormatStringResource(nullptr, IDS_FILEOPS_CONSENT_ALSO_RECYCLE, FormatFileOperationCountNoun(FileOperationCountNoun::Item, 1u));
+        std::string bytes;
+        if (! waiting.conditionMet || ! task || task->_executionMode != Mode::PerItem || ! plans || plans->size() != 2u ||
+            ! hasRoute(FileOperations::DeleteMode::Recycle, mixed.front()) || ! hasRoute(FileOperations::DeleteMode::Permanent, permanentPath) ||
+            ! prompt.has_value() || prompt->bucket != Task::ConflictBucket::PermanentDeleteConfirmation || ! prompt->factItemCountKnown ||
+            prompt->factItemCount != 1u || prompt->sourcePath != permanentPath.native() || prompt->consentNote.find(alsoRecycle) == std::wstring::npos ||
+            ! ReadFileTextFsIo(localIo, mixed.front(), bytes) || bytes != firstBytes || ! ReadFileTextFsIo(localIo, permanentPath, bytes) ||
+            bytes != secondBytes)
+            return reject(L"The mixed selection must name only the permanent item, disclose the Recycle item and preserve both before consent.");
+        Debug::Perf::Emit(L"FileOps.RecycleBin.IngressUs", L"mixed permanent consent", Debug::Perf::ElapsedUs(started), 1u, 1u, S_OK);
+        const auto answer = consenting ? Task::ConflictAction::PermanentDelete : Task::ConflictAction::Cancel;
+        if (! task->SubmitConflictDecision(prompt->generation, answer, false))
+            return reject(L"The mixed Recycle consent did not accept its exact generation.");
+        const auto done = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+            return state.completedTasks.contains(taskId) && ! operations->HasActiveOperations();
+        }, {.timeout = SelfTest::Scale(std::chrono::seconds(20)), .operationName = L"mixed Recycle completion"});
+        if (! done.conditionMet)
+            return reject(L"The mixed Recycle task did not finish.");
+        const auto& completed    = state.completedTasks.at(taskId);
+        const std::wstring purge = PurgeExpectedRecycledTestItems(consenting ? 1u : 0u);
+        if (! purge.empty())
+            return reject(purge);
+        if (consenting)
+        {
+            if (completed.hr != S_OK || completed.conflictPromptCount != 0u || GetFileAttributesW(mixed.front().c_str()) != INVALID_FILE_ATTRIBUTES ||
+                GetLastError() != ERROR_FILE_NOT_FOUND || GetFileAttributesW(permanentPath.c_str()) != INVALID_FILE_ATTRIBUTES ||
+                GetLastError() != ERROR_FILE_NOT_FOUND)
+                return reject(L"Approved mixed Recycle did not remove both exact selections through their two routes.");
+        }
+        else if (completed.hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || completed.conflictPromptCount != 0u ||
+                 ! ReadFileTextFsIo(localIo, mixed.front(), bytes) || bytes != firstBytes || ! ReadFileTextFsIo(localIo, permanentPath, bytes) ||
+                 bytes != secondBytes)
+            return reject(L"Cancel on mixed Recycle must preserve both original items.");
+    }
+
     return run(L"per-item",
                false,
                true,
