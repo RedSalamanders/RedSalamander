@@ -15092,7 +15092,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     constexpr auto left       = FolderWindow::Pane::Left;
     constexpr auto right      = FolderWindow::Pane::Right;
     const auto pane           = folder->GetFileSystemPluginId(left) == kPluginIdLocal ? left : right;
-    const auto paneFileSystem = folder->GetFileSystemForPane(pane);
+    const auto paneFileSystem = folder->GetFileSystem(pane);
     if (! paneFileSystem || folder->GetFileSystemPluginId(pane) != kPluginIdLocal)
         return reject(L"the test-owned window has no Local provider pane");
 
