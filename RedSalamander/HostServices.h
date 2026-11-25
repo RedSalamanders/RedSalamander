@@ -11,6 +11,42 @@
 
 class FolderWindow;
 
+// A synchronous provider call can report an actual credential UI wait to its owning task.
+// Capture this observer with the request before crossing to the UI thread. Its context
+// remains borrowed until that synchronous request returns.
+struct HostCredentialWaitObserver
+{
+    void* context                                        = nullptr;
+    void (*notify)(void* context, bool waiting) noexcept = nullptr;
+};
+
+class ScopedHostCredentialWaitObserver final
+{
+public:
+    explicit ScopedHostCredentialWaitObserver(HostCredentialWaitObserver observer) noexcept : _previous(_current)
+    {
+        _current = observer;
+    }
+
+    ScopedHostCredentialWaitObserver(const ScopedHostCredentialWaitObserver&)            = delete;
+    ScopedHostCredentialWaitObserver& operator=(const ScopedHostCredentialWaitObserver&) = delete;
+    ~ScopedHostCredentialWaitObserver() noexcept
+    {
+        _current = _previous;
+    }
+
+    [[nodiscard]] static HostCredentialWaitObserver Capture() noexcept
+    {
+        return _current;
+    }
+
+private:
+    // Provider ABI calls do not carry this host-only observation. Nested work on a
+    // scheduler thread restores its calling task's observer when the call unwinds.
+    inline static thread_local HostCredentialWaitObserver _current{};
+    HostCredentialWaitObserver _previous;
+};
+
 // Binds the process-lifetime plugin host to the composition root before any
 // plugin can call it. Dependencies remain non-owning and outlive the host.
 void ConfigureHostServices(FolderWindow& folderWindow, std::atomic<HWND>& folderWindowHwnd, Common::Settings::Settings& settings) noexcept;

@@ -3179,10 +3179,15 @@ the header, with no unknown `0/?` fraction, footer counting label or provisional
 - The primary graph series and pump throughput contain transfer bytes only; `fileOps.graphVerify`
   is the separate verification series. The current/aggregate bandwidth marker and configured
   bandwidth budget count both.
-- The task publishes a monotonic rate-sampling generation on pause, queue, blocking decision,
-  and live-output wait transitions. The popup resets the rate window if its last sample predates
-  that generation, including when a whole wait occurred without a popup tick. A live-output wait
-  uses the existing waiting-for-another-task presentation.
+- The task publishes a monotonic rate-sampling generation at entry and exit for pause, queue,
+  blocking decision, credential UI and live-output waits. The popup resets the rate window if
+  its last sample predates that generation, including when the whole wait occurred between ticks.
+  A task-owned synchronous provider call carries a host-only wait observer into the dispatched
+  credential request. It brackets the actual password, passphrase or Windows Hello interaction.
+  Nested waits remain blocked until the last interaction ends. Cached credentials and requests
+  the host refuses before invoking credential UI do not create a wait. This observation leaves the provider interface,
+  credential rules and mutation reservation intact. A live-output wait uses the existing
+  waiting-for-another-task presentation.
 - Verification off creates no verification reads, graph samples, or artificial phase.
 
 The existing More menu, Pause/Resume, Cancel, Start now/reorder, Issues pane, completed grouping,

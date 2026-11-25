@@ -98,6 +98,15 @@ constexpr uint32_t kPromptEditBandwidth   = 0xF005u;
     return choices;
 }
 
+template <typename Prompt> [[nodiscard]] HRESULT RunCredentialInteraction(HostCredentialWaitObserver observer, Prompt&& prompt) noexcept
+{
+    if (! observer.notify)
+        return prompt();
+    observer.notify(observer.context, true);
+    const auto leave = wil::scope_exit([observer]() noexcept { observer.notify(observer.context, false); });
+    return prompt();
+}
+
 struct PendingAlert
 {
     HostAlertRequest request{};
@@ -152,6 +161,7 @@ struct PendingConnectionSecret
     HWND ownerWindow              = nullptr;
     wchar_t** secretOut           = nullptr;
     HRESULT* dispatchResult       = nullptr;
+    HostCredentialWaitObserver waitObserver{};
 };
 
 struct PendingSetConnectionSecret
@@ -196,6 +206,7 @@ struct PendingUpgradeFtpAnonymousToPassword
     std::wstring connectionName;
     HWND ownerWindow        = nullptr;
     HRESULT* dispatchResult = nullptr;
+    HostCredentialWaitObserver waitObserver{};
 };
 
 struct PendingExecuteInPane
@@ -772,10 +783,11 @@ public:
             data->kind           = kind;
             data->ownerWindow    = ownerWindow;
             data->secretOut      = secretOut;
+            data->waitObserver   = ScopedHostCredentialWaitObserver::Capture();
             return SendSynchronousHostPayload(hostWindow, WndMsg::kHostGetConnectionSecret, std::move(data));
         }
 
-        return GetConnectionSecretOnUiThread(connectionName, kind, ownerWindow, secretOut);
+        return GetConnectionSecretOnUiThread(connectionName, kind, ownerWindow, secretOut, ScopedHostCredentialWaitObserver::Capture());
     }
 
     HRESULT STDMETHODCALLTYPE SetConnectionSecret(const wchar_t* connectionName,
@@ -861,6 +873,7 @@ public:
             data->kind           = kind;
             data->ownerWindow    = ownerWindow;
             data->secretOut      = secretOut;
+            data->waitObserver   = ScopedHostCredentialWaitObserver::Capture();
             const HRESULT hr     = SendSynchronousHostPayload(hostWindow, WndMsg::kHostPromptConnectionSecret, std::move(data));
             if (FAILED(hr) || hr == S_FALSE)
             {
@@ -869,7 +882,7 @@ public:
             return S_OK;
         }
 
-        return PromptForConnectionSecretOnUiThread(connectionName, kind, ownerWindow, secretOut);
+        return PromptForConnectionSecretOnUiThread(connectionName, kind, ownerWindow, secretOut, ScopedHostCredentialWaitObserver::Capture());
     }
 
     HRESULT STDMETHODCALLTYPE ClearCachedConnectionSecret(const wchar_t* connectionName, HostConnectionSecretKind kind) noexcept override
@@ -914,10 +927,11 @@ public:
             auto data            = std::make_unique<PendingUpgradeFtpAnonymousToPassword>();
             data->connectionName = connectionName;
             data->ownerWindow    = ownerWindow;
+            data->waitObserver   = ScopedHostCredentialWaitObserver::Capture();
             return SendSynchronousHostPayload(hostWindow, WndMsg::kHostUpgradeFtpAnonymousToPassword, std::move(data));
         }
 
-        return UpgradeFtpAnonymousToPasswordOnUiThread(connectionName, ownerWindow);
+        return UpgradeFtpAnonymousToPasswordOnUiThread(connectionName, ownerWindow, ScopedHostCredentialWaitObserver::Capture());
     }
 
     HRESULT STDMETHODCALLTYPE ExecuteViewerAction(const HostViewerActionRequest* request, uint64_t* taskId) noexcept override
@@ -1202,8 +1216,9 @@ public:
                 return true;
             }
 
-            *data->dispatchResult = GetConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind, data->ownerWindow, data->secretOut);
-            result                = static_cast<LRESULT>(*data->dispatchResult);
+            *data->dispatchResult =
+                GetConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind, data->ownerWindow, data->secretOut, data->waitObserver);
+            result = static_cast<LRESULT>(*data->dispatchResult);
             return true;
         }
 
@@ -1244,8 +1259,9 @@ public:
                 return true;
             }
 
-            *data->dispatchResult = PromptForConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind, data->ownerWindow, data->secretOut);
-            result                = static_cast<LRESULT>(*data->dispatchResult);
+            *data->dispatchResult =
+                PromptForConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind, data->ownerWindow, data->secretOut, data->waitObserver);
+            result = static_cast<LRESULT>(*data->dispatchResult);
             return true;
         }
 
@@ -1272,7 +1288,7 @@ public:
                 return true;
             }
 
-            *data->dispatchResult = UpgradeFtpAnonymousToPasswordOnUiThread(data->connectionName.c_str(), data->ownerWindow);
+            *data->dispatchResult = UpgradeFtpAnonymousToPasswordOnUiThread(data->connectionName.c_str(), data->ownerWindow, data->waitObserver);
             result                = static_cast<LRESULT>(*data->dispatchResult);
             return true;
         }
@@ -1697,7 +1713,8 @@ private:
         return S_OK;
     }
 
-    HRESULT GetConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind, HWND ownerWindow, wchar_t** secretOut) noexcept
+    HRESULT GetConnectionSecretOnUiThread(
+        const wchar_t* connectionName, HostConnectionSecretKind kind, HWND ownerWindow, wchar_t** secretOut, HostCredentialWaitObserver observer) noexcept
     {
         if (! secretOut)
         {
@@ -1832,8 +1849,9 @@ private:
                     }
                 }
 
-                const HRESULT helloHr =
-                    RedSalamander::Security::VerifyWindowsHelloForWindow(owner, LoadStringResource(nullptr, IDS_CONNECTIONS_HELLO_PROMPT_CREDENTIAL));
+                const HRESULT helloHr = RunCredentialInteraction(observer, [&]() noexcept {
+                    return RedSalamander::Security::VerifyWindowsHelloForWindow(owner, LoadStringResource(nullptr, IDS_CONNECTIONS_HELLO_PROMPT_CREDENTIAL));
+                });
                 if (FAILED(helloHr))
                 {
                     Debug::Warning(L"GetConnectionSecret: Windows Hello verification failed for connection '{}' (id={}) hr=0x{:08X}",
@@ -1881,7 +1899,8 @@ private:
         return S_OK;
     }
 
-    HRESULT PromptForConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind, HWND ownerWindow, wchar_t** secretOut) noexcept;
+    HRESULT PromptForConnectionSecretOnUiThread(
+        const wchar_t* connectionName, HostConnectionSecretKind kind, HWND ownerWindow, wchar_t** secretOut, HostCredentialWaitObserver observer) noexcept;
 
     HRESULT SetConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind, const wchar_t* secret, BOOL persist) noexcept;
 
@@ -1889,7 +1908,7 @@ private:
 
     HRESULT ClearCachedConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind) noexcept;
 
-    HRESULT UpgradeFtpAnonymousToPasswordOnUiThread(const wchar_t* connectionName, HWND ownerWindow) noexcept;
+    HRESULT UpgradeFtpAnonymousToPasswordOnUiThread(const wchar_t* connectionName, HWND ownerWindow, HostCredentialWaitObserver observer) noexcept;
 
     HRESULT ShowAlertOnUiThread(const HostAlertRequest& request, void* cookie) noexcept
     {
@@ -2389,7 +2408,8 @@ private:
 };
 
 HRESULT
-HostServices::PromptForConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind, HWND ownerWindow, wchar_t** secretOut) noexcept
+HostServices::PromptForConnectionSecretOnUiThread(
+    const wchar_t* connectionName, HostConnectionSecretKind kind, HWND ownerWindow, wchar_t** secretOut, HostCredentialWaitObserver observer) noexcept
 {
     if (! secretOut)
     {
@@ -2455,8 +2475,12 @@ HostServices::PromptForConnectionSecretOnUiThread(const wchar_t* connectionName,
     std::wstring userName;
     std::wstring secret;
     auto clearSecret       = wil::scope_exit([&] { SecureClear(secret); });
-    const HRESULT promptHr = promptForUserAndPassword ? ::PromptForConnectionUserAndPassword(owner, theme, caption, message, {}, userName, secret)
-                                                      : ::PromptForConnectionSecret(owner, theme, caption, message, secretLabel, passphrase, secret);
+    const HRESULT promptHr = RunCredentialInteraction(observer,
+                                                      [&]() noexcept
+    {
+        return promptForUserAndPassword ? ::PromptForConnectionUserAndPassword(owner, theme, caption, message, {}, userName, secret)
+                                        : ::PromptForConnectionSecret(owner, theme, caption, message, secretLabel, passphrase, secret);
+    });
     if (FAILED(promptHr) || promptHr == S_FALSE)
     {
         return promptHr;
@@ -2713,7 +2737,7 @@ HRESULT HostServices::ClearCachedConnectionSecretOnUiThread(const wchar_t* conne
     return S_OK;
 }
 
-HRESULT HostServices::UpgradeFtpAnonymousToPasswordOnUiThread(const wchar_t* connectionName, HWND ownerWindow) noexcept
+HRESULT HostServices::UpgradeFtpAnonymousToPasswordOnUiThread(const wchar_t* connectionName, HWND ownerWindow, HostCredentialWaitObserver observer) noexcept
 {
     HWND hostWindow           = nullptr;
     const HRESULT hrHostReady = EnsureHostUiThreadReady(hostWindow);
@@ -2760,7 +2784,8 @@ HRESULT HostServices::UpgradeFtpAnonymousToPasswordOnUiThread(const wchar_t* con
     std::wstring password;
 
     const std::wstring initialUser = (! profile->userName.empty() && profile->userName != L"anonymous") ? profile->userName : L"";
-    const HRESULT promptHr         = ::PromptForConnectionUserAndPassword(owner, theme, caption, message, initialUser, userName, password);
+    const HRESULT promptHr         = RunCredentialInteraction(
+        observer, [&]() noexcept { return ::PromptForConnectionUserAndPassword(owner, theme, caption, message, initialUser, userName, password); });
     if (FAILED(promptHr) || promptHr == S_FALSE)
     {
         SecureClear(password);

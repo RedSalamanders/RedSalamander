@@ -10024,6 +10024,8 @@ using TickResult = std::optional<bool>;
         recordFailure(reason);
         AppendLog(std::format(L"Popup idle cadence: FAILED: {}", reason));
     };
+    if (! DebugValidateFileOperationsVerificationPresentation())
+        return reject(L"Credential attention and the active peer ETA did not agree across popup and taskbar.");
     if (! DebugValidateFileOperationsPreparingPresentation())
         fail(L"Preparing elapsed status and bulk pause controls must respect queue priority and group ownership");
     if (! DebugValidateFileOperationsStoppingPresentation())
@@ -11064,6 +11066,42 @@ using TickResult = std::optional<bool>;
     cadencePopupState->DebugStopCadenceCaptureForSelfTest();
     stopCadenceCapture.release();
     emitCadenceObservations(L"engine-paused-through-resume", *cadencePopupState);
+
+    // This worker is held at an existing Local transfer barrier. Drive the same task observer
+    // used by synchronous host credential UI without opening a dialog or creating a credential.
+    using Task                      = State::Task;
+    const uint64_t beforeCredential = task->_rateSamplingStateGeneration.load(std::memory_order_acquire);
+    const auto credentialStart      = std::chrono::steady_clock::now();
+    bool credentialProjection       = false;
+    {
+        Task::OnCredentialWait(task, true);
+        const auto leaveCredential = wil::scope_exit([task]() noexcept { Task::OnCredentialWait(task, false); });
+        FileOperationsPopupInternal::TaskSnapshot snapshot{};
+        credentialProjection = operations->GetPopupTelemetryWork() == State::PopupTelemetryWork::Waiting &&
+                               DebugGetFileOperationsPopupTaskSnapshot(popup, taskId, snapshot) && snapshot.waitingForCredentials &&
+                               snapshot.statusKind == FileOperationsPopupInternal::TaskSnapshot::StatusKind::AwaitingCredentials;
+        {
+            Task::OnCredentialWait(task, true);
+            const auto leaveNestedWait = wil::scope_exit([task]() noexcept { Task::OnCredentialWait(task, false); });
+            credentialProjection &= task->_rateSamplingStateGeneration.load(std::memory_order_acquire) == beforeCredential + 1u;
+        }
+        credentialProjection &= task->IsWaitingForCredentials();
+    }
+    const uint64_t credentialTransitions = task->_rateSamplingStateGeneration.load(std::memory_order_acquire) - beforeCredential;
+    cadencePopupState->DebugUpdateRatesWithoutCadenceRefreshForSelfTest();
+    FileOperationsPopupInternal::PopupRateSamplingDebugSnapshot afterCredential{};
+    const bool credentialReset = credentialProjection && credentialTransitions == 2u && ! task->IsWaitingForCredentials() &&
+                                 operations->GetPopupTelemetryWork() == State::PopupTelemetryWork::Active &&
+                                 cadencePopupState->DebugGetRateSamplingForSelfTest(taskId, afterCredential) && afterCredential.currentBandwidth == 0.0 &&
+                                 afterCredential.windowSampleCount == 1u;
+    Debug::Perf::Emit(L"FileOps.PopupCadence.CredentialWait",
+                      L"owned-held-copy",
+                      Debug::Perf::ElapsedUs(credentialStart),
+                      credentialTransitions,
+                      afterCredential.windowSampleCount,
+                      credentialReset ? S_OK : E_FAIL);
+    if (! credentialReset)
+        fail(L"A complete credential wait between samples must preserve its blocked projection and restart the rate window.");
 
     // Prompt-blocked: the engine classifies a published decision as waiting, and its metadata load
     // (which still changes the card) as active. The flags are restored before any pump.

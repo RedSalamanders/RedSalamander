@@ -1854,6 +1854,7 @@ BEGIN
     IDS_FMT_FILEOPS_BADGE_INDETERMINATE_TOOLTIP           "Outcome unknown: {0:L}"
     IDS_FILEOPS_STATUS_NEEDS_ATTENTION                    "Needs attention"
     IDS_FILEOPS_STATUS_WAITING_FOR_DECISION               "Waiting for your decision"
+    IDS_FILEOPS_STATUS_AWAITING_CREDENTIALS               "Waiting for credentials"
     IDS_FILEOPS_CONFLICT_READING_DETAILS                  "Loading decision details..."
     IDS_FILEOPS_OWNED_STAGE_CLEANUP_UNKNOWN               "The final destination was not published. Cleanup of a temporary item could not be confirmed, so a possible artifact may remain. Automatic retry is blocked."
     IDS_FILEOPS_RECYCLE_DESTROYED                         "Windows deleted this item permanently instead of moving it to the Recycle Bin."

@@ -1308,6 +1308,11 @@ improvement claims.
 Recycle Bin batch validation records `FileOps.SelfTest.RecycleBinBatchBaseline`,
 `RecycleBinBatchCandidate`, and `RecycleBinBatchImprovement` as live-environment timing evidence.
 
+The `FileOps.PopupCadence.CredentialWait` event in `FileOps_PopupIdleCadence` measures an owned Local
+task's two observer transitions between real rate samples. The case checks nested waits,
+status and the new rate window while the test provider holds the task at a transfer barrier.
+The peer ETA and taskbar projection check uses the same aggregate builder as the running popup.
+
 The no-activation `FileOps_ReviewRemediationContracts` selection compares explicit per-item
 Recycle and normal Find and Viewer admission on equivalent same-parent Local batches. It verifies
 the one start prompt, canceled Viewer preservation, removed paths, batch receipts and exact

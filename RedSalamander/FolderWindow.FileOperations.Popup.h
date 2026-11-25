@@ -139,6 +139,7 @@ struct TaskSnapshot
         Failed,
         Canceled,
         Stopping,
+        AwaitingCredentials,
     };
 
     enum class Kind : uint8_t
@@ -331,6 +332,7 @@ struct TaskSnapshot
     ULONGLONG preparationStartTick     = 0;
 
     bool waitingForOthers                = false;
+    bool waitingForCredentials           = false;
     bool waitingInQueue                  = false;
     bool waitingForIdentityInterlock     = false;
     bool waitingForParallelTransferSlot  = false;
@@ -910,15 +912,16 @@ struct RateSnapshot
     // The task's effective speed limit (0: none). A transfer held at its limit is not stalled.
     uint64_t speedLimitBytesPerSecond = 0;
     std::array<InFlightStreamSnapshot, TaskSnapshot::kMaxInFlightFiles> inFlightFiles{};
-    size_t inFlightFileCount = 0;
-    bool started             = false;
-    bool paused              = false;
-    bool waitingForOthers    = false;
-    bool waitingInQueue      = false;
-    bool queuePaused         = false;
-    bool waitingForDecision  = false; // a question waits for the user: no bytes is not a stall
-    bool discoveryClosed     = false;
-    bool finished            = false;
+    size_t inFlightFileCount   = 0;
+    bool started               = false;
+    bool paused                = false;
+    bool waitingForOthers      = false;
+    bool waitingInQueue        = false;
+    bool queuePaused           = false;
+    bool waitingForDecision    = false; // a question waits for the user: no bytes is not a stall
+    bool waitingForCredentials = false;
+    bool discoveryClosed       = false;
+    bool finished              = false;
     // Cancellation was requested: what the task waits on is its own abort, never a named stall.
     bool stopping = false;
 };

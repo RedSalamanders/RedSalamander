@@ -1611,6 +1611,10 @@ void PublishPlannedItemTotalAfterDiscovery(FileOperationsPopupInternal::TaskSnap
     {
         return TaskStatusKind::Conflict;
     }
+    if (task.waitingForCredentials)
+    {
+        return TaskStatusKind::AwaitingCredentials;
+    }
     if (task.queuePaused || task.waitingInQueue || task.waitingForOthers)
     {
         return TaskStatusKind::Waiting;
@@ -1729,8 +1733,8 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
 
 [[nodiscard]] bool StatusNeedsAttention(TaskStatusKind status) noexcept
 {
-    return status == TaskStatusKind::Conflict || status == TaskStatusKind::Partial || status == TaskStatusKind::Indeterminate ||
-           status == TaskStatusKind::Failed;
+    return status == TaskStatusKind::Conflict || status == TaskStatusKind::AwaitingCredentials || status == TaskStatusKind::Partial ||
+           status == TaskStatusKind::Indeterminate || status == TaskStatusKind::Failed;
 }
 
 [[nodiscard]] bool StatusCountsAsRunning(TaskStatusKind status) noexcept
@@ -1746,7 +1750,8 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
 
 [[nodiscard]] bool StatusIsWarning(TaskStatusKind status) noexcept
 {
-    return status == TaskStatusKind::Conflict || status == TaskStatusKind::Partial || status == TaskStatusKind::Indeterminate;
+    return status == TaskStatusKind::Conflict || status == TaskStatusKind::AwaitingCredentials || status == TaskStatusKind::Partial ||
+           status == TaskStatusKind::Indeterminate;
 }
 
 [[nodiscard]] bool StatusIsError(TaskStatusKind status) noexcept
@@ -1772,6 +1777,7 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
         case TaskStatusKind::Canceled: return PopupStatusVisualTone::Neutral;
         case TaskStatusKind::Paused: return PopupStatusVisualTone::Muted;
         case TaskStatusKind::Conflict:
+        case TaskStatusKind::AwaitingCredentials:
         case TaskStatusKind::Partial:
         case TaskStatusKind::Indeterminate: return PopupStatusVisualTone::Warning;
         case TaskStatusKind::Failed: return PopupStatusVisualTone::Error;
@@ -1825,6 +1831,7 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
         case TaskStatusKind::Paused: return LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_PAUSED);
         case TaskStatusKind::Conflict:
             return LoadStringResource(nullptr, task.conflict.metadataLoading ? IDS_FILEOPS_CONFLICT_READING_DETAILS : IDS_FILEOPS_STATUS_WAITING_FOR_DECISION);
+        case TaskStatusKind::AwaitingCredentials: return LoadStringResource(nullptr, IDS_FILEOPS_STATUS_AWAITING_CREDENTIALS);
         case TaskStatusKind::Discovering:
         {
             const uint64_t elapsedSec = task.discoveryElapsedMs / 1000;
@@ -1889,6 +1896,7 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
         case TaskStatusKind::Preparing: return LoadStringResource(nullptr, IDS_FILEOPS_PREPARING);
         case TaskStatusKind::Paused:
         case TaskStatusKind::Stopping:
+        case TaskStatusKind::AwaitingCredentials:
         case TaskStatusKind::Canceled: return StatusTextForTask(task, status, nowTick);
         case TaskStatusKind::Conflict: return {};
         case TaskStatusKind::None:
@@ -2175,6 +2183,7 @@ struct TerminalAxisBadge final
         case TaskStatusKind::Preparing: showAnimation = true; return LoadStringResource(nullptr, IDS_FILEOPS_PREPARING);
         case TaskStatusKind::Verifying: showAnimation = true; return LoadStringResource(nullptr, IDS_FILEOPS_STATUS_VERIFYING);
         case TaskStatusKind::Stopping: return {};
+        case TaskStatusKind::AwaitingCredentials: return StatusTextForTask(task, status, 0u);
         case TaskStatusKind::Conflict:
             return LoadStringResource(nullptr, task.conflict.metadataLoading ? IDS_FILEOPS_CONFLICT_READING_DETAILS : IDS_FILEOPS_STATUS_WAITING_FOR_DECISION);
         case TaskStatusKind::Running:
@@ -2296,13 +2305,13 @@ struct TerminalAxisBadge final
         {
             summary.hasClosedUnknownTotals = true;
         }
-        if (presentation.includeInAggregateCohort && (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE) &&
+        if (presentation.includeInAggregateCohort && ! task.waitingForCredentials && (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE) &&
             (! task.discoveryClosed || task.totalBytes == 0 || copySizeUnavailable))
         {
             summary.hasUnknownActiveTransferBytes = true;
         }
 
-        if (! rates || ! presentation.includeInAggregateCohort || task.paused || task.cancellationRequested ||
+        if (! rates || ! presentation.includeInAggregateCohort || task.paused || task.cancellationRequested || task.waitingForCredentials ||
             (task.operation != FILESYSTEM_COPY && task.operation != FILESYSTEM_MOVE))
         {
             continue;
@@ -3692,7 +3701,8 @@ bool IsRateSamplingBlocked(const FileOperationsPopupInternal::RateSnapshot& task
 {
     // I35 R10.2: a question waiting for the user moves no bytes by design. That is neither
     // throughput nor a stall, so it is measured like a pause.
-    return task.paused || task.queuePaused || task.waitingInQueue || task.waitingForOthers || task.waitingForDecision || task.stopping;
+    return task.paused || task.queuePaused || task.waitingInQueue || task.waitingForOthers || task.waitingForDecision || task.waitingForCredentials ||
+           task.stopping;
 }
 
 void AddHueWeight(std::array<FileOperationsPopupInternal::RateHistory::HueWeight, FileOperationsPopupInternal::RateHistory::kMaxHueWeightsPerSample>& weights,
@@ -5809,6 +5819,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.paused                         = pauseReason != PauseReason::None;
         snap.pausedByBulk                   = pauseReason == PauseReason::Bulk;
         snap.waitingForOthers               = task->IsWaitingForOthers() || task->_liveOutputWaitCount.load(std::memory_order_acquire) != 0u;
+        snap.waitingForCredentials          = task->IsWaitingForCredentials();
         snap.waitingInQueue                 = task->IsWaitingInQueue();
         snap.waitingForIdentityInterlock    = snap.waitingInQueue && task->_waitingForIdentityInterlock.load(std::memory_order_acquire);
         snap.waitingForParallelTransferSlot = snap.waitingInQueue && task->_waitingForParallelTransferSlot.load(std::memory_order_acquire);
@@ -6290,12 +6301,13 @@ std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
             }
         }
 
-        snap.started              = task->HasStarted();
-        snap.paused               = task->IsPaused();
-        snap.waitingForOthers     = task->IsWaitingForOthers() || task->_liveOutputWaitCount.load(std::memory_order_acquire) != 0u;
-        snap.waitingInQueue       = task->IsWaitingInQueue();
-        snap.queuePaused          = task->IsQueuePaused();
-        snap.lastByteProgressTick = task->_lastByteProgressTick.load(std::memory_order_acquire);
+        snap.started               = task->HasStarted();
+        snap.paused                = task->IsPaused();
+        snap.waitingForOthers      = task->IsWaitingForOthers() || task->_liveOutputWaitCount.load(std::memory_order_acquire) != 0u;
+        snap.waitingForCredentials = task->IsWaitingForCredentials();
+        snap.waitingInQueue        = task->IsWaitingInQueue();
+        snap.queuePaused           = task->IsQueuePaused();
+        snap.lastByteProgressTick  = task->_lastByteProgressTick.load(std::memory_order_acquire);
         snap.stallKind = RateStallKindFor(task->_progressStallPhase.load(std::memory_order_acquire), task->_progressStallSide.load(std::memory_order_acquire));
         snap.speedLimitBytesPerSecond = task->_effectiveSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
         snap.stopping                 = task->CancelRequestedDurable();
@@ -18172,6 +18184,21 @@ bool DebugValidateFileOperationsVerificationPresentation() noexcept
     const GlobalFileOperationsStatusSummary summary = BuildGlobalStatusSummary(tasks, &rates);
     // Transfer is sequentially followed by verification: 20/10 + 50/5 = 12 seconds.
     if (! summary.hasAggregateEta || std::abs(summary.aggregateEtaSeconds - 12.0) >= 0.001)
+    {
+        return false;
+    }
+
+    TaskSnapshot credentialWait          = task;
+    credentialWait.taskId                = task.taskId + 1u;
+    credentialWait.discoveryClosed       = false;
+    credentialWait.waitingForCredentials = true;
+    credentialWait.statusKind            = ResolveTaskStatusKind(credentialWait);
+    tasks.push_back(credentialWait);
+    const GlobalFileOperationsStatusSummary waiting = BuildGlobalStatusSummary(tasks, &rates);
+    const GlobalTaskbarProgressModel taskbar        = BuildGlobalTaskbarProgressModel(waiting);
+    if (credentialWait.statusKind != TaskStatusKind::AwaitingCredentials || waiting.needAttention != 1u || waiting.activeRunning != 1u ||
+        taskbar.state != static_cast<uint32_t>(TBPF_ERROR) || taskbar.total != 0u || ! waiting.hasAggregateEta ||
+        std::abs(waiting.aggregateEtaSeconds - summary.aggregateEtaSeconds) >= 0.001)
     {
         return false;
     }

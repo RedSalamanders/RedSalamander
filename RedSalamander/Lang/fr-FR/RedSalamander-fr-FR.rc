@@ -1558,6 +1558,7 @@ BEGIN
     IDS_FMT_FILEOPS_BADGE_INDETERMINATE_TOOLTIP           "Résultat inconnu : {0:L}"
     IDS_FILEOPS_STATUS_NEEDS_ATTENTION                    "Nécessite une attention"
     IDS_FILEOPS_STATUS_WAITING_FOR_DECISION               "En attente de votre décision"
+    IDS_FILEOPS_STATUS_AWAITING_CREDENTIALS               "En attente d’identifiants"
     IDS_FILEOPS_CONFLICT_READING_DETAILS                  "Chargement des détails pour la décision..."
     IDS_FILEOPS_OWNED_STAGE_CLEANUP_UNKNOWN               "La destination finale n’a pas été publiée. Le nettoyage d’un élément temporaire n’a pas pu être confirmé ; un artefact possible peut subsister. La nouvelle tentative automatique est bloquée."
     IDS_FILEOPS_RECYCLE_DESTROYED                         "Windows a supprimé définitivement cet élément au lieu de le placer dans la Corbeille."
