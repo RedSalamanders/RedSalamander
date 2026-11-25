@@ -927,6 +927,17 @@ private:
     }
 }
 
+// These Mark of the Web fixtures must use a sandbox volume that supports named streams.
+[[nodiscard]] std::optional<bool> OwnedFixtureSupportsNamedStreams(const std::filesystem::path& path) noexcept
+{
+    const wil::unique_hfile handle(
+        CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr));
+    DWORD fileSystemFlags = 0;
+    if (! handle || ! GetVolumeInformationByHandleW(handle.get(), nullptr, 0, nullptr, nullptr, &fileSystemFlags, nullptr, 0))
+        return std::nullopt;
+    return (fileSystemFlags & FILE_NAMED_STREAMS) != 0u;
+}
+
 [[nodiscard]] bool RunFileOpsLateMoveMetadataLossChecks(SelfTestState& state)
 {
     const auto reject = [](std::wstring_view reason)
@@ -950,14 +961,10 @@ private:
         return reject(L"could not create the Local source");
     const auto removeLocal = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
 
-    DWORD fileSystemFlags = 0;
-    {
-        const wil::unique_hfile handle(
-            CreateFileW(source.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr));
-        if (! handle || ! GetVolumeInformationByHandleW(handle.get(), nullptr, 0, nullptr, nullptr, &fileSystemFlags, nullptr, 0))
-            return reject(L"could not read the owned source volume capabilities");
-    }
-    if ((fileSystemFlags & FILE_NAMED_STREAMS) == 0u)
+    const auto supportsNamedStreams = OwnedFixtureSupportsNamedStreams(source);
+    if (! supportsNamedStreams.has_value())
+        return reject(L"could not read the owned source volume capabilities");
+    if (! supportsNamedStreams.value())
     {
         AppendLog(L"Late Move metadata loss skipped because the owned sandbox volume does not support named streams.");
         return true;
@@ -1031,8 +1038,18 @@ private:
     constexpr std::string_view occupant = "The existing destination file.";
     constexpr std::string_view mark     = "[ZoneTransfer]\r\nZoneId=3\r\n";
     const auto localIo                  = state.fsLocal.query<IFileSystemIO>();
-    if (! WriteFileTextFsIo(localIo, source, body) || ! WriteFileTextFsIo(localIo, zone, mark) || ! WriteFileTextFsIo(localIo, destination, occupant))
-        return reject(L"the source, named stream, or existing destination could not be written");
+    if (! WriteFileTextFsIo(localIo, source, body) || ! WriteFileTextFsIo(localIo, destination, occupant))
+        return reject(L"the source or existing destination could not be written");
+    const auto supportsNamedStreams = OwnedFixtureSupportsNamedStreams(source);
+    if (! supportsNamedStreams.has_value())
+        return reject(L"could not read the owned source volume capabilities");
+    if (! supportsNamedStreams.value())
+    {
+        AppendLog(L"Staged Move metadata Skip skipped because the owned sandbox volume does not support named streams.");
+        return true;
+    }
+    if (! WriteFileTextFsIo(localIo, zone, mark))
+        return reject(L"the source named stream could not be written");
 
     const RedSalamander::TestSupport::ScopedEnvironmentVariable failMetadataTransfer(L"REDSALAMANDER_FILEOPS_METADATA_FAIL_MASK", std::wstring_view(L"0x2"));
     CrossProviderCaseScope scope(state, operations);

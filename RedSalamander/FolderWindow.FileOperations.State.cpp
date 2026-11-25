@@ -21434,7 +21434,9 @@ struct CrossFileSystemBridge
                 }
                 if (metadataAction == ConflictAction::Skip)
                 {
-                    // The stage is unpublished. CopyFile's existing scope guard accounts for its retirement.
+                    // The stage is unpublished. The transaction guard retires it, and the bridge
+                    // counts the decision so the selected item reduces to Skipped.
+                    skippedFileConflictCount.fetch_add(1u, std::memory_order_acq_rel);
                     Debug::Perf::EmitValue(L"FileOps.Metadata.StageSkipped", securitySignificantLoss, S_FALSE);
                     return S_FALSE;
                 }
