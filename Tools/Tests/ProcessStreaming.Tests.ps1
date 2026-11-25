@@ -904,9 +904,19 @@ Describe 'Captured VSwhere metadata family' {
         $env:RS_METADATA_PAYLOAD=Join-Path $script:metadataRoot 'payload.txt';$env:RS_METADATA_EXIT='0';$env:RS_METADATA_OBSERVATION=Join-Path $script:metadataRoot 'observed.json'
         $starterPath=Join-Path $script:metadataSourceRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1'
         $starters=@(Get-Module -All|Where-Object {$_.Path -ceq $starterPath});if($starters.Count -ne 1){throw 'Expected one actual canonical starter module.'}
-        $script:metadataAudit=[pscustomobject]@{Rows=[Collections.Generic.List[object]]::new();Starter=$starters[0].ExportedFunctions['Start-RSContainedProcess'];Active=$true}
+        $script:metadataAudit = [pscustomobject]@{
+            Rows = [Collections.Generic.List[object]]::new()
+            OpenChildren = [Collections.Generic.Dictionary[object, object]]::new()
+            Starter = $starters[0].ExportedFunctions['Start-RSContainedProcess']
+            Closer = $starters[0].ExportedFunctions['Close-RSContainedProcess']
+            Active = $true
+        }
         $starterExport=$script:metadataAudit.Starter
-        if($starterExport -isnot [Management.Automation.FunctionInfo] -or -not [object]::ReferenceEquals($starterExport.Module,$starters[0])){throw 'Canonical starter export ownership mismatch.'}
+        foreach ($export in @($starterExport, $script:metadataAudit.Closer)) {
+            if ($export -isnot [Management.Automation.FunctionInfo] -or -not [object]::ReferenceEquals($export.Module, $starters[0])) {
+                throw 'Canonical process export ownership mismatch.'
+            }
+        }
         $state=$script:metadataAudit
         Mock Start-RSContainedProcess -ModuleName ProcessStreaming ({
             param($ProcessStartInfo,[switch]$DelegateArtifactOperation)
@@ -914,16 +924,53 @@ Describe 'Captured VSwhere metadata family' {
                 -not $ProcessStartInfo.RedirectStandardOutput -or -not $ProcessStartInfo.RedirectStandardError -or $DelegateArtifactOperation){throw 'Refusing unsafe metadata start before child creation.'}
             $starter=$state.Starter;$owned=& $starter -ProcessStartInfo $ProcessStartInfo;$transferred=$false
             try {
-                $state.Rows.Add([ordered]@{pid=$owned.Id;contained=$owned.IsInContainmentJob;file=$ProcessStartInfo.FileName;cwd=$ProcessStartInfo.WorkingDirectory;
-                    argv=@($ProcessStartInfo.ArgumentList);noWindow=$ProcessStartInfo.CreateNoWindow;stdout=$ProcessStartInfo.RedirectStandardOutput;stderr=$ProcessStartInfo.RedirectStandardError;delegated=[bool]$DelegateArtifactOperation;stdoutEncoding=$(if($ProcessStartInfo.StandardOutputEncoding){$ProcessStartInfo.StandardOutputEncoding.CodePage}else{$null});stderrEncoding=$(if($ProcessStartInfo.StandardErrorEncoding){$ProcessStartInfo.StandardErrorEncoding.CodePage}else{$null})})
-                $transferred=$true;return $owned
-            }finally{if(-not $transferred){$owned.Dispose()}}
+                $row = [ordered]@{
+                    pid = $owned.Id
+                    contained = $owned.IsInContainmentJob
+                    file = $ProcessStartInfo.FileName
+                    cwd = $ProcessStartInfo.WorkingDirectory
+                    argv = @($ProcessStartInfo.ArgumentList)
+                    noWindow = $ProcessStartInfo.CreateNoWindow
+                    stdout = $ProcessStartInfo.RedirectStandardOutput
+                    stderr = $ProcessStartInfo.RedirectStandardError
+                    delegated = [bool]$DelegateArtifactOperation
+                    stdoutEncoding = $(if ($ProcessStartInfo.StandardOutputEncoding) { $ProcessStartInfo.StandardOutputEncoding.CodePage })
+                    stderrEncoding = $(if ($ProcessStartInfo.StandardErrorEncoding) { $ProcessStartInfo.StandardErrorEncoding.CodePage })
+                    exitedBeforeClose = $false
+                }
+                $state.Rows.Add($row)
+                $state.OpenChildren.Add($owned, $row)
+                $transferred = $true
+                return $owned
+            }
+            finally {
+                if (-not $transferred) { $owned.Dispose() }
+            }
+        }.GetNewClosure())
+        Mock Close-RSContainedProcess -ModuleName ProcessStreaming ({
+            param($Process)
+            if ($null -eq $Process) { return }
+            $row = $null
+            if (-not $state.OpenChildren.TryGetValue($Process, [ref]$row)) {
+                throw 'Metadata capture tried to close an unrecorded child.'
+            }
+            $closer = $state.Closer
+            try {
+                # A held launch handle observes the exact child even under PID reuse.
+                $row.exitedBeforeClose = $Process.WaitForExit(0)
+            }
+            finally {
+                & $closer -Process $Process
+                [void]$state.OpenChildren.Remove($Process)
+            }
         }.GetNewClosure())
     }
     AfterEach {
         [Console]::OutputEncoding=$script:metadataSavedOutputEncoding
         Write-Host ('[METADATA OWNED STARTS] '+($script:metadataAudit.Rows|ConvertTo-Json -Depth 5 -Compress -EscapeHandling EscapeNonAscii))
         $script:metadataAudit.Active=$false
+        foreach ($child in $script:metadataAudit.OpenChildren.Keys) { $child.Dispose() }
+        $script:metadataAudit.OpenChildren.Clear()
         foreach($name in $script:metadataSavedEnvironment.Keys){
             if($null -eq $script:metadataSavedEnvironment[$name]){ Remove-Item -LiteralPath ('Env:\'+$name) -ErrorAction SilentlyContinue }
             else{ [Environment]::SetEnvironmentVariable($name,$script:metadataSavedEnvironment[$name],'Process') }
@@ -942,7 +989,7 @@ Describe 'Captured VSwhere metadata family' {
             ($observed.argv -join '|')|Should Be 'literal space|*';$observed.cwd|Should Be $script:metadataRoot;$observed.visibleConsole|Should Be $false
             Write-Host ('[METADATA CHILD] '+([ordered]@{exit=$capture.ExitCode;stdout=$capture.StdOut;stderr=$capture.StdErr;observation=$observed}|ConvertTo-Json -Depth 5 -Compress -EscapeHandling EscapeNonAscii))
             $row=$script:metadataAudit.Rows[$script:metadataAudit.Rows.Count-1];$row.pid|Should Be $observed.pid;$row.contained|Should Be $true;$row.stdoutEncoding|Should BeNullOrEmpty;$row.stderrEncoding|Should BeNullOrEmpty
-            (Get-Process -Id $row.pid -ErrorAction SilentlyContinue)|Should BeNullOrEmpty
+            $row.exitedBeforeClose | Should Be $true
         }
         $script:metadataAudit.Rows.Count|Should Be 2
         [Environment]::GetEnvironmentVariable('_MSPDBSRV_ENDPOINT_','Process')|Should Be $beforeEndpoint
@@ -991,7 +1038,7 @@ Describe 'Captured VSwhere metadata family' {
             }
             $calls.Count|Should Be 6;$script:metadataAudit.Rows.Count|Should Be 6
             @($script:metadataAudit.Rows|Where-Object {-not $_.contained -or -not $_.noWindow -or -not $_.stdout -or -not $_.stderr -or $_.delegated}).Count|Should Be 0
-            foreach($row in $script:metadataAudit.Rows){(Get-Process -Id $row.pid -ErrorAction SilentlyContinue)|Should BeNullOrEmpty}
+            foreach ($row in $script:metadataAudit.Rows) { $row.exitedBeforeClose | Should Be $true }
         }finally{Pop-Location}
     }
     It 'runs each actual graph and HEAD metadata caller with owned capture and refuses failed queries' {
@@ -1059,7 +1106,11 @@ Describe 'Captured VSwhere metadata family' {
             {Assert-GitCallerCapture $unsafe}|Should Throw 'Refusing an uncaptured Git caller'
         }
         $calls.Count|Should Be 10;$script:metadataAudit.Rows.Count|Should Be 10
-        foreach($row in $script:metadataAudit.Rows){$row.contained|Should Be $true;$row.delegated|Should Be $false;(Get-Process -Id $row.pid -ErrorAction SilentlyContinue)|Should BeNullOrEmpty}
+        foreach ($row in $script:metadataAudit.Rows) {
+            $row.contained | Should Be $true
+            $row.delegated | Should Be $false
+            $row.exitedBeforeClose | Should Be $true
+        }
     }
 }
 Describe 'Pinned metadata child environment' {

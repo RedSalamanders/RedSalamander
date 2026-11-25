@@ -829,6 +829,8 @@ Scheduled tooling fixtures use the explicit `TestSupport.psm1` native helper and
 UTF-8 specialization. The native formatter factory creates an owned CUI probe and audit
 records that stand in for clang-format in the `format.ps1` tests, with Windows PowerShell
 managed compilation required only by those test cases.
+The metadata capture tests verify that each exact launched child has exited before the launcher
+releases its process handle.
 Versioning concurrency fixtures retain asynchronous Hidden launches and exact process
 ownership. The real installer batch keeps its inherited production routing; fixtures
 execute that same batch through the private no-window test seam. See the owning build

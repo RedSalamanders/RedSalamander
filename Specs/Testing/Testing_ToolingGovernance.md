@@ -467,8 +467,9 @@ actual exit/error semantics, and close only the process it launched. Prefer the
 canonical captured/streaming helper. Engine-independent bootstrap and provenance
 readers retain only the exact private raw/line/stdin exceptions in Core_SharedHelpers;
 their dependency/environment/encoding distinction is documented at the definition
-and protected by the finite AST/source and owned-child controls. A caller-owned
-Git shim can diagnose an unsafe path but never constitutes its production fix.
+and protected by the finite AST/source and owned-child controls. The owned metadata fixture observes exit through a
+process handle the canonical launcher still holds at cleanup. A caller-owned Git shim can diagnose
+an unsafe path but never constitutes its production fix.
 Provisioning writes retain the governing lock and delegated write authority; a
 read-only projection never silently acquires that authority. No generic factory
 or interactive installer/build policy is changed to make metadata silent.
