@@ -233,7 +233,7 @@ Notes:
 - To make a copy beside the original, hold Ctrl while dragging the item into the same folder. RedSalamander gives the copy a new name.
 - If source/destination are different file-system contexts, RedSalamander uses a cross-filesystem bridge (read → write). Files can start copying as soon as their parent destination directory exists, while read-only destinations still reject writes.
 - Clipboard paste and the item menu's **Move…** use the same File Operations task workflow as `F5`/`F6`. **Move…** takes the selection from the current pane and uses a Windows folder as the destination, including when the source is on a connected provider.
-- If a Move can only copy, RedSalamander asks whether to copy and keep the originals before starting. For a mixed selection it shows how many items will move and how many will be copied. **Cancel** keeps the files and any cut list intact. **Move with Options** includes this information in its options dialog.
+- If a Move can only copy, RedSalamander asks whether to copy and keep the originals before starting. For a mixed selection it shows how many items will move and how many will be copied. **Cancel** keeps the files and any cut list intact. **Move with Options** includes this information in its options dialog. If a provider root changes before preparation, RedSalamander keeps the originals and asks you to check the paths and start the operation again.
 - Providers that advertise an operation as unsupported block that command before a task starts.
 
 ## Delete vs permanent delete

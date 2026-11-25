@@ -13416,6 +13416,8 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareForExecution() noexcept
         }
     }
 
+    RETURN_IF_FAILED(RevalidateMoveConfirmationEndpoints(*plans));
+
 #ifdef ENABLE_TESTS
     FolderWindowFileOperationsStateInternal::RecordPreparedTransferStrategyForSelfTest(*this);
 #endif
@@ -13662,11 +13664,11 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         return;
     }
 
-    const auto completeAndPost = [&](HRESULT operationStatus) noexcept
+    const auto completeAndPost = [&](HRESULT operationStatus, bool preservePreparationFailure = false) noexcept
     {
         PublishLifecyclePhase(TaskLifecyclePhase::Stopping);
         const HRESULT terminalHr = FinalizeTypedItemResults(operationStatus);
-        _resultHr.store(terminalHr, std::memory_order_release);
+        _resultHr.store(preservePreparationFailure ? operationStatus : terminalHr, std::memory_order_release);
         _state->PostCompleted(*this);
     };
 
@@ -13692,7 +13694,8 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
                       preparationCanceled ? L"preparation.canceled" : L"preparation.failed",
                       preparationCanceled ? L"Task preparation was canceled before any mutation was attempted."
                                           : L"Task preparation failed before any mutation was attempted.");
-        completeAndPost(readinessHr);
+        // All selected items share this preparation failure and none reached mutation.
+        completeAndPost(readinessHr, true);
         return;
     }
 

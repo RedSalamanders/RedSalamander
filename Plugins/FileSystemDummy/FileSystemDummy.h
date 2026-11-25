@@ -330,6 +330,9 @@ private:
 
     PluginMetaData _metaData{};
     std::atomic_bool _probedRenameSelfTest{false};
+#ifdef ENABLE_TESTS
+    std::atomic_bool _mixedMoveRootsSelfTest{false};
+#endif
     inline static std::string _configurationJson;
     inline static unsigned long _maxChildrenPerDirectory        = 42;
     inline static unsigned long _maxDepth                       = 10;
