@@ -645,7 +645,7 @@ and focused tests.
 | `Modules/Build/RedMonitorDependency.psm1` | Resolves consumer-owned source-contract paths and rejects obsolete viewer ownership. |
 | `Modules/Build/DxUiUpdate.psm1` | Validated DxUi-main selection, atomic product-lock update, and caller-selected product validation. |
 | `Modules/Build/MSBuildInvocation.psm1` | MSBuild launch planning and one diagnostic-header classifier for streaming colors and captured-log counts, including unnumbered warnings/errors. |
-| `Modules/Build/ProcessStreaming.psm1` | Live stdout/stderr subprocess execution. |
+| `Modules/Build/ProcessStreaming.psm1` | Live stdout/stderr subprocess execution with the contained process PID in its timeout diagnostic. |
 | `Modules/Build/SanitizedEnvironment.psm1` | Canonical environment normalization with distinct null-removal and present-empty child overrides, kill-on-close contained process launch (the job also applies `SEM_NOGPFAULTERRORBOX`, so a crash ends the process without a Windows Error Reporting dialog), and local current-parent identity. |
 | `Modules/Build/VcpkgInstallSafety.psm1` | Pinned tool/baseline bootstrap and process-local hosted integration, manifest floor/override validation, safe triplets/merge paths, and the default-MSVC-toolset overlay shared by installer and build. |
 | `Modules/Build/VcpkgToolCheckout.psm1` | Complete vcpkg checkout for the pinned DxUi installer (the consumers' shared copy), run before it in the restore's contained child process. |
