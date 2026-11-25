@@ -215,6 +215,8 @@ A copy keeps the file content, timestamps and attributes, alternate data streams
 - a file whose own permissions you set (inheritance disabled) gets the destination folder's permissions instead;
 - the destination cannot keep the Mark of the Web, alternate data streams or extended attributes (for example a FAT or exFAT drive, or a share without stream support). The copy itself completes, and the card names what was not kept.
 
+If a Move discovers one of these losses after publishing the destination, RedSalamander keeps the original. A verified destination is reported as **Copied; source kept**, with the reason in Issues.
+
 ## Copy and move between panes
 
 These commands use the **focused pane** as the source and the **other pane’s current folder** as the destination:

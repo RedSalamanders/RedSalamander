@@ -484,8 +484,12 @@ real FTP/SSH session-limit qualification.
   merely because the provider lacks an atomic no-replace primitive.
 - Explicitly overwrite-authorized calls may move an existing final to a
   randomized rollback sibling and publish the new object. Randomized path text is
-  not immutable identity: after successful publication, the rollback sibling is
-  retained as cleanup debt rather than deleted by pathname.
+  not immutable identity. After publication, the rollback sibling stays as cleanup
+  debt and the provider leaves it in place. Each direct Rename completion carries
+  the outcome of the primary rename and a separate retained rollback-sibling
+  disposition once the backup step succeeded. With a lost primary reply, both
+  the rename outcome and source presence remain unconfirmed. The retained
+  sibling disposition records the recovery path that the provider left in place.
 - If publication fails after a rollback sibling exists, recovery preserves the
   current final, rollback sibling, and any remaining staging object and returns
   `ERROR_PARTIAL_COPY`; it never deletes the current final or renames the backup
