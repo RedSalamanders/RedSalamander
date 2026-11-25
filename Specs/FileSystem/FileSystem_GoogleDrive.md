@@ -262,11 +262,16 @@ must not be used to turn the lost response into a second mutation attempt.
 
 Conflict rules:
 
-- a destination file that already exists is refused with `ERROR_ALREADY_EXISTS` unless overwrite was granted;
+- Copy and Move refuse an existing destination file with `ERROR_ALREADY_EXISTS` unless overwrite was granted;
   with overwrite the new object is created first and the replaced file is then trashed (never permanently
   deleted by an overwrite),
-- a destination folder is never replaced by a file; a folder onto an existing folder merges per child, skipping
+- Copy and Move never replace a destination folder with a file; a folder onto an existing folder merges per child, skipping
   colliding files without overwrite, and the item ends as `ERROR_PARTIAL_COPY` with every skipped source preserved,
+- singular and batch Rename refuse an occupied raw sibling name with `ERROR_ALREADY_EXISTS`, including
+  duplicate names that appear with distinct decorations in the pane. This applies with the overwrite flag.
+  Rename to a free name, including a case-only change, uses one PATCH to the source ID. A listing cannot
+  exclude an external client creating a same-name sibling before the PATCH, so duplicate names may still
+  appear and are exposed by their IDs.
 - the writer replaces only the object that occupied the name when it opened, at the version the user saw
   (R3-1, `IFileWriterExpectedReplacement`): a different or changed occupant is `ERROR_REVISION_MISMATCH`, an
   object that appeared later is `ERROR_ALREADY_EXISTS`, and nothing is published in either case; an

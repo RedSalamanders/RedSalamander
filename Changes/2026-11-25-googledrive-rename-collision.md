@@ -1,0 +1,1 @@
+- Google Drive Rename now refuses occupied names, including existing duplicates, without merging folders or trashing another file.
