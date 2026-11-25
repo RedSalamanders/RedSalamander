@@ -14203,30 +14203,35 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     }
     state.Require(SelfTest::PathExists(archivePath), L"Pack command should create the ZIP archive.");
 
-    const std::filesystem::path omittedSource = nestedRoot / L"omitted-link.txt";
-    state.Require(Common::Testing::CreateSandboxedSymbolicLink(omittedSource, sourceRoot / L"alpha.txt", SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE, ec),
-                  L"Pack retention requires a sandboxed link that is omitted from the stored ZIP.");
-    if (! state.failure.empty())
     {
-        return false;
+        const std::filesystem::path omittedSource = nestedRoot / L"omitted-link.txt";
+        state.Require(Common::Testing::CreateSandboxedSymbolicLink(omittedSource, sourceRoot / L"alpha.txt", SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE, ec),
+                      L"Pack retention requires a sandboxed link that is omitted from the stored ZIP.");
+        const auto retireLink = wil::scope_exit([&]() noexcept
+        { state.Require(SelfTest::RemoveAll(omittedSource), L"Archive case should retire its owned symbolic link before evidence archival."); });
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+        const std::filesystem::path partialArchive = outputRoot / L"partial.zip";
+        FolderWindow::ArchiveCommandDebugOptions partialPackOptions{};
+        partialPackOptions.archivePath = partialArchive;
+        partialPackOptions.deleteAfter = true;
+        g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(partialPackOptions);
+        state.Require(dispatchApprovedCleanup(L"cmd/pane/pack", L"The test must have approved the Pack cleanup request."),
+                      L"Pack with Delete after should dispatch.");
+        PumpPendingMessages();
+        const auto partialPack = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+        state.Require(partialPack.has_value() && partialPack->hr == S_FALSE && containsEntry(partialPack->entries, L"nested/beta.txt") &&
+                          ! containsEntry(partialPack->entries, L"nested/omitted-link.txt"),
+                      L"Pack should publish the included files and report that it omitted the source link.");
+        const DWORD omittedAttributes = GetFileAttributesW(omittedSource.c_str());
+        state.Require(cleanupIdle() && SelfTest::PathExists(partialArchive) && omittedAttributes != INVALID_FILE_ATTRIBUTES &&
+                          (omittedAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u &&
+                          ReadUtf8TextFileForCommandSelfTest(sourceRoot / L"alpha.txt") == L"alpha" &&
+                          ReadUtf8TextFileForCommandSelfTest(nestedRoot / L"beta.txt") == L"beta",
+                      L"Pack should retain the original files and link without queuing a Delete.");
     }
-    const std::filesystem::path partialArchive = outputRoot / L"partial.zip";
-    FolderWindow::ArchiveCommandDebugOptions partialPackOptions{};
-    partialPackOptions.archivePath = partialArchive;
-    partialPackOptions.deleteAfter = true;
-    g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(partialPackOptions);
-    state.Require(dispatchApprovedCleanup(L"cmd/pane/pack", L"The test must have approved the Pack cleanup request."),
-                  L"Pack with Delete after should dispatch.");
-    PumpPendingMessages();
-    const auto partialPack = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
-    state.Require(partialPack.has_value() && partialPack->hr == S_FALSE && containsEntry(partialPack->entries, L"nested/beta.txt") &&
-                      ! containsEntry(partialPack->entries, L"nested/omitted-link.txt"),
-                  L"Pack should publish the included files and report that it omitted the source link.");
-    const DWORD omittedAttributes = GetFileAttributesW(omittedSource.c_str());
-    state.Require(cleanupIdle() && SelfTest::PathExists(partialArchive) && omittedAttributes != INVALID_FILE_ATTRIBUTES &&
-                      (omittedAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u && ReadUtf8TextFileForCommandSelfTest(sourceRoot / L"alpha.txt") == L"alpha" &&
-                      ReadUtf8TextFileForCommandSelfTest(nestedRoot / L"beta.txt") == L"beta",
-                  L"Pack should retain the original files and link without queuing a Delete.");
 
     const std::filesystem::path existingArchivePath = outputRoot / L"existing.zip";
     state.Require(SelfTest::WriteTextFile(existingArchivePath, "old"), L"Failed to create existing archive overwrite fixture.");
