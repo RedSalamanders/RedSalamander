@@ -12480,15 +12480,9 @@ void FolderWindow::CommandPack(Pane pane)
     if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, IDS_CMD_PACK))
         return;
 
-    const bool regularCleanup = deleteSourcesAfterPack && std::ranges::none_of(selectedPaths,
-                                                                               [](const auto& sourcePath) noexcept
-    {
-        const DWORD attributes = GetFileAttributesW(sourcePath.c_str());
-        return attributes != INVALID_FILE_ATTRIBUTES && (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == FILE_ATTRIBUTE_DIRECTORY;
-    });
-    HRESULT cleanupCapture    = regularCleanup ? CaptureArchiveCleanupSources(cleanupReceipt, selectedPaths, L"archive.pack.cleanup_capture_us") : S_OK;
+    HRESULT cleanupCapture = deleteSourcesAfterPack ? CaptureArchiveCleanupSources(cleanupReceipt, selectedPaths, L"archive.pack.cleanup_capture_us") : S_OK;
     FileOperationArtifacts::TouchGuardRequest artifactRequest;
-    if (regularCleanup && SUCCEEDED(cleanupCapture))
+    if (deleteSourcesAfterPack && SUCCEEDED(cleanupCapture))
         cleanupCapture = CaptureArchiveArtifactTouch(cleanupReceipt, selectedPaths, artifactRequest);
 
     if (deleteSourcesAfterPack && SUCCEEDED(cleanupCapture))
@@ -12515,7 +12509,7 @@ void FolderWindow::CommandPack(Pane pane)
     if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, IDS_CMD_PACK))
         return;
 
-    const auto* exactCleanup = regularCleanup && SUCCEEDED(cleanupCapture) ? &cleanupReceipt : nullptr;
+    const auto* exactCleanup = deleteSourcesAfterPack && SUCCEEDED(cleanupCapture) ? &cleanupReceipt : nullptr;
     result                   = selectedPacker.storedZip
                                    ? CreateStoredZipArchive(selectedPaths, archivePath.value(), overwrite, deleteSourcesAfterPack, exactCleanup)
                                    : CreateSevenZipArchive(selectedPaths, archivePath.value(), overwrite, deleteSourcesAfterPack, selectedPacker, exactCleanup);
@@ -12556,7 +12550,7 @@ void FolderWindow::CommandPack(Pane pane)
         deleteRequest.operation                   = FILESYSTEM_DELETE;
         deleteRequest.origin                      = FolderView::FileOperationRequest::Origin::PackCleanup;
         deleteRequest.sourcePaths                 = selectedPaths;
-        deleteRequest.flags                       = exactCleanup ? FILESYSTEM_FLAG_NONE : FILESYSTEM_FLAG_RECURSIVE;
+        deleteRequest.flags                       = FILESYSTEM_FLAG_NONE;
         deleteRequest.archiveDeleteAfterConfirmed = true;
         const HRESULT deleteHr                    = StartFileOperationFromFolderView(pane, std::move(deleteRequest), exactCleanup);
         if (deleteHr == kFileOperationRefusedForPendingExit)

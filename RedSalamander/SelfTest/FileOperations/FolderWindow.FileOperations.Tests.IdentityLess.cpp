@@ -3674,34 +3674,9 @@ struct QueuedByNameDelete final
                                                                 std::nullopt,
                                                                 origin,
                                                                 FileOperations::ConsentKind::ArchiveDeleteAfter);
-        if (! pack)
-        {
-            // Unpack requires exact read authority before it can admit Delete.
-            if (cleanupHr != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || cleanupTaskId != 0u || HostGetTestPromptRequestCount() != promptCount ||
-                ! FileSizeEquals(victim, 4096u))
-                return reject(L"Unpack cleanup without an exact source receipt must keep the file and publish no task.");
-            continue;
-        }
-        if (FAILED(cleanupHr) || cleanupTaskId == 0u)
-            return reject(std::format(L"the {} cleanup was not admitted (hr=0x{:08X})", pack ? L"Pack" : L"Unpack", static_cast<unsigned long>(cleanupHr)));
-        scope.Track(cleanupTaskId);
-        const auto cleanupQuestion = scope.WaitForQuestion(cleanupTaskId, L"archive cleanup Delete");
-        if (cleanupQuestion.has_value())
-            static_cast<void>(scope.CancelQuestionsUntilEnd(cleanupTaskId, L"archive cleanup Delete question"));
-        const CompletedTaskInfo* cleanupEnd = scope.WaitForEnd(cleanupTaskId, L"archive cleanup Delete");
-        const auto cleanupSummary           = FindIdentityLessSummary(operations, cleanupTaskId);
-        const bool byNameNoted =
-            cleanupSummary.has_value() && CountIdentityLessNotes(cleanupSummary.value(), L"delete.permanent.byName", IDS_FILEOPS_NOTE_DELETED_BY_NAME) != 0u;
-        if (cleanupQuestion.has_value() || cleanupEnd == nullptr || cleanupEnd->hr != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || byNameNoted ||
+        if (cleanupHr != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || cleanupTaskId != 0u || HostGetTestPromptRequestCount() != promptCount ||
             ! FileSizeEquals(victim, 4096u))
-            return reject(std::format(L"the {} cleanup of an item the location cannot identify was not refused: question={} hr=0x{:08X} byName={} "
-                                      L"exists={} issues=[{}]",
-                                      pack ? L"Pack" : L"Unpack",
-                                      DescribeIdentityLessPrompt(cleanupQuestion),
-                                      cleanupEnd != nullptr ? static_cast<unsigned long>(cleanupEnd->hr) : 0ul,
-                                      byNameNoted,
-                                      std::filesystem::exists(victim),
-                                      cleanupSummary.has_value() ? DescribeIdentityLessIssues(cleanupSummary.value()) : std::wstring(L"<no summary>")));
+            return reject(L"Archive cleanup without an exact source receipt must keep the file and publish no task or question.");
     }
     Debug::Perf::Emit(
         L"FileOps.SelfTest.IdentityLessOpenFailureAndArchiveOrigins", L"open=refused;leftover=blocked;pack=refused;unpack=refused", 0u, 4u, 0u, S_OK);
