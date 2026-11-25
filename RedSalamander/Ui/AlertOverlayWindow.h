@@ -386,6 +386,7 @@ public:
 
     // Shows the owner's current value of an option without a new presentation (no focus or text change).
     void SetOptionValue(uint32_t optionId, uint64_t value) noexcept;
+    void SetOptionChoices(uint32_t optionId, std::vector<AlertOptionChoice> choices, uint64_t selectedValue) noexcept;
 
 private:
     static LRESULT CALLBACK WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;

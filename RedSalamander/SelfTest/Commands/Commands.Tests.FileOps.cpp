@@ -7487,7 +7487,49 @@ public:
                 }
                 const bool executionChanged =
                     cycle(0xF003u, IDS_FILEOPS_CONFIRM_START, binaryLabel(IDS_FILEOPS_BTN_MODE_QUEUE, IDS_FILEOPS_BTN_MODE_PARALLEL), observed->execution);
-                const bool bandwidthChanged = cycle(0xF004u, IDS_FILEOPS_CONFIRM_BANDWIDTH, bandwidthLabel, observed->bandwidth);
+                const auto editCustomBandwidth = [&](bool accept, uint64_t expectedLimit) noexcept
+                {
+                    if (! InvokeVisibleDescendantByName(overlay, UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_MENU_CUSTOM)))
+                        return false;
+                    const HWND editor = WaitForWindow(&GetFileOperationsSpeedLimitPromptHandle, SelfTest::Scale(2000ms));
+                    if (! editor)
+                        return false;
+                    auto cancelEditor = wil::scope_exit([editor]() noexcept
+                    {
+                        if (IsWindow(editor) != FALSE)
+                            static_cast<void>(DebugCancelFileOperationsSpeedLimitPrompt());
+                    });
+                    if (! DebugSetFileOperationsSpeedLimitPromptText(L"768 KiB"))
+                        return false;
+                    const bool closed = accept ? DebugConfirmFileOperationsSpeedLimitPrompt() : DebugCancelFileOperationsSpeedLimitPrompt();
+                    if (! closed || ! WaitForWindowClosed(editor, SelfTest::Scale(2000ms)))
+                        return false;
+                    return WaitForWindow(
+                               [&]() noexcept -> HWND
+                    {
+                        RedSalamander::Ui::AlertOverlayWindowDebugSnapshot snapshot{};
+                        if (! RedSalamander::Ui::DebugGetAlertOverlayWindowSnapshot(overlay, snapshot))
+                            return nullptr;
+                        const auto option = std::ranges::find(snapshot.optionIds, 0xF004u);
+                        if (option == snapshot.optionIds.end())
+                            return nullptr;
+                        const size_t index = static_cast<size_t>(option - snapshot.optionIds.begin());
+                        return index < snapshot.optionValues.size() && snapshot.optionValues[index] == expectedLimit ? overlay : nullptr;
+                    },
+                               SelfTest::Scale(2000ms)) == overlay;
+                };
+
+                bool bandwidthChanged = cycle(0xF004u, IDS_FILEOPS_CONFIRM_BANDWIDTH, bandwidthLabel, observed->bandwidth);
+                if (bandwidthChanged)
+                {
+                    bandwidthChanged = editCustomBandwidth(false, observed->bandwidth);
+                    if (bandwidthChanged && operation == FILESYSTEM_COPY)
+                    {
+                        constexpr uint64_t customLimit = 768u * 1024u;
+                        bandwidthChanged               = editCustomBandwidth(true, customLimit);
+                        observed->bandwidth            = customLimit;
+                    }
+                }
                 RedSalamander::Ui::AlertOverlayWindowDebugSnapshot afterOptions{};
                 if (! RedSalamander::Ui::DebugGetAlertOverlayWindowSnapshot(overlay, afterOptions))
                     verifyValidated = false;

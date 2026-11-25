@@ -2177,7 +2177,10 @@ selector opens the choices and it has no separate primary action.
 Preferences, explicit start options and the running card use the same bandwidth catalog. Its ordered
 values are Unlimited, 1, 5, 10, 50, 100 and 500 MiB/s, and 1 GiB/s. The choices use localized IEC
 labels and binary byte values. Custom examples use IEC units. The shared parser accepts legacy
-spellings such as `4MB` with the same binary meaning.
+spellings such as `4MB` with the same binary meaning. **Custom…** in explicit start options opens the same
+owned speed-limit editor as the running card. It starts from the currently selected value. Accepting a rate
+updates the option and its accessible value in place. Canceling the editor preserves the selection. The
+operation is admitted only after the user accepts the start options, and the rate applies only to that task.
 
 In Rainbow theme, graph history keeps per-sample colors stable as samples scroll. It MUST NOT blink or
 cycle historic samples by time.

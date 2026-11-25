@@ -348,6 +348,19 @@ public:
         return false;
     }
 
+    // Replaces an option's finite choices in place while keeping its control identity.
+    [[nodiscard]] bool ReplaceOptionChoices(uint32_t optionId, std::vector<AlertOptionChoice> choices, uint64_t selectedValue) noexcept
+    {
+        const auto option   = std::ranges::find(_model.options, optionId, &AlertOption::id);
+        const auto selected = std::ranges::find(choices, selectedValue, &AlertOptionChoice::value);
+        if (option == _model.options.end() || selected == choices.end())
+            return false;
+        option->selectedIndex = static_cast<size_t>(selected - choices.begin());
+        option->choices       = std::move(choices);
+        InvalidateLayout();
+        return true;
+    }
+
     [[nodiscard]] bool FocusNextButton(bool reverse) noexcept
     {
         if (_model.buttons.empty())

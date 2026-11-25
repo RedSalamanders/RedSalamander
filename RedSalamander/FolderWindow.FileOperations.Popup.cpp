@@ -3484,12 +3484,6 @@ private:
     std::optional<uint64_t> _result;
 };
 
-[[nodiscard]] std::optional<uint64_t> ShowCustomSpeedLimitPrompt(HWND ownerWindow, const AppTheme& theme, uint64_t initialLimitBytesPerSecond) noexcept
-{
-    FileOperationsSpeedLimitPromptWindow window(ownerWindow, theme, initialLimitBytesPerSecond);
-    return window.ShowModal();
-}
-
 bool PointInRectF(const D2D1_RECT_F& rc, float x, float y) noexcept
 {
     return rc.left <= x && x <= rc.right && rc.top <= y && y <= rc.bottom;
@@ -4557,6 +4551,12 @@ ATOM RegisterFileOperationsPopupWndClass(HINSTANCE instance)
 }
 
 } // namespace
+
+std::optional<uint64_t> FileOperations::ShowCustomSpeedLimitPrompt(HWND owner, const AppTheme& theme, uint64_t initialBytesPerSecond) noexcept
+{
+    FileOperationsSpeedLimitPromptWindow window(owner, theme, initialBytesPerSecond);
+    return window.ShowModal();
+}
 
 using FileOperationsPopupInternal::PopupButton;
 using FileOperationsPopupInternal::PopupHitTest;
@@ -13772,7 +13772,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
             // The custom prompt pumps nested thread messages; keep FileOperationState alive across
             // that pump and re-find the task by id afterwards (same fence as the deferred path).
             const FolderWindow::FileOperationPromptDispatchScope promptDispatch(*folderWindow);
-            const auto promptResult = ShowCustomSpeedLimitPrompt(hwnd, folderWindow->GetTheme(), current);
+            const auto promptResult = FileOperations::ShowCustomSpeedLimitPrompt(hwnd, folderWindow->GetTheme(), current);
             if (! promptResult.has_value())
             {
                 return;
@@ -13833,7 +13833,7 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::ShowCustomSpeedLimit
     const uint64_t taskId       = resolvedTaskId;
     const uint64_t currentLimit = task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
     const FolderWindow::FileOperationPromptDispatchScope promptDispatch(*folderWindow);
-    const auto promptResult = ShowCustomSpeedLimitPrompt(hwnd, folderWindow->GetTheme(), currentLimit);
+    const auto promptResult = FileOperations::ShowCustomSpeedLimitPrompt(hwnd, folderWindow->GetTheme(), currentLimit);
     if (promptResult.has_value() && hostLifetime.lock())
     {
         if (FolderWindow::FileOperationState::Task* const currentTask = fileOps->FindTask(taskId))
@@ -18446,7 +18446,7 @@ HWND GetFileOperationsSpeedLimitPromptHandle() noexcept
 
 void DebugShowFileOperationsSpeedLimitPromptForGallery(HWND owner, const AppTheme& theme) noexcept
 {
-    static_cast<void>(ShowCustomSpeedLimitPrompt(owner, theme, 80ull * 1024ull * 1024ull));
+    static_cast<void>(FileOperations::ShowCustomSpeedLimitPrompt(owner, theme, 80ull * 1024ull * 1024ull));
 }
 
 bool DebugGetFileOperationsSpeedLimitPromptSnapshot(FileOperationsSpeedLimitPromptDebugSnapshot& out) noexcept
