@@ -1179,8 +1179,7 @@ the same synchronous reporter and counter path as the pointer overload.
   `FileOps_PopupIdleCadence`, `FileOps_IdentityInterlockWaiting`,
   `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`,
   `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, `FileOps_SmbExactRenameProvider`,
-  `FileOps_SmbCorroboratedRenameProvider`, `C0_CurlCommittedMutationResponseLost`, or
-  `FileOps_SmbCorroboratedRenameProvider`, `FileOps_ProviderCapabilityMatrix`, or
+  `FileOps_SmbCorroboratedRenameProvider`, `C0_CurlCommittedMutationResponseLost`, `FileOps_ProviderCapabilityMatrix`, or
   `Delete_IdentityLessPinnedTreeChangedEntry` case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
   copies and, for progress witnesses, owned HWND WGC capture;
