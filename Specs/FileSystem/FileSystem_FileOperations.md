@@ -2220,6 +2220,13 @@ Security-significant metadata-loss consent is evaluated on the exact identity-ow
 anyway and Keep source first publish the stage, then respectively permit the already-qualified
 conditional cleanup or retain the source. A later cancellation point must preserve whatever exact
 publication state its mutation record reports rather than collapsing every Cancel to `NotAttempted`.
+After a final writer publishes, a later finding of lost Mark of the Web, named streams or
+extended attributes without prior consent leaves source cleanup disabled. Continue destination
+verification and preserve its publication result. Issues records the loss and why the source stayed.
+A proved destination and retained source yield **Copied; source kept**. The worker emits
+`FileOps.Metadata.LateMoveSourceRetained` with the sensitive feature mask and presents no additional
+destructive decision. `FileOps_ReviewRemediationContracts` exercises the real Local-to-Dummy writer,
+content verification, and survival of the source's `Zone.Identifier` stream.
 
 The shared deferred-consent gate owns insufficient/unknown space, hydration, sparse inflation, EFS
 plaintext, metadata-loss Move, and Recycle escalation. It serializes the prompt through the task
