@@ -308,7 +308,8 @@ HWND AlertOverlayFocusWindow() noexcept
 class AlertOverlayUiaProvider final : public IRawElementProviderSimple,
                                       public IRawElementProviderFragment,
                                       public IRawElementProviderFragmentRoot,
-                                      public IInvokeProvider
+                                      public IInvokeProvider,
+                                      public IToggleProvider
 {
 public:
     enum class ElementKind : uint8_t
@@ -324,7 +325,13 @@ public:
     {
         ElementKind kind = ElementKind::Root;
         size_t index     = 0u;
+        bool checkBox    = false;
     };
+
+    [[nodiscard]] static ElementId OptionElement(const AlertOption& option, size_t index) noexcept
+    {
+        return {ElementKind::Option, index, option.checkBox};
+    }
 
     AlertOverlayUiaProvider(HWND hwnd, ElementId id, std::weak_ptr<const uint64_t> instanceToken, uint64_t generation) noexcept
         : _hwnd(hwnd),
@@ -362,6 +369,10 @@ public:
         else if (IsButtonLike() && riid == __uuidof(IInvokeProvider))
         {
             *object = static_cast<IInvokeProvider*>(this);
+        }
+        else if (_id.checkBox && riid == __uuidof(IToggleProvider))
+        {
+            *object = static_cast<IToggleProvider*>(this);
         }
         else
         {
@@ -411,6 +422,11 @@ public:
             *provider = static_cast<IInvokeProvider*>(this);
             AddRef();
         }
+        else if (patternId == UIA_TogglePatternId && _id.checkBox)
+        {
+            *provider = static_cast<IToggleProvider*>(this);
+            AddRef();
+        }
         return S_OK;
     }
 
@@ -440,7 +456,9 @@ public:
             case UIA_IsControlElementPropertyId: return SetBool(value, true);
             case UIA_IsContentElementPropertyId: return SetBool(value, _id.kind != ElementKind::Root);
             case UIA_IsEnabledPropertyId: return SetBool(value, IsEnabled(*window));
-            case UIA_IsKeyboardFocusablePropertyId: return SetBool(value, IsEnabled(*window) && (IsButtonLike() || _id.kind == ElementKind::Root));
+            case UIA_IsKeyboardFocusablePropertyId:
+                return SetBool(value, IsEnabled(*window) && (IsButtonLike() || _id.checkBox || _id.kind == ElementKind::Root));
+            case UIA_ToggleToggleStatePropertyId: return _id.checkBox ? SetI4(value, ReadToggleState(*window)) : S_OK;
             case UIA_HasKeyboardFocusPropertyId:
             {
                 const auto focused = window->_overlay.GetFocusedControl();
@@ -672,7 +690,7 @@ public:
             return CreateFragment(_hwnd, {ElementKind::CloseButton, 0u}, _instanceToken, _generation, provider);
         for (size_t i = 0; i < model.options.size(); ++i)
             if (hit.part == AlertHitTest::Part::Option && model.options[i].id == hit.buttonId)
-                return CreateFragment(_hwnd, {ElementKind::Option, i}, _instanceToken, _generation, provider);
+                return CreateFragment(_hwnd, OptionElement(model.options[i], i), _instanceToken, _generation, provider);
         for (size_t i = 0; i < model.buttons.size(); ++i)
             if (hit.part == AlertHitTest::Part::Button && model.buttons[i].id == hit.buttonId)
                 return CreateFragment(_hwnd, {ElementKind::Button, i}, _instanceToken, _generation, provider);
@@ -714,16 +732,7 @@ public:
         }
 
         if (_id.kind == ElementKind::Option)
-        {
-            const auto& options = window->_overlay.GetModel().options;
-            if (_id.index >= options.size())
-            {
-                return UIA_E_ELEMENTNOTAVAILABLE;
-            }
-            if (! IsEnabled(*window))
-                return UIA_E_ELEMENTNOTENABLED;
-            return PostInvokeMessage(*window, WndMsg::kAlertOverlayInvokeOption, options[_id.index].id);
-        }
+            return PostOptionActivation(*window);
 
         const auto& buttons = window->_overlay.GetModel().buttons;
         if (_id.index >= buttons.size())
@@ -732,6 +741,29 @@ public:
         }
 
         return PostInvokeMessage(*window, WndMsg::kAlertOverlayInvokeButton, buttons[_id.index].id);
+    }
+
+    HRESULT STDMETHODCALLTYPE Toggle() noexcept override
+    {
+        if (GetWindowThreadProcessId(_hwnd, nullptr) != GetCurrentThreadId())
+            return OnOwnerThread([&]() noexcept { return Toggle(); });
+        auto* window = ResolveWindow();
+        if (! window || ! _id.checkBox)
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        return PostOptionActivation(*window);
+    }
+
+    HRESULT STDMETHODCALLTYPE get_ToggleState(ToggleState* state) noexcept override
+    {
+        if (GetWindowThreadProcessId(_hwnd, nullptr) != GetCurrentThreadId())
+            return OnOwnerThread([&]() noexcept { return get_ToggleState(state); });
+        if (! state)
+            return E_POINTER;
+        const auto* window = ResolveWindow();
+        if (! window || ! _id.checkBox)
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        *state = ReadToggleState(*window);
+        return S_OK;
     }
 
     // The element the alert's keyboard focus is on (the control GetFocus reports, else the root).
@@ -748,7 +780,7 @@ public:
         if (focused.part == AlertHitTest::Part::Option)
             for (size_t index = 0; index < model.options.size(); ++index)
                 if (model.options[index].id == focused.buttonId)
-                    return {ElementKind::Option, index};
+                    return OptionElement(model.options[index], index);
         return {};
     }
 
@@ -826,7 +858,23 @@ private:
 
     [[nodiscard]] bool IsButtonLike() const noexcept
     {
-        return _id.kind == ElementKind::Button || _id.kind == ElementKind::Option || _id.kind == ElementKind::CloseButton;
+        return _id.kind == ElementKind::Button || (_id.kind == ElementKind::Option && ! _id.checkBox) || _id.kind == ElementKind::CloseButton;
+    }
+
+    [[nodiscard]] ToggleState ReadToggleState(const AlertOverlayWindow& window) const noexcept
+    {
+        const auto& options = window._overlay.GetModel().options;
+        return _id.index < options.size() && window._overlay.GetOptionValue(options[_id.index].id).value_or(0u) == 1u ? ToggleState_On : ToggleState_Off;
+    }
+
+    [[nodiscard]] HRESULT PostOptionActivation(AlertOverlayWindow& window) noexcept
+    {
+        const auto& options = window._overlay.GetModel().options;
+        if (_id.index >= options.size())
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        if (! IsEnabled(window))
+            return UIA_E_ELEMENTNOTENABLED;
+        return PostInvokeMessage(window, WndMsg::kAlertOverlayInvokeOption, options[_id.index].id);
     }
 
     [[nodiscard]] bool IsEnabled(const AlertOverlayWindow& window) const noexcept
@@ -905,8 +953,8 @@ private:
         {
             case ElementKind::Root: return UIA_PaneControlTypeId;
             case ElementKind::Text: return UIA_TextControlTypeId;
+            case ElementKind::Option: return _id.checkBox ? UIA_CheckBoxControlTypeId : UIA_ButtonControlTypeId;
             case ElementKind::CloseButton:
-            case ElementKind::Option:
             case ElementKind::Button: return UIA_ButtonControlTypeId;
             default: return UIA_CustomControlTypeId;
         }
@@ -935,7 +983,7 @@ private:
                 if (_id.index < model.options.size())
                 {
                     const auto& option = model.options[_id.index];
-                    if (! option.choices.empty() && option.selectedIndex < option.choices.size())
+                    if (! option.checkBox && ! option.choices.empty() && option.selectedIndex < option.choices.size())
                     {
                         return std::format(L"{}: {}", option.label, option.choices[option.selectedIndex].label);
                     }
@@ -990,7 +1038,7 @@ private:
         }
         for (size_t index = 0u; index < model.options.size(); ++index)
         {
-            children.push_back(ElementId{ElementKind::Option, index});
+            children.push_back(OptionElement(model.options[index], index));
         }
         for (size_t index = 0u; index < model.buttons.size(); ++index)
         {
@@ -1966,9 +2014,11 @@ void AlertOverlayWindow::InvokeOption(uint32_t optionId, bool reverse) noexcept
         if (EnsureOverlayLayoutForInput())
             _overlay.RevealFocusedControl();
         InvalidateRect(_hwnd.get(), nullptr, FALSE);
-        // A focus move announces the option with its new value; otherwise report the new value.
-        const bool focusMoved = previous.part != AlertHitTest::Part::Option || previous.buttonId != optionId;
-        if (! focusMoved || ! RaiseUiaFocusChanged())
+        const bool focusMoved     = previous.part != AlertHitTest::Part::Option || previous.buttonId != optionId;
+        const bool focusAnnounced = focusMoved && RaiseUiaFocusChanged();
+        const auto& options       = _overlay.GetModel().options;
+        const auto changed        = std::ranges::find(options, optionId, &AlertOption::id);
+        if (! focusAnnounced || (changed != options.end() && changed->checkBox))
             RaiseUiaOptionValueChanged(optionId);
         // Last: the owner keeps its own state as the truth and may re-present this overlay from it.
         if (_callbacks.onOptionChanged)
@@ -1986,6 +2036,15 @@ void AlertOverlayWindow::SetOptionValue(uint32_t optionId, uint64_t value) noexc
         InvalidateRect(_hwnd.get(), nullptr, FALSE);
         RaiseUiaOptionValueChanged(optionId);
     }
+}
+
+void AlertOverlayWindow::SetOptionChoices(uint32_t optionId, std::vector<AlertOptionChoice> choices, uint64_t selectedValue) noexcept
+{
+    if (! _visible || ! _hwnd || ! _overlay.ReplaceOptionChoices(optionId, std::move(choices), selectedValue))
+        return;
+    static_cast<void>(EnsureOverlayLayoutForInput());
+    InvalidateRect(_hwnd.get(), nullptr, FALSE);
+    RaiseUiaOptionValueChanged(optionId);
 }
 
 bool AlertOverlayWindow::RaiseUiaFocusChanged() noexcept
@@ -2010,14 +2069,22 @@ void AlertOverlayWindow::RaiseUiaOptionValueChanged(uint32_t optionId) noexcept
     {
         if (options[index].id != optionId)
             continue;
-        // An option's name carries its current value.
-        const AlertOverlayUiaProvider::ElementId element{AlertOverlayUiaProvider::ElementKind::Option, index};
-        const auto provider = AlertOverlayUiaProvider::ForCurrentPresentation(*this, element);
-        wil::unique_variant previousName;
-        wil::unique_variant currentName;
-        HRESULT hr = provider ? provider->GetPropertyValue(UIA_NamePropertyId, currentName.reset_and_addressof()) : E_OUTOFMEMORY;
+        const auto element        = AlertOverlayUiaProvider::OptionElement(options[index], index);
+        const auto provider       = AlertOverlayUiaProvider::ForCurrentPresentation(*this, element);
+        const PROPERTYID property = element.checkBox ? UIA_ToggleToggleStatePropertyId : UIA_NamePropertyId;
+        wil::unique_variant previous;
+        wil::unique_variant current;
+        HRESULT hr = provider ? provider->GetPropertyValue(property, current.reset_and_addressof()) : E_OUTOFMEMORY;
         if (SUCCEEDED(hr))
-            hr = UiaRaiseAutomationPropertyChangedEvent(provider.get(), UIA_NamePropertyId, previousName, currentName);
+        {
+            if (element.checkBox)
+            {
+                auto* previousValue = previous.reset_and_addressof();
+                previousValue->vt   = VT_I4;
+                previousValue->lVal = current.lVal == ToggleState_On ? ToggleState_Off : ToggleState_On;
+            }
+            hr = UiaRaiseAutomationPropertyChangedEvent(provider.get(), property, previous, current);
+        }
         RecordUiaEvent(UIA_AutomationPropertyChangedEventId, element, _presentationGeneration, hr);
         return;
     }
@@ -3572,8 +3639,13 @@ bool DebugRunAlertOverlayUxAccessibilitySelfTest(HWND placement, AlertOverlayUxA
     settings.title   = L"Option activation";
     settings.message = L"Twelve settings below a short body.";
     for (uint32_t index = 0; index < 12u; ++index)
-        settings.options.push_back(
-            AlertOption{.id = 400u + index, .label = std::format(L"Setting {}", index), .choices = {{0u, L"Off"}, {1u, L"On"}}, .selectedIndex = 0u});
+        settings.options.push_back(AlertOption{
+            .id            = 400u + index,
+            .label         = std::format(L"Setting {}", index),
+            .choices       = {{0u, L"Off"}, {1u, L"On"}},
+            .selectedIndex = 0u,
+            .checkBox      = index == 1u,
+        });
     addButtons(settings, L"OK", L"Cancel");
     if (! show(std::move(settings), false))
         return false;
@@ -3602,8 +3674,33 @@ bool DebugRunAlertOverlayUxAccessibilitySelfTest(HWND placement, AlertOverlayUxA
     static_cast<void>(SendMessageW(window->_hwnd.get(), WM_KEYDOWN, VK_SPACE, 0));
     out.spaceActivationKeepsScroll = window->GetOptionValue(kTarget) == std::optional<uint64_t>{1u} && keepsPlace(scrolled, scrolledRect);
 
+    g_debugFocusOverride     = window->_hwnd.get();
+    const auto checkElement  = AlertOverlayUiaProvider::OptionElement(window->_overlay.GetModel().options[1], 1u);
+    const auto checkProvider = AlertOverlayUiaProvider::ForCurrentPresentation(*window, checkElement);
+    wil::unique_variant checkType;
+    wil::com_ptr_nothrow<IUnknown> togglePattern;
+    wil::com_ptr_nothrow<IToggleProvider> toggle;
+    ToggleState checkState    = ToggleState_Indeterminate;
+    out.checkBoxExposesToggle = checkProvider && SUCCEEDED(checkProvider->GetPropertyValue(UIA_ControlTypePropertyId, checkType.reset_and_addressof())) &&
+                                checkType.vt == VT_I4 && checkType.lVal == UIA_CheckBoxControlTypeId &&
+                                SUCCEEDED(checkProvider->GetPatternProvider(UIA_TogglePatternId, togglePattern.put())) && togglePattern &&
+                                SUCCEEDED(togglePattern.query_to(toggle.put())) && toggle && SUCCEEDED(toggle->get_ToggleState(&checkState)) &&
+                                checkState == ToggleState_On;
+    if (out.checkBoxExposesToggle)
+    {
+        g_debugUiaEvents.clear();
+        const HRESULT toggleHr = toggle->Toggle();
+        MSG message{};
+        while (PeekMessageW(&message, window->_hwnd.get(), WndMsg::kAlertOverlayInvokeOption, WndMsg::kAlertOverlayInvokeOption, PM_REMOVE))
+            static_cast<void>(DispatchMessageW(&message));
+        wil::unique_variant label;
+        out.checkBoxKeepsLabelAndReportsToggle = SUCCEEDED(toggleHr) && SUCCEEDED(toggle->get_ToggleState(&checkState)) && checkState == ToggleState_Off &&
+                                                 keepsPlace(scrolled, scrolledRect) && raised(UIA_AutomationPropertyChangedEventId, checkElement) &&
+                                                 SUCCEEDED(checkProvider->GetPropertyValue(UIA_NamePropertyId, label.reset_and_addressof())) &&
+                                                 label.vt == VT_BSTR && label.bstrVal && std::wstring_view(label.bstrVal) == L"Setting 1";
+    }
+
     // Focus moves inside a focused alert raise UIA focus events; the option keeps the focus here.
-    g_debugFocusOverride = window->_hwnd.get();
     g_debugUiaEvents.clear();
     static_cast<void>(SendMessageW(window->_hwnd.get(), WM_KEYDOWN, VK_TAB, 0));
     out.tabRaisesFocusEvent = raised(UIA_AutomationFocusChangedEventId, {Kind::Option, 2u});

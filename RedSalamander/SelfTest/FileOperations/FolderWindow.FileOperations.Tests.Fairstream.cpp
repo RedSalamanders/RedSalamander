@@ -1109,14 +1109,14 @@ case SelfTestState::Step::Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate:
             if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
             {
                 if (prompt->bucket != Task::ConflictBucket::TypeMismatch || ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
-                    ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip) || ! PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll) ||
+                    ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip) || PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll) ||
                     PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite) || ! prompt->applyToAllEligible)
                 {
                     Fail(L"Conflict-bucket apply-to-all test expected a separately scoped link-to-directory type-mismatch prompt.");
                     return true;
                 }
 
-                task->DebugSubmitCurrentConflictDecision(Task::ConflictAction::SkipAll, false);
+                task->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Skip, true);
                 state.stepState = 3;
                 return false;
             }

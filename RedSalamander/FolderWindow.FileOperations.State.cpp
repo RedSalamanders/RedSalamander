@@ -5375,6 +5375,8 @@ void NormalizeDiskFullSkipScope(Task::ConflictDecisionScope& scope) noexcept
     return scope;
 }
 
+[[nodiscard]] bool IsCacheableConflictDecision(ConflictAction action) noexcept;
+
 struct ConflictActionPolicy
 {
     std::array<ConflictAction, Task::ConflictPromptState::kMaxActions> actions{};
@@ -5417,6 +5419,22 @@ struct ConflictActionPolicy
         }
         primaryActions[primaryActionCount] = action;
         ++primaryActionCount;
+    }
+
+    [[nodiscard]] bool UsesSkipOnlyRepeatLabel() const noexcept
+    {
+        if (! applyToAllEligible)
+            return false;
+        bool offersSkip = false;
+        for (size_t index = 0; index < actionCount; ++index)
+        {
+            const ConflictAction action = actions[index];
+            if (action == ConflictAction::Skip)
+                offersSkip = true;
+            else if (IsCacheableConflictDecision(action))
+                return false;
+        }
+        return offersSkip;
     }
 
     void FinalizePresentation(ConflictBucket bucket, bool scopedApplyToAllEligible) noexcept
@@ -5754,17 +5772,11 @@ struct ConflictActionPolicy
     }
 
     if (! IsDeferredConsentBucket(bucket) || bucket == ConflictBucket::RecycleFailed)
-    {
         policy.Add(ConflictAction::Skip);
-        if (applyToAllEligible)
-        {
-            policy.Add(ConflictAction::SkipAll);
-        }
-    }
     // I63 B6: the two task-wide bulk policies. Each is offered only on a plain regular-file collision whose own pair
     // matches it, so choosing it never has to say what it does to a pair it does not cover, and only where Apply to
     // all is offered (the task can meet another such collision). Replace all older also needs Replace for this pair.
-    // They wait under More beside Skip All; neither is the default or the Escape action.
+    // A lone additional action gets its own button. Cancel stays the default and Escape action.
     if (bucket == ConflictBucket::RegularFileExists && applyToAllEligible)
     {
         if (comparison.date == FileOperations::ConflictDateRelation::Same && comparison.size == FileOperations::ConflictSizeRelation::Same)
@@ -6180,6 +6192,7 @@ void SetConflictPromptLocked(Task& task,
     }
     prompt.decisionScope      = std::move(decisionScope);
     prompt.applyToAllEligible = actionPolicy.applyToAllEligible;
+    prompt.applyToAllOnlySkip = actionPolicy.UsesSkipOnlyRepeatLabel();
     prompt.applyToAllChecked  = false;
     prompt.skipAllEligible    = actionPolicy.skipAllEligible;
     prompt.buttonsPublishable = actionPolicy.buttonsPublishable;
@@ -8940,9 +8953,9 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
             }
         }
     }
-    // I63 B6: the bulk policies exist only on a plain regular-file collision whose own pair matches, only where Apply to
-    // all is offered, Replace all older only where Replace is offered; they sit under More (which then holds at least
-    // two commands) and are never the default or the Escape action. Every class, every switch, both Move forms.
+    // The bulk policies require a matching pair in a plain regular-file collision and an eligible repeat scope.
+    // Replace all older also requires Replace. A matching policy is direct when it is the only additional action.
+    // Additional actions share More. Cancel remains the default and Escape action.
     {
         constexpr std::array<FileOperations::ConflictItemComparison, 7u> comparisons{{
             {FileOperations::ConflictDateRelation::Unknown, FileOperations::ConflictSizeRelation::Unknown},
@@ -8961,38 +8974,47 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
                 {
                     for (const FileOperations::ConflictItemComparison& comparison : comparisons)
                     {
-                        const auto bucket         = static_cast<ConflictBucket>(bucketIndex);
-                        const auto policy         = BuildConflictActionPolicy(bucket,
-                                                                              (flags & 1u) != 0u,
-                                                                              (flags & 2u) != 0u,
-                                                                              (flags & 4u) != 0u,
-                                                                              (flags & 8u) != 0u,
-                                                                              (flags & 16u) != 0u,
-                                                                              (flags & 32u) != 0u,
-                                                                              false,
-                                                                              FILESYSTEM_MOVE,
-                                                                              discard,
-                                                                              comparison);
-                        const bool plainFile      = bucket == ConflictBucket::RegularFileExists && (flags & 4u) != 0u;
-                        const bool expectSkipSame = plainFile && comparison.date == FileOperations::ConflictDateRelation::Same &&
-                                                    comparison.size == FileOperations::ConflictSizeRelation::Same;
-                        const bool expectReplace  = plainFile && (flags & 8u) != 0u && comparison.date == FileOperations::ConflictDateRelation::Newer;
-                        const auto primaryEnd     = policy.primaryActions.begin() + static_cast<std::ptrdiff_t>(policy.primaryActionCount);
-                        const auto overflowEnd    = policy.overflowActions.begin() + static_cast<std::ptrdiff_t>(policy.overflowActionCount);
-                        const auto underMore      = [&](ConflictAction action) noexcept
+                        const auto bucket                 = static_cast<ConflictBucket>(bucketIndex);
+                        const auto policy                 = BuildConflictActionPolicy(bucket,
+                                                                                      (flags & 1u) != 0u,
+                                                                                      (flags & 2u) != 0u,
+                                                                                      (flags & 4u) != 0u,
+                                                                                      (flags & 8u) != 0u,
+                                                                                      (flags & 16u) != 0u,
+                                                                                      (flags & 32u) != 0u,
+                                                                                      false,
+                                                                                      FILESYSTEM_MOVE,
+                                                                                      discard,
+                                                                                      comparison);
+                        const bool plainFile              = bucket == ConflictBucket::RegularFileExists && (flags & 4u) != 0u;
+                        const bool expectSkipSame         = plainFile && comparison.date == FileOperations::ConflictDateRelation::Same &&
+                                                            comparison.size == FileOperations::ConflictSizeRelation::Same;
+                        const bool expectReplace          = plainFile && (flags & 8u) != 0u && comparison.date == FileOperations::ConflictDateRelation::Newer;
+                        const auto primaryEnd             = policy.primaryActions.begin() + static_cast<std::ptrdiff_t>(policy.primaryActionCount);
+                        const auto overflowEnd            = policy.overflowActions.begin() + static_cast<std::ptrdiff_t>(policy.overflowActionCount);
+                        const auto placedWithOtherChoices = [&](ConflictAction action) noexcept
                         {
-                            return std::find(policy.overflowActions.begin(), overflowEnd, action) != overflowEnd &&
-                                   std::find(policy.primaryActions.begin(), primaryEnd, action) == primaryEnd;
+                            // The permission matrix can explicitly offer Retry on a collision as an additional action.
+                            const size_t otherActions = static_cast<size_t>(discard) + static_cast<size_t>((flags & 1u) != 0u);
+                            if (otherActions != 0u)
+                            {
+                                return policy.overflowActionCount == 1u + otherActions &&
+                                       std::find(policy.overflowActions.begin(), overflowEnd, action) != overflowEnd &&
+                                       std::find(policy.primaryActions.begin(), primaryEnd, action) == primaryEnd;
+                            }
+                            return policy.overflowActionCount == 0u && policy.primaryActionCount >= 2u &&
+                                   policy.primaryActions[policy.primaryActionCount - 2u] == action &&
+                                   policy.primaryActions[policy.primaryActionCount - 1u] == ConflictAction::Cancel;
                         };
                         if (policy.Contains(ConflictAction::SkipSameSizeAndDate) != expectSkipSame ||
                             policy.Contains(ConflictAction::ReplaceOlder) != expectReplace ||
-                            (expectSkipSame && ! underMore(ConflictAction::SkipSameSizeAndDate)) ||
-                            (expectReplace && ! underMore(ConflictAction::ReplaceOlder)) ||
-                            ((expectSkipSame || expectReplace) && policy.overflowActionCount < 2u) ||
+                            (expectSkipSame && ! placedWithOtherChoices(ConflictAction::SkipSameSizeAndDate)) ||
+                            (expectReplace && ! placedWithOtherChoices(ConflictAction::ReplaceOlder)) ||
                             policy.defaultAction == ConflictAction::SkipSameSizeAndDate || policy.defaultAction == ConflictAction::ReplaceOlder ||
                             policy.escapeAction != ConflictAction::Cancel || ! policy.Contains(ConflictAction::Cancel) ||
                             policy.primaryActionCount + policy.overflowActionCount != policy.actionCount)
                         {
+                            Debug::Perf::Emit(L"FileOps.SelfTest.RepeatPolicyMatrixFailure", L"named collision action", 0u, bucketIndex, flags, E_FAIL);
                             return false;
                         }
                     }
@@ -9147,48 +9169,48 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
     loading.metadataLoading = true;
 
     return matchesPolicy(regularAllowed,
-                         {ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(regularWithheld,
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(readOnlyAllowed,
-                         {ConflictAction::ReplaceReadOnly, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::ReplaceReadOnly, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {ConflictAction::ReplaceReadOnly, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::ReplaceReadOnly, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(readOnlyWithheld,
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(typeMismatch,
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(destinationLink,
-                         {ConflictAction::ReplaceLink, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::ReplaceLink, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {ConflictAction::ReplaceLink, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::ReplaceLink, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(targetConflict, {ConflictAction::Skip, ConflictAction::Cancel}, {ConflictAction::Skip, ConflictAction::Cancel}, {}, false, false) &&
            matchesPolicy(accessRetry,
-                         {ConflictAction::Retry, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::Retry, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {ConflictAction::Retry, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::Retry, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(diskFull,
                          {ConflictAction::Retry, ConflictAction::SkipAll, ConflictAction::Cancel},
                          {ConflictAction::Retry, ConflictAction::SkipAll, ConflictAction::Cancel},
@@ -9269,70 +9291,51 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
                          false,
                          false,
                          ConflictAction::QueueUntilOtherTaskFinishes) &&
-           // I63 B4: Delete source waits under More with Skip All; without Skip All it is the one command More would hold,
-           // so it is published directly before Cancel.
+           // A lone Delete source gets its own button. Two specialized choices use More.
            matchesPolicy(discardMore,
-                         {ConflictAction::Overwrite,
-                          ConflictAction::KeepBoth,
-                          ConflictAction::DiscardSource,
-                          ConflictAction::Skip,
-                          ConflictAction::SkipAll,
-                          ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::DiscardSource, ConflictAction::SkipAll},
+                         {ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::DiscardSource, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::DiscardSource, ConflictAction::Cancel},
+                         {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(discardDirect,
                          {ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::DiscardSource, ConflictAction::Skip, ConflictAction::Cancel},
                          {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::DiscardSource, ConflictAction::Cancel},
                          {},
                          false,
                          false) &&
-           matchesPolicy(discardReadOnly,
-                         {ConflictAction::ReplaceReadOnly,
-                          ConflictAction::KeepBoth,
-                          ConflictAction::DiscardSource,
-                          ConflictAction::Skip,
-                          ConflictAction::SkipAll,
-                          ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::ReplaceReadOnly, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::DiscardSource, ConflictAction::SkipAll},
-                         true,
-                         true) &&
-           matchesPolicy(skipSameMore,
-                         {ConflictAction::Overwrite,
-                          ConflictAction::KeepBoth,
-                          ConflictAction::Skip,
-                          ConflictAction::SkipAll,
-                          ConflictAction::SkipSameSizeAndDate,
-                          ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::SkipAll, ConflictAction::SkipSameSizeAndDate},
-                         true,
-                         true) &&
+           matchesPolicy(
+               discardReadOnly,
+               {ConflictAction::ReplaceReadOnly, ConflictAction::KeepBoth, ConflictAction::DiscardSource, ConflictAction::Skip, ConflictAction::Cancel},
+               {ConflictAction::KeepBoth, ConflictAction::ReplaceReadOnly, ConflictAction::Skip, ConflictAction::DiscardSource, ConflictAction::Cancel},
+               {},
+               true,
+               false) &&
+           matchesPolicy(
+               skipSameMore,
+               {ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipSameSizeAndDate, ConflictAction::Cancel},
+               {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::SkipSameSizeAndDate, ConflictAction::Cancel},
+               {},
+               true,
+               false) &&
            matchesPolicy(replaceOlderMore,
-                         {ConflictAction::Overwrite,
-                          ConflictAction::KeepBoth,
-                          ConflictAction::Skip,
-                          ConflictAction::SkipAll,
-                          ConflictAction::ReplaceOlder,
-                          ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::SkipAll, ConflictAction::ReplaceOlder},
+                         {ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::ReplaceOlder, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::ReplaceOlder, ConflictAction::Cancel},
+                         {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(skipSameMove,
                          {ConflictAction::Overwrite,
                           ConflictAction::KeepBoth,
                           ConflictAction::DiscardSource,
                           ConflictAction::Skip,
-                          ConflictAction::SkipAll,
                           ConflictAction::SkipSameSizeAndDate,
                           ConflictAction::Cancel},
                          {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::DiscardSource, ConflictAction::SkipAll, ConflictAction::SkipSameSizeAndDate},
+                         {ConflictAction::DiscardSource, ConflictAction::SkipSameSizeAndDate},
                          true,
-                         true) &&
+                         false) &&
+           accessRetry.UsesSkipOnlyRepeatLabel() && ! regularAllowed.UsesSkipOnlyRepeatLabel() && ! diskFull.UsesSkipOnlyRepeatLabel() &&
            loading.actionCount == 0u && loading.primaryActionCount == 0u && loading.overflowActionCount == 0u &&
            loading.defaultAction == ConflictAction::None && loading.escapeAction == ConflictAction::None && ! loading.applyToAllEligible &&
            ! loading.skipAllEligible && ! loading.buttonsPublishable;
@@ -9359,6 +9362,7 @@ void DebugBuildFileOpsVisualConflictPolicyForSelfTest(
     prompt.defaultAction       = policy.defaultAction;
     prompt.escapeAction        = policy.escapeAction;
     prompt.applyToAllEligible  = policy.applyToAllEligible;
+    prompt.applyToAllOnlySkip  = policy.UsesSkipOnlyRepeatLabel();
     prompt.skipAllEligible     = policy.skipAllEligible;
     prompt.buttonsPublishable  = policy.buttonsPublishable;
 }
