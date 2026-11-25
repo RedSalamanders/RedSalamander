@@ -180,6 +180,7 @@
 .PARAMETER NonInteractive
     Omits entries that require the person's desktop; omitted acceptance remains pending.
     Reports the pending entry count, including zero, in planning and execution.
+    The exact FileOps_DeferredExitRefusesNewWork case uses owned windows without activation.
     The repository verdict is NOT_EVALUATED. Never use this to claim Fresh Full success.
 
 .OUTPUTS

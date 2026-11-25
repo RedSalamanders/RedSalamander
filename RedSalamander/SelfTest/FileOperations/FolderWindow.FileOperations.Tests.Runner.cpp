@@ -12259,9 +12259,8 @@ void CALLBACK AlertOverlayLifetimePromptStep(HWND, UINT, UINT_PTR timerId, DWORD
     return passed;
 }
 
-// A refused admission must never show the FolderView rename prompt or the Change Case prompt. While
-// the refusal routes run, a thread timer counts and cancels either one, so a regression fails the case
-// instead of blocking it in a modal loop.
+// A refused admission must never show a FolderView Rename, Change Case or Create Directory prompt.
+// A thread timer counts and cancels any such prompt so the refusal case fails without blocking.
 std::atomic<uint32_t> g_deferredExitModalPromptCount{0u};
 
 void CALLBACK CancelDeferredExitModalPrompt(HWND, UINT, UINT_PTR, DWORD) noexcept
@@ -12269,6 +12268,8 @@ void CALLBACK CancelDeferredExitModalPrompt(HWND, UINT, UINT_PTR, DWORD) noexcep
     if (GetFolderViewRenamePromptHandle() != nullptr && DebugCancelFolderViewRenamePrompt())
         g_deferredExitModalPromptCount.fetch_add(1u, std::memory_order_acq_rel);
     if (GetFolderViewChangeCasePromptHandle() != nullptr && DebugCancelFolderViewChangeCasePrompt())
+        g_deferredExitModalPromptCount.fetch_add(1u, std::memory_order_acq_rel);
+    if (GetFolderViewCreateDirectoryPromptHandle() != nullptr && DebugCancelFolderViewCreateDirectoryPrompt())
         g_deferredExitModalPromptCount.fetch_add(1u, std::memory_order_acq_rel);
 }
 
@@ -12530,8 +12531,51 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
     HostSetAutoAcceptPrompts(false);
     HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
     uint64_t prompts = HostGetTestPromptRequestCount();
-    if (folder->ConfirmCancelAllFileOperations(closeTargets[0]) || HostGetTestPromptRequestCount() != prompts + 1u || ! folder->IsFileOperationsExitPending() ||
-        IsWindow(closeTargets[0]) == FALSE)
+    {
+        // The timer runs inside the real Create Directory name prompt's modal pump.
+        struct CreateDirectoryExit final
+        {
+            explicit CreateDirectoryExit(FolderWindow& owner) noexcept : folder(owner)
+            {
+            }
+
+            FolderWindow& folder;
+            bool closeDeferred = false;
+            bool submitted     = false;
+
+            static void CALLBACK Tick(HWND closeTarget, UINT, UINT_PTR id, DWORD) noexcept
+            {
+                auto* context     = static_cast<CreateDirectoryExit*>(GetPropW(closeTarget, L"RedSalamander.CreateDirectoryExit"));
+                const HWND prompt = GetFolderViewCreateDirectoryPromptHandle();
+                if (! context || ! prompt)
+                    return;
+                KillTimer(closeTarget, id);
+                context->closeDeferred = ! context->folder.ConfirmCancelAllFileOperations(closeTarget);
+                context->submitted =
+                    DebugSetFolderViewCreateDirectoryPromptText(L"blocked-during-create-dialog") && DebugConfirmFolderViewCreateDirectoryPrompt();
+                if (! context->submitted)
+                    PostMessageW(prompt, WM_CLOSE, 0, 0);
+            }
+        };
+        CreateDirectoryExit witness{*folder};
+        const HWND closeTarget = closeTargets[0];
+        const auto property    = L"RedSalamander.CreateDirectoryExit";
+        if (! SetPropW(closeTarget, property, &witness))
+            return reject(L"the Create Directory exit witness could not bind its test window");
+        const UINT_PTR timer      = SetTimer(closeTarget, 1u, 30u, &CreateDirectoryExit::Tick);
+        const auto cleanupWitness = wil::scope_exit([&]() noexcept
+        {
+            if (timer)
+                KillTimer(closeTarget, timer);
+            RemovePropW(closeTarget, property);
+        });
+        if (! timer)
+            return reject(L"the Create Directory exit witness could not start its modal timer");
+        folder->CommandCreateDirectory(kSource);
+        if (! witness.submitted || ! witness.closeDeferred || exists(sourceRoot / L"blocked-during-create-dialog"))
+            return reject(L"the Create Directory prompt did not refuse a name submitted after the nested exit consent");
+    }
+    if (HostGetTestPromptRequestCount() != prompts + 1u || ! folder->IsFileOperationsExitPending() || IsWindow(closeTargets[0]) == FALSE)
         return reject(L"accepting the exit consent did not ask exactly once and defer the close");
     const auto* heldTask   = operations->FindTask(heldTaskId.value());
     const auto* queuedTask = operations->FindTask(queuedTaskId.value());
@@ -12690,6 +12734,14 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
         folder->CommandMoveToOtherPane(kSource, false);
         return S_OK;
     }) &&
+                         attempt(L"pane Create Directory",
+                                 kSource,
+                                 IDS_CAPTION_CREATE_DIR,
+                                 [&]() noexcept
+    {
+        folder->CommandCreateDirectory(kSource);
+        return S_OK;
+    }) &&
                          attempt(L"pane Permanent delete",
                                  kSource,
                                  IDS_FILEOP_OPERATION_DELETE,
@@ -12706,7 +12758,7 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
         DWORD performed  = DROPEFFECT_NONE;
         const HRESULT hr = destinationView->DebugPerformFileDropForSelfTest({payload}, DROPEFFECT_COPY, &performed);
         // The pane alert explains the refusal; FolderView must not replace it with a generic failure.
-        return refusedHr(L"drag and drop", hr, S_OK) ? S_OK : E_FAIL;
+        return refusedHr(L"drag and drop", hr, DRAGDROP_S_CANCEL) && performed == DROPEFFECT_NONE ? S_OK : E_FAIL;
     }) &&
                          attempt(L"clipboard Move admission",
                                  std::nullopt,
