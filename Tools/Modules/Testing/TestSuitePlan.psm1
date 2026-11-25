@@ -148,6 +148,8 @@ function Get-RSTestRunPlan {
              $CaseFilter -ceq 'FileOps_RepeatedNonClipboardCopyStorage' -or
              $CaseFilter -ceq 'FileOps_RepeatedNonClipboardMoveStorage' -or
              $CaseFilter -ceq 'FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof' -or
+             $CaseFilter -ceq 'R0fGraph_FakeGraphReadWriteCreateRenameRecycle' -or
+             $CaseFilter -ceq 'Phase16_RemoteOneDrivePersonalInlineRename' -or
              $CaseFilter -ceq 'FileOps_RepeatDecisionContracts' -or
              $CaseFilter -ceq 'FileOps_AlertOverlayUxAccessibility' -or
              $CaseFilter -ceq 'FileOps_ReviewRemediationContracts' -or

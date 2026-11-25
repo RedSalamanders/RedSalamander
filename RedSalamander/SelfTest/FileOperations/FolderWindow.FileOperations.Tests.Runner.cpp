@@ -994,6 +994,7 @@ struct SelfTestState
         Phase16_RemoteS3FileOps,
         Phase16_RemoteOneDrivePersonalSecret,
         Phase16_RemoteOneDrivePersonalSandbox,
+        Phase16_RemoteOneDrivePersonalInlineRename,
         Phase16_RemoteOneDrivePersonalFileOps,
         Phase16_RemoteOneDriveBusinessSecret,
         Phase16_RemoteOneDriveBusinessSandbox,
@@ -1645,6 +1646,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Phase16_RemoteS3FileOps: return L"Phase16_RemoteS3FileOps";
         case SelfTestState::Step::Phase16_RemoteOneDrivePersonalSecret: return L"Phase16_RemoteOneDrivePersonalSecret";
         case SelfTestState::Step::Phase16_RemoteOneDrivePersonalSandbox: return L"Phase16_RemoteOneDrivePersonalSandbox";
+        case SelfTestState::Step::Phase16_RemoteOneDrivePersonalInlineRename: return L"Phase16_RemoteOneDrivePersonalInlineRename";
         case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps: return L"Phase16_RemoteOneDrivePersonalFileOps";
         case SelfTestState::Step::Phase16_RemoteOneDriveBusinessSecret: return L"Phase16_RemoteOneDriveBusinessSecret";
         case SelfTestState::Step::Phase16_RemoteOneDriveBusinessSandbox: return L"Phase16_RemoteOneDriveBusinessSandbox";
@@ -2021,6 +2023,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::Phase16_RemoteS3FileOps,                             // Phase 16 â€” sandboxed CRUD/copy-move coverage (S3)
     SelfTestState::Step::Phase16_RemoteOneDrivePersonalSecret,                // Phase 16 â€” secure secret retrieval (OneDrive Personal)
     SelfTestState::Step::Phase16_RemoteOneDrivePersonalSandbox,               // Phase 16 â€” remote sandbox root configuration (OneDrive Personal)
+    SelfTestState::Step::Phase16_RemoteOneDrivePersonalInlineRename,          // Phase 16 - live file, folder and case-only Rename
     SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps,               // Phase 16 â€” sandboxed CRUD/copy-move coverage (OneDrive Personal)
     SelfTestState::Step::Phase16_RemoteOneDriveBusinessSecret,                // Phase 16 â€” secure secret retrieval (OneDrive Business)
     SelfTestState::Step::Phase16_RemoteOneDriveBusinessSandbox,               // Phase 16 â€” remote sandbox root configuration (OneDrive Business)
@@ -2355,7 +2358,7 @@ constexpr std::array<SelfTestState::Step, 2> kFileOpsFamilyPhase15{{
     SelfTestState::Step::Phase15_FileSystem7zMountPathImpact,
 }};
 
-constexpr std::array<SelfTestState::Step, 19> kFileOpsFamilyPhase16{{
+constexpr std::array<SelfTestState::Step, 20> kFileOpsFamilyPhase16{{
     SelfTestState::Step::Phase16_RemoteWatchContractExposure,
     SelfTestState::Step::Phase16_RemoteFtpSecret,
     SelfTestState::Step::Phase16_RemoteFtpSandbox,
@@ -2370,6 +2373,7 @@ constexpr std::array<SelfTestState::Step, 19> kFileOpsFamilyPhase16{{
     SelfTestState::Step::Phase16_RemoteS3FileOps,
     SelfTestState::Step::Phase16_RemoteOneDrivePersonalSecret,
     SelfTestState::Step::Phase16_RemoteOneDrivePersonalSandbox,
+    SelfTestState::Step::Phase16_RemoteOneDrivePersonalInlineRename,
     SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps,
     SelfTestState::Step::Phase16_RemoteOneDriveBusinessSecret,
     SelfTestState::Step::Phase16_RemoteOneDriveBusinessSandbox,
@@ -4787,12 +4791,12 @@ void CleanupRemoteOneDrivePersonalCase(SelfTestState& state) noexcept
 {
     if (state.fsRemoteOneDrivePersonal && ! state.remoteOneDrivePersonalCaseRootConn.empty())
     {
-        static_cast<void>(
-            state.fsRemoteOneDrivePersonal->DeleteItem(state.remoteOneDrivePersonalCaseRootConn.c_str(),
-                                                       static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
-                                                       nullptr,
-                                                       nullptr,
-                                                       nullptr));
+        static_cast<void>(state.fsRemoteOneDrivePersonal->DeleteItem(
+            state.remoteOneDrivePersonalCaseRootConn.c_str(),
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+            nullptr,
+            nullptr,
+            nullptr));
     }
 
     ResetRemoteS3State(state);
@@ -14719,6 +14723,155 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     Debug::Perf::Emit(L"FileOps.SelfTest.ProbedInlineRenameUs", L"Dummy collision,case,cancel,stale source", Debug::Perf::ElapsedUs(began), 4u, 0u, S_OK);
     AppendLog(L"Probed inline Rename kept the observed occupant, verified exact spelling and refused cancel and stale-source dispatch.");
     return true;
+}
+
+[[nodiscard]] HRESULT RunGraphInlineRenameForSelfTest(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                      const std::filesystem::path& source,
+                                                      std::wstring_view destinationLeaf) noexcept
+{
+    RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
+    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
+        return E_UNEXPECTED;
+
+    Common::Settings::Settings settings{};
+    wil::unique_hwnd privateHost(
+        CreateWindowExW(0, L"STATIC", L"Owned Graph test", WS_POPUP, 0, 0, 640, 480, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));
+    FolderWindow owner;
+    owner.SetSettings(&settings);
+    constexpr auto pane = FolderWindow::Pane::Left;
+    if (! privateHost || ! owner.Create(privateHost.get(), 0, 0, 640, 480))
+        return E_UNEXPECTED;
+    const auto information         = fileSystem.try_query<IInformations>();
+    const PluginMetaData* metadata = nullptr;
+    if (! information || information->GetMetaData(&metadata) != S_OK || ! metadata || ! metadata->shortId)
+        return E_UNEXPECTED;
+    RETURN_IF_FAILED(
+        owner.SetFileSystemInstanceForPane(pane, fileSystem, std::wstring(kPluginIdOneDrivePersonal), metadata->shortId, L"graph-rename-selftest"));
+
+    auto* operations = owner.DebugGetFileOperationState();
+    if (! operations)
+        return E_UNEXPECTED;
+    const auto cleanup = wil::scope_exit([&]() noexcept { static_cast<void>(CancelOutstandingSelfTestOperations(operations)); });
+    std::optional<FolderWindow::FileOperationCompletedEvent> completion;
+    const uint64_t callback = owner.AddFileOperationCompletedCallback([&](const FolderWindow::FileOperationCompletedEvent& event) { completion = event; });
+    const auto unsubscribe  = wil::scope_exit([&]() noexcept { owner.RemoveFileOperationCompletedCallback(callback); });
+
+    uint64_t id            = 0u;
+    const HRESULT admitted = operations->AdmitInlineRename(pane, fileSystem, source, std::wstring(destinationLeaf), &id);
+    if (admitted != S_OK || id == 0u)
+        return FAILED(admitted) ? admitted : E_UNEXPECTED;
+    const auto finished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return completion.has_value() && completion->taskId == id && operations->FindTask(id) == nullptr;
+    }, {.timeout = SelfTest::Scale(std::chrono::seconds(30)), .operationName = L"Graph inline Rename completion"});
+    if (! finished.conditionMet)
+        return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+    if (completion->hr != S_OK || completion->itemOutcomes.size() != 1u)
+        return FAILED(completion->hr) ? completion->hr : E_UNEXPECTED;
+
+    const auto& result = completion->itemOutcomes.front();
+    if (result.status != S_OK || result.publication != FileOperations::PublicationState::Published ||
+        result.sourceDisposition != FileOperations::SourceDisposition::Removed || result.completion != FileOperations::ItemCompletion::Completed ||
+        result.finalDestinationPath.filename().native() != destinationLeaf)
+        return E_UNEXPECTED;
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT RunLiveOneDrivePersonalInlineRenameForSelfTest(const Common::Settings::ConnectionProfile& profile) noexcept
+{
+    const HRESULT enabled = FileSystemPluginManager::GetInstance().EnablePlugin(kPluginIdOneDrivePersonal, g_settings);
+    RETURN_IF_FAILED(enabled);
+    const auto* entry = FindLoadedPluginEntry(kPluginIdOneDrivePersonal);
+    if (! entry || ! entry->fileSystem)
+        return E_UNEXPECTED;
+
+    const auto fs          = entry->fileSystem;
+    const auto io          = fs.try_query<IFileSystemIO>();
+    const auto directories = fs.try_query<IFileSystemDirectoryOperations>();
+    const auto probed      = fs.try_query<IFileSystemProbedRename>();
+    if (! io || ! directories || ! probed)
+        return E_NOINTERFACE;
+
+    const std::wstring guid = NewGuidString();
+    if (guid.empty())
+        return E_UNEXPECTED;
+    const std::wstring root =
+        MakeConnectionPathForSelfTest(profile.name, JoinPluginPathForSelfTest(profile.initialPath, std::format(L"fileops-selftest-onedrivep-rename-{}", guid)));
+    if (root.empty())
+        return E_INVALIDARG;
+    const HRESULT created = directories->CreateDirectory(root.c_str());
+    if (created != S_OK)
+        return FAILED(created) ? created : E_UNEXPECTED;
+    AppendLog(std::format(L"Live OneDrive Rename created owned fixture {}.", guid));
+
+    const auto notFound = [&](const std::filesystem::path& path) noexcept
+    {
+        unsigned long attributes = 0;
+        const HRESULT hr         = io->GetAttributes(ToPluginPathText(path).c_str(), &attributes);
+        return hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
+    };
+    const auto hasBytes = [&](const std::filesystem::path& path, std::string_view expected) noexcept
+    {
+        std::string actual;
+        return ReadFileTextFsIo(io, path, actual) && actual == expected;
+    };
+    const auto reject = [](std::wstring_view explanation, HRESULT status = E_FAIL) noexcept
+    {
+        AppendLog(std::format(L"Live OneDrive Rename: {} (hr=0x{:08X}).", explanation, static_cast<unsigned long>(status)));
+        return FAILED(status) ? status : E_FAIL;
+    };
+    const std::filesystem::path parent(root);
+    constexpr std::string_view fileBytes     = "owned live Rename source";
+    constexpr std::string_view occupantBytes = "owned live Rename occupant";
+    const auto original                      = parent / L"before.txt";
+    const auto occupant                      = parent / L"occupied.txt";
+    const auto renamed                       = parent / L"renamed.txt";
+    const auto folder                        = parent / L"folder-before";
+    const auto renamedFolder                 = parent / L"folder-after";
+
+    const auto started   = std::chrono::steady_clock::now();
+    const HRESULT result = [&]() noexcept -> HRESULT
+    {
+        if (! WriteFileTextFsIo(io, original, fileBytes) || ! WriteFileTextFsIo(io, occupant, occupantBytes) ||
+            directories->CreateDirectory(folder.c_str()) != S_OK || ! WriteFileTextFsIo(io, folder / L"inside.txt", fileBytes))
+            return reject(L"could not seed the fresh file, occupant and folder");
+
+        wil::com_ptr<IFileSystemProbedRenameSource> source;
+        const HRESULT captured = probed->CaptureProbedRenameSource(ToPluginPathText(original).c_str(), nullptr, source.put());
+        if (captured != S_OK || ! source)
+            return reject(L"could not capture the selected live source", captured);
+        FileSystemCorroboratedRenameResult refusal{};
+        const HRESULT collision = source->RenameToFreeSibling(L"occupied.txt", nullptr, &refusal);
+        if (collision != HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || refusal.mutationAttempted != FALSE || refusal.mutation.outcomeKnown != TRUE ||
+            refusal.mutation.mutationCommitted != FALSE || refusal.mutation.originalStillPresent != TRUE || ! hasBytes(original, fileBytes) ||
+            ! hasBytes(occupant, occupantBytes))
+            return reject(L"occupied-name refusal did not keep both files before dispatch", collision);
+        source.reset();
+
+        const HRESULT fileHr = RunGraphInlineRenameForSelfTest(fs, original, L"renamed.txt");
+        if (fileHr != S_OK || ! notFound(original) || ! hasBytes(renamed, fileBytes) || ! hasBytes(occupant, occupantBytes))
+            return reject(L"host file Rename did not prove a free sibling and its exact bytes", fileHr);
+
+        const HRESULT caseHr = RunGraphInlineRenameForSelfTest(fs, renamed, L"Renamed.txt");
+        if (caseHr != S_OK || ! hasBytes(parent / L"Renamed.txt", fileBytes))
+            return reject(L"host case-only Rename did not prove the requested spelling and bytes", caseHr);
+
+        const HRESULT folderHr = RunGraphInlineRenameForSelfTest(fs, folder, L"folder-after");
+        if (folderHr != S_OK || ! notFound(folder) || ! hasBytes(renamedFolder / L"inside.txt", fileBytes))
+            return reject(L"host folder Rename did not prove publication and preserved contents", folderHr);
+        return S_OK;
+    }();
+    Debug::Perf::Emit(
+        L"FileOps.SelfTest.OneDrivePersonalInlineRenameUs", L"owned live file, case, folder and collision", Debug::Perf::ElapsedUs(started), 3u, 1u, result);
+
+    const HRESULT recycled =
+        fs->DeleteItem(root.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN), nullptr, nullptr, nullptr);
+    if (recycled != S_OK || ! notFound(parent))
+    {
+        const HRESULT cleanup = reject(L"could not verify Recycle of the exact owned fixture", recycled);
+        return FAILED(result) ? result : cleanup;
+    }
+    AppendLog(L"Live OneDrive Rename recycled the owned fixture and verified its absence.");
+    return result;
 }
 
 [[nodiscard]] bool RunFileOpsSmbExactRenameProviderChecks(SelfTestState& state, std::wstring& unavailableReason) noexcept

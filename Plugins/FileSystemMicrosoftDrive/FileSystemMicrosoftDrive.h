@@ -101,6 +101,7 @@ private:
 class FileSystemMicrosoftDrive final : public IFileSystem,
                                        public FileSystemRouteCapabilitiesBase,
                                        public IFileSystemIO,
+                                       public IFileSystemProbedRename,
                                        public IFileSystemDirectoryOperations,
                                        public IFileSystemAtomicWriter,
                                        public IInformations,
@@ -186,6 +187,9 @@ public:
                                           const FileSystemOptions* options = nullptr,
                                           IFileSystemCallback* callback    = nullptr,
                                           void* cookie                     = nullptr) noexcept override;
+    HRESULT STDMETHODCALLTYPE CaptureProbedRenameSource(const wchar_t* path,
+                                                        const FileSystemOptions* options,
+                                                        IFileSystemProbedRenameSource** source) noexcept override;
     HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
                                                FileSystemOperation operationType,
@@ -251,6 +255,7 @@ protected:
     HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
+    class ProbedRenameSource;
     ~FileSystemMicrosoftDrive();
     [[nodiscard]] IHostAlerts* GetHostAlerts() const noexcept;
     void ShowMissingClientIdAlert() const noexcept;

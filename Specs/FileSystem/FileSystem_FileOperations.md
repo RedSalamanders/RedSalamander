@@ -2583,6 +2583,11 @@ A known name collision can offer Keep both using the next available typed siblin
 The provider still enforces no-replace against an external creator. Keep both does not offer
 any replacement action. An unknown mutation result ends the task without replay.
 
+For OneDrive Personal, the probed inline token captures the selected drive item, parent and revision.
+The worker validates the requested sibling and captures the provider's pre-dispatch collision or
+proved publication receipt. A file or folder must belong to the selected drive. Keep both uses a new
+sibling name. An indeterminate dispatch ends mutation authority. [Microsoft Drive provider contract](FileSystem_MicrosoftDrive.md)
+
 If the host rejects the request before publishing a task, FolderView shows a localized pane-scoped
 operation error because no task card exists. After successful task publication, failure presentation
 belongs only to the central task UI; FolderView does not add a duplicate pane alert.
