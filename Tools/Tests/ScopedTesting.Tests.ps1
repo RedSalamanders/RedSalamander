@@ -7,11 +7,13 @@ Describe 'Scoped testing and PR coverage contracts' {
     It 'validates real fragments before affected execution and keeps explanation non-executing' {
         $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('fragment-admission-'+[guid]::NewGuid().ToString('N'))
         $moduleDirectory=Join-Path $fixture 'Tools/Modules/Testing'
-        $documentationDirectory=Join-Path $fixture 'Tools/Modules/Documentation'
-        [void](New-Item -ItemType Directory -Path $moduleDirectory,$documentationDirectory,(Join-Path $fixture 'Changes') -Force)
-        foreach($relative in @('Test-Changes.ps1','Tools/Test-Changelog.ps1','Tools/Modules/Documentation/Changelog.psm1')) {
+        [void](New-Item -ItemType Directory -Path $moduleDirectory,(Join-Path $fixture '.ci'),(Join-Path $fixture 'Changes') -Force)
+        foreach($relative in @('Test-Changes.ps1','Tools/Test-Changelog.ps1','.ci/project.json')) {
             Copy-Item -LiteralPath (Join-Path $repoRoot $relative) -Destination (Join-Path $fixture $relative)
         }
+        # The Tools/Test-Changelog.ps1 engine shim runs the pinned engine from the fixture's own .ci-engine.
+        Invoke-RSTestFixtureGit -Arguments @('clone';'--quiet';'--no-hardlinks';(Join-Path $repoRoot '.ci-engine');(Join-Path $fixture '.ci-engine')) *> (Join-Path $fixture 'engine-clone.log')
+        $LASTEXITCODE | Should Be 0
         'function Assert-ScopedTestNames { param($Root) return 1 }; Export-ModuleMember -Function Assert-ScopedTestNames' |
             Set-Content -LiteralPath (Join-Path $moduleDirectory 'ScopedTesting.psm1')
         @'

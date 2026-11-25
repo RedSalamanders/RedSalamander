@@ -590,7 +590,8 @@ contract and is authoritative when the table is intentionally brief.
 | `Clean-TestSandbox.ps1` | Public maintenance command | Lists or explicitly removes one exact run directory beneath marked `X:\RedSalamander.Perf`; it never touches historical outside-root locations. Apply protects live owners using the runner's PID-reuse policy. Preview/WhatIf/success exit 0; a failed removal returns `Status: Failed`, warns and exits 1. Review manually named runs and verify evidence preservation first. Removal never follows reparse points: junctions and directory symlinks are unlinked, and a run containing a volume mount point is refused whole (an administrator must remove the mount). A run that records a test-owned VHDX receipt is torn down first when elevated; unelevated, a VHDX kept detached after a failed FileOps suite is deleted with the run and any other receipt refuses the whole run with the receipt path and the exact recovery commands; a dry run warns. |
 | `CompareTestRuns.ps1` | Public report command | Compares two archived self-test runs. |
 | `Evaluate-TerminalEngines.ps1` | Historical Gate-0 command | Reproduces/authenticates the sealed multi-candidate selection; not a product build. |
-| `Fold-Changelog.ps1` | Public changelog command | Folds pending fragments in the checkout it is given: the default branch's fold, normally through `Submit-ChangelogFold.ps1`, never part of a feature change; supports read-only -Check and -WhatIf preview. |
+| `Fold-Changelog.ps1` | Public changelog command | Engine shim of the pinned `.ci-engine` command. Folds pending fragments in the checkout it is given: the default branch's fold, normally through `Submit-ChangelogFold.ps1`, never part of a feature change; supports read-only -Check and -WhatIf preview. |
+| `Release-Changelog.ps1` | Public changelog command | Engine shim of the pinned `.ci-engine` command. In a release-only change after every fragment is folded, moves the Unreleased entries under one `## <version> - <date>` heading; WhatIf is read-only. |
 | `GenerateDebugIcons.ps1` | Internal asset generator | Regenerates checked-in debug-badged icon resources. |
 | `Get-GhosttyTerminalRuntimeStatus.ps1` | Public read-only runtime status command | Validates the lock without network, observes official upstream/advisories, or freezes one explicit candidate; writes only below `.build`. |
 | `Get-SpecInventory.ps1` | Public governance command | Validates specs/WIP/links and test inventory. Validation uses `-NoReports`; default catalog generation retains four reports below `.build`. |
@@ -621,12 +622,12 @@ contract and is authoritative when the table is intentionally brief.
 | `Run-MtpLiveCloseout.ps1` | Public opt-in device command | Runs MTP/PTP live-device closeout smoke and archives all local evidence beneath the selected `X:\RedSalamander.Perf` run. |
 | `SanitizedEnvironment.ps1` | Internal compatibility loader | Preserves the frozen Terminal tooling path; current callers import `Modules/Build/SanitizedEnvironment.psm1`. |
 | `Show-PerfRuns.ps1` | Public performance report command | Lists, compares, and trends archived performance evidence; mixed units for one metric fail closed. The FolderView preset separates `folder.sort_product_paint_us`, legacy `folder.sort_toggle_us` and inclusive writer attribution `folder.sort_jsonl_write_us`. |
-| `Submit-ChangelogFold.ps1` | Public changelog command | Folds the default branch's fragments in a temporary worktree outside the caller's checkout, verifies an exact fold and opens the fold pull request; -PushOnly leaves the pull request to the caller and -WhatIf pushes nothing. |
+| `Submit-ChangelogFold.ps1` | Public changelog command | Engine shim of the pinned `.ci-engine` command. Folds the default branch's fragments in a temporary worktree outside the caller's checkout, verifies an exact fold and opens the fold pull request; -PushOnly leaves the pull request to the caller and -WhatIf pushes nothing. |
 | `TerminalEngineEvaluator.psm1` | Historical Gate-0 module | Sealed candidate collection/finalization implementation. |
 | `TerminalEvidence.psm1` | Historical evidence module | Authenticates sealed terminal evaluation records. |
 | `Test-TerminalEngineRound4Closeout.ps1` | Historical closeout command | Reauthenticates the frozen Round-4 selection evidence. |
-| `Test-Changelog.ps1` | Public read-only validator | Checks fragment names/content and the changelog; pending fragments are expected. -Base refuses any CHANGELOG.md change that is not an exact fold of fragments the merge base holds (PrePush: origin/main; CI: HEAD^1); -RequireFolded checks a finished fold. |
-| `Test-ChangelogWorkflow.ps1` | Internal tooling fixture entrypoint | Runs shared behavior fixtures (local Git repositories and a bare remote) in the existing marked sandbox through the Changelog Pester adapter. |
+| `Test-Changelog.ps1` | Public read-only validator | Engine shim of the pinned `.ci-engine` command. Validates pending fragments and checks the changelog. With `-Base`, it accepts the exact fold or generated release transition. `-RequireFolded` verifies a finished fold. |
+| `Test-ChangelogWorkflow.ps1` | Internal tooling fixture entrypoint | Engine shim of the pinned `.ci-engine` command. Runs shared behavior fixtures (local Git repositories and a bare remote) in the existing marked sandbox through the Changelog Pester adapter. |
 | `Test-TestRunArchive.ps1` | Public evidence command | Validates changed, staged, complete, or paired Terminal VT `Specs/TestRuns` archives, including area schemas and identity/performance bindings; the public ancestral snapshot supplies missing implicit relocation-baseline identities. |
 | `TestRunPlan.ps1` | Internal compatibility loader | Preserves sealed historical test paths; current callers import `Modules/Testing/TestRunPlan.psm1`. |
 | `tool-inventory.json` | Tooling-governance data | Machine-readable contract consumed by the validator and tests. |
@@ -643,7 +644,6 @@ and focused tests.
 | Module | Responsibility |
 |---|---|
 | `Modules/Auditing/RepositorySourceScanner.psm1` | Deterministic repository source discovery and match scanning with repository-relative exclusions. |
-| `Modules/Documentation/Changelog.psm1` | Shared Changes validation, exact-fold comparison with a base, deterministic merge, duplicate-pending-entry refusal, staged publication and retry-safe cleanup. |
 | `Modules/Build/ArtifactOperationLock.psm1` | Profile artifact, platform-scoped vcpkg-root, and packaging coordination with native immediate-child-authenticated delegation, scoped contamination, path-qualified residual-process policy, reparse-safe guarded output paths, and same-directory atomic file publication. |
 | `Modules/Build/BuildProjectSelection.psm1` | Solution project selection and transitive dependency resolution. |
 | `Modules/Build/BuildEvidence.psm1` | Manifest-derived artifact/runtime closure, legacy/current vcpkg app-local path normalization, complete Ghostty lock/build-input identity, measured test-surface identity, canonical compiler/linker/RC/SDK identity, verified immutable receipts with idempotent same-projection publication that retains first-record bytes, receipt-derived portable payload staging/import, and final output rendering. |
@@ -775,7 +775,8 @@ identified VLC runtime and passing decoder observations, never a skip.
 
 ## Changes workflow
 
-See [Changes/README.md](../Changes/README.md). A change keeps its fragment and never edits CHANGELOG.md. Test-Changelog.ps1 validates without writes; with -Base (PrePush uses origin/main, CI uses HEAD^1) it refuses any CHANGELOG.md change that is not an exact fold of fragments already on the base. Submit-ChangelogFold.ps1 folds the default branch's fragments in a temporary worktree and opens the fold pull request; Fold-Changelog.ps1 is the fold it runs there, with -WhatIf to preview and -Check as the read-only gate of a finished fold. Test-ChangelogWorkflow.ps1 runs shared fixtures through the current Changelog Pester adapter in the existing marked sandbox. The implementation lives under Modules/Documentation/Changelog.psm1.
+Feature changes keep their fragments. `Submit-ChangelogFold.ps1` generates a separate fold PR from the default branch. `Test-Changelog.ps1 -Base` verifies the exact fold or generated release transition against its base.
+The five project commands use the shared implementation at the pin in `.ci/project.json`. The Changelog Pester adapter runs shared fixtures in the marked test sandbox. [Changes contract](../Specs/Core/Core_Changes.md)
 
 Verify-RedMonitorClient.ps1 is also called by direct Common MSBuild; Update-RedMonitorClient.ps1 downloads exactly the public header and MIT notice at an explicit full commit.
 

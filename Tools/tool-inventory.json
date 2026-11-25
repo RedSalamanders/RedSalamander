@@ -323,7 +323,8 @@
       ],
       "usage": "See Changes/README.md and the command help; run on the default branch after merge, normally through Submit-ChangelogFold.ps1, never in a feature change.",
       "prerequisites": [
-        "PowerShell 7"
+        "PowerShell 7",
+        "The shared CI engine checkout at .ci-engine, at the commit .ci/project.json pins"
       ],
       "tests": [
         "Tools/Tests/Changelog.Tests.ps1"
@@ -338,7 +339,34 @@
         "Tools/Submit-ChangelogFold.ps1",
         "Tools/Tests/Changelog.Tests.ps1"
       ],
-      "purpose": "Fold validated Changes fragments into CHANGELOG.md on the default branch, with preview and a read-only zero-fragment gate."
+      "purpose": "Engine shim (Specs/ProjectCommands.md in the shared CI engine): runs the pinned .ci-engine implementation. Fold validated Changes fragments into CHANGELOG.md on the default branch, with preview and a read-only zero-fragment gate."
+    },
+    {
+      "lifecycle": "active",
+      "visibility": "public",
+      "replacement": null,
+      "ownerSpec": "Specs/Core/Core_Changes.md",
+      "kind": "command",
+      "sideEffects": [
+        "Atomically replaces CHANGELOG.md with the exact release transition; WhatIf is read-only"
+      ],
+      "usage": "See Changes/README.md and the command help; only in a release-only change after every fragment is folded, never in a feature change.",
+      "prerequisites": [
+        "PowerShell 7",
+        "The shared CI engine checkout at .ci-engine, at the commit .ci/project.json pins"
+      ],
+      "tests": [
+        "Tools/Tests/Changelog.Tests.ps1"
+      ],
+      "outputs": [
+        "Updated changelog",
+        "Console summary"
+      ],
+      "path": "Tools/Release-Changelog.ps1",
+      "usedBy": [
+        "Manual release use"
+      ],
+      "purpose": "Engine shim (Specs/ProjectCommands.md in the shared CI engine): runs the pinned .ci-engine implementation. Generate one release heading from the already folded Unreleased notes, as a separate release-only change."
     },
     {
       "lifecycle": "active",
@@ -354,7 +382,8 @@
       "prerequisites": [
         "PowerShell 7",
         "Git",
-        "Authenticated gh unless PushOnly"
+        "Authenticated gh unless PushOnly",
+        "The shared CI engine checkout at .ci-engine, at the commit .ci/project.json pins"
       ],
       "tests": [
         "Tools/Tests/Changelog.Tests.ps1"
@@ -369,7 +398,7 @@
         "Tools/Test-ChangelogWorkflow.ps1",
         "Tools/Tests/Changelog.Tests.ps1"
       ],
-      "purpose": "Fold the default branch's Changes fragments on a fold branch and open its pull request without touching the caller's checkout."
+      "purpose": "Engine shim (Specs/ProjectCommands.md in the shared CI engine): runs the pinned .ci-engine implementation. Fold the default branch's Changes fragments on a fold branch and open its pull request without touching the caller's checkout."
     },
     {
       "lifecycle": "active",
@@ -381,7 +410,8 @@
       "usage": "See Changes/README.md and the command help; run while editing, and with -Base before a push (PrePush) and in CI.",
       "prerequisites": [
         "PowerShell 7",
-        "Git for -Base"
+        "Git for -Base",
+        "The shared CI engine checkout at .ci-engine, at the commit .ci/project.json pins"
       ],
       "tests": [
         "Tools/Tests/Changelog.Tests.ps1"
@@ -397,7 +427,7 @@
         "Tools/Submit-ChangelogFold.ps1",
         "Tools/Tests/Changelog.Tests.ps1"
       ],
-      "purpose": "Read-only shared fragment-format validation, the exact-fold comparison of CHANGELOG.md with a base ref, and an optional check of a finished fold."
+      "purpose": "Engine shim (Specs/ProjectCommands.md in the shared CI engine): runs the pinned .ci-engine implementation. Read-only shared fragment-format validation, the exact-fold comparison of CHANGELOG.md with a base ref, and an optional check of a finished fold."
     },
     {
       "lifecycle": "active",
@@ -411,7 +441,8 @@
       "usage": "See Changes/README.md and the command help; run through the Changelog Pester adapter.",
       "prerequisites": [
         "PowerShell 7",
-        "Git"
+        "Git",
+        "The shared CI engine checkout at .ci-engine, at the commit .ci/project.json pins"
       ],
       "tests": [
         "Tools/Tests/Changelog.Tests.ps1"
@@ -423,37 +454,7 @@
       "usedBy": [
         "Tools/Tests/Changelog.Tests.ps1"
       ],
-      "purpose": "Run the shared cross-repository behavior fixtures inside a caller-provided existing marked sandbox scratch directory."
-    },
-    {
-      "lifecycle": "active",
-      "visibility": "internal",
-      "replacement": null,
-      "ownerSpec": "Specs/Core/Core_Changes.md",
-      "kind": "module",
-      "sideEffects": [
-        "Exported fold writes changelog and removes folded inputs; import, validation and the base comparison (read-only Git commands) never write"
-      ],
-      "usage": "See Changes/README.md and the command help; imported by the changelog commands and the shared behavior suite.",
-      "prerequisites": [
-        "PowerShell 7",
-        "Git for the base comparison"
-      ],
-      "tests": [
-        "Tools/Tests/Changelog.Tests.ps1"
-      ],
-      "outputs": [
-        "Fragment/problem records",
-        "Merged Markdown",
-        "Fold count"
-      ],
-      "path": "Tools/Modules/Documentation/Changelog.psm1",
-      "usedBy": [
-        "Tools/Fold-Changelog.ps1",
-        "Tools/Test-Changelog.ps1",
-        "Tools/Test-ChangelogWorkflow.ps1"
-      ],
-      "purpose": "Shared fragment validation, exact-fold comparison with a base ref, deterministic merge, refusal of ambiguous duplicate pending text and recoverable staged folding, identical across the six projects."
+      "purpose": "Engine shim (Specs/ProjectCommands.md in the shared CI engine): runs the pinned .ci-engine implementation. Run the shared cross-repository behavior fixtures inside a caller-provided existing marked sandbox scratch directory."
     },
     {
       "lifecycle": "active",

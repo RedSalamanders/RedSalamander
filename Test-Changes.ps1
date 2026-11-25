@@ -71,7 +71,7 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-# Pending fragments are expected: they are folded on the default branch after merge. CHANGELOG.md may change only by such a fold.
+# Pending fragments are folded on the default branch after merge. The pinned validator checks the exact fold or generated release transition.
 # BaseRef defaults to origin/HEAD for the impact comparison; the changelog is compared with origin/main unless a BaseRef is supplied.
 if (-not $Explain) {
     $changelogArguments = @{}
