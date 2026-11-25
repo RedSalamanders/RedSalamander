@@ -524,9 +524,11 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         };
         state.Require(! name.empty() && ! inherited.empty() && ! skip.empty() && ! preserve.empty() && waitForComboValue(name, inherited),
                       L"Copy links should start with the named provider-default choice.");
-        state.Require(selectCopyLinkPolicy(CopyLinkPolicy::Skip, skip) && DebugGetPreferencesDialogSnapshot(snapshot) && snapshot.dirty &&
-                          snapshot.shellApplyButtonEnabled && g_settings.fileOperations && g_settings.fileOperations->copyLinkPolicy == CopyLinkPolicy::Inherit,
-                      L"Selecting Skip should change the draft and enable Apply while the live default stays inherited.");
+        state.Require(selectCopyLinkPolicy(CopyLinkPolicy::Skip, skip), L"Keyboard input should select Skip in Copy links.");
+        state.Require(DebugGetPreferencesDialogSnapshot(snapshot) && snapshot.dirty && snapshot.shellApplyButtonEnabled,
+                      L"Changing Copy links should mark Preferences dirty and enable Apply.");
+        state.Require(g_settings.fileOperations && g_settings.fileOperations->copyLinkPolicy == CopyLinkPolicy::Inherit,
+                      L"The live Copy links default should stay inherited before Apply.");
         if (! state.failure.empty())
             return false;
 

@@ -2096,6 +2096,7 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
             baselineFileOperations.showInformationalNotes != workingFileOperations.showInformationalNotes ||
             baselineFileOperations.mirrorDecisionsInPane != workingFileOperations.mirrorDecisionsInPane ||
             baselineFileOperations.verifyAfterCopy != workingFileOperations.verifyAfterCopy ||
+            baselineFileOperations.copyLinkPolicy != workingFileOperations.copyLinkPolicy ||
             baselineFileOperations.defaultBandwidthLimitBytesPerSecond != workingFileOperations.defaultBandwidthLimitBytesPerSecond ||
             baselineFileOperations.maxParallelTransfers != workingFileOperations.maxParallelTransfers ||
             baselineFileOperations.crossFsBridgeBufferSizeKB != workingFileOperations.crossFsBridgeBufferSizeKB ||

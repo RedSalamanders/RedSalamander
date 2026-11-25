@@ -1,1 +1,1 @@
-- Cover the Copy links preference through its actual keyboard control and confirm that Apply saves the choice and Cancel discards the next draft.
+- File Operations Preferences now enables Apply and saves changes to Copy links when it is the only edited setting.
