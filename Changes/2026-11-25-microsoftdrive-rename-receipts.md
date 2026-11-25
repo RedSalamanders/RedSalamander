@@ -1,0 +1,1 @@
+- Microsoft Drive Rename preserves an observed occupant, sends the source revision with its rename request, and reports the per-item result to both single-item and batch callers.

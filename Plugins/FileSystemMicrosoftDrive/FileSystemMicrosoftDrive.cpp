@@ -4073,7 +4073,7 @@ using MoveDiscoveryReporter = std::function<void(bool isFolder, uint64_t sizeByt
         const HRESULT mutationHr = hr;
         ItemMetadata reconciled{};
         const HRESULT reconcileHr = GetItemMetadataById(fs, context, itemId, reconciled);
-        if (SUCCEEDED(reconcileHr) && reconciled.id == itemId && reconciled.name == newName && (! includeParent || reconciled.parentId == parentId))
+        if (SUCCEEDED(reconcileHr) && reconciled.id == itemId && reconciled.name == newName && (parentId.empty() || reconciled.parentId == parentId))
         {
             return S_OK;
         }
@@ -4184,6 +4184,7 @@ using CancelProbe       = std::function<HRESULT()>;
 struct MoveCommitResult
 {
     bool primaryMutationCommitted = false;
+    bool observedRenameCollision  = false;
     HRESULT cleanupStatus         = S_OK;
     HRESULT rollbackStatus        = S_OK;
 };
@@ -4191,15 +4192,15 @@ struct MoveCommitResult
 [[nodiscard]] const FileSystemItemMutationResult* BuildMoveMutationResult(const MoveCommitResult& commitResult,
                                                                           FileSystemItemMutationResult& itemMutationResult) noexcept
 {
-    if (! commitResult.primaryMutationCommitted)
+    if (! commitResult.primaryMutationCommitted && ! commitResult.observedRenameCollision)
     {
         return nullptr;
     }
 
     itemMutationResult.sizeBytes            = sizeof(itemMutationResult);
     itemMutationResult.outcomeKnown         = TRUE;
-    itemMutationResult.mutationCommitted    = TRUE;
-    itemMutationResult.originalStillPresent = FALSE;
+    itemMutationResult.mutationCommitted    = commitResult.primaryMutationCommitted ? TRUE : FALSE;
+    itemMutationResult.originalStillPresent = commitResult.observedRenameCollision ? TRUE : FALSE;
     itemMutationResult.ownedStageDisposition =
         FAILED(commitResult.cleanupStatus) ? FileSystemOwnedStageDisposition::Retained : FileSystemOwnedStageDisposition::NotApplicable;
     return &itemMutationResult;
@@ -4639,8 +4640,12 @@ struct MoveDestinationLookupHint
             return anySkipped ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : S_OK;
         }
 
-        if (! destinationIsSource && (flags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0)
+        if (! destinationIsSource && (! allowDirectoryMerge || (flags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0))
         {
+            // Rename has no expected-occupant replacement contract. An observed collision
+            // returns before any backup or primary PATCH, even with the legacy overwrite flag.
+            if (! allowDirectoryMerge && commitResultOut != nullptr)
+                commitResultOut->observedRenameCollision = true;
             return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
         }
 
@@ -4692,7 +4697,8 @@ struct MoveDestinationLookupHint
             return hr;
         }
     }
-    hr = MoveItemById(fs, sourceContext, sourceItem.id, destinationName, destinationParent.id, includeParent);
+    const std::wstring_view expectedSourceRevision = allowDirectoryMerge ? std::wstring_view{} : std::wstring_view(sourceItem.eTag);
+    hr = MoveItemById(fs, sourceContext, sourceItem.id, destinationName, destinationParent.id, includeParent, expectedSourceRevision);
     if (FAILED(hr))
     {
         if (! backupItemId.empty())
@@ -6211,19 +6217,17 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::DeleteItem(
     });
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::RenameItem(const wchar_t* sourcePath,
-                                                               const wchar_t* destinationPath,
-                                                               FileSystemFlags flags,
-                                                               const FileSystemOptions* options,
-                                                               IFileSystemCallback* callback,
-                                                               void* cookie) noexcept
+namespace
 {
-    const GraphOperationOptionsScope operationOptionsScope(options);
-    if (! FileSystemOptionsHaveValidHeader(options))
-    {
-        return E_INVALIDARG;
-    }
-
+[[nodiscard]] HRESULT RenameGraphItem(FileSystemMicrosoftDrive& fileSystem,
+                                      const wchar_t* sourcePath,
+                                      const wchar_t* destinationPath,
+                                      FileSystemFlags flags,
+                                      const FileSystemOptions* options,
+                                      IFileSystemCallback* callback,
+                                      void* cookie,
+                                      std::optional<MoveCommitResult>& commitResult) noexcept
+{
     const CancelProbe checkCancel = CancelProbe([options, callback, cookie]() noexcept -> HRESULT
     {
         bool cancelled         = false;
@@ -6246,35 +6250,55 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::RenameItem(const wchar_t* so
     }
 
     DriveContext sourceContext{};
-    HRESULT hr = BuildDriveContext(*this, sourcePath, sourceContext);
+    HRESULT hr = BuildDriveContext(fileSystem, sourcePath, sourceContext);
     if (FAILED(hr))
     {
         return hr;
     }
 
     DriveContext destinationContext{};
-    hr = BuildDriveContext(*this, destinationPath, destinationContext);
+    hr = BuildDriveContext(fileSystem, destinationPath, destinationContext);
     if (FAILED(hr))
     {
         return hr;
     }
 
-    // Rename never merges: renaming onto an existing folder stays an explicit conflict.
-    MoveCommitResult commitResult{};
-    hr = MoveOrRenameItem(*this,
-                          sourceContext,
-                          destinationContext,
-                          sourceContext.drivePath,
-                          destinationContext.drivePath,
-                          flags,
-                          MoveIssueReporter{},
-                          false,
-                          checkCancel,
-                          &commitResult,
-                          nullptr,
-                          nullptr);
+    // Rename never merges and never replaces an observed occupant.
+    return MoveOrRenameItem(fileSystem,
+                            sourceContext,
+                            destinationContext,
+                            sourceContext.drivePath,
+                            destinationContext.drivePath,
+                            flags,
+                            MoveIssueReporter{},
+                            false,
+                            checkCancel,
+                            &commitResult.emplace(),
+                            nullptr,
+                            nullptr);
+}
+} // namespace
+
+HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::RenameItem(const wchar_t* sourcePath,
+                                                               const wchar_t* destinationPath,
+                                                               FileSystemFlags flags,
+                                                               const FileSystemOptions* options,
+                                                               IFileSystemCallback* callback,
+                                                               void* cookie) noexcept
+{
+    const GraphOperationOptionsScope operationOptionsScope(options);
+    if (! FileSystemOptionsHaveValidHeader(options))
+    {
+        return E_INVALIDARG;
+    }
+
+    std::optional<MoveCommitResult> commitResult;
+    const HRESULT hr = RenameGraphItem(*this, sourcePath, destinationPath, flags, options, callback, cookie, commitResult);
+    if (! commitResult.has_value())
+        return hr;
+
     FileSystemItemMutationResult itemMutationResult{};
-    const FileSystemItemMutationResult* mutationResult = BuildMoveMutationResult(commitResult, itemMutationResult);
+    const FileSystemItemMutationResult* mutationResult = BuildMoveMutationResult(commitResult.value(), itemMutationResult);
     const HRESULT callbackHr = ReportItemResult(callback, FILESYSTEM_RENAME, 1, 1, 0, sourcePath, destinationPath, hr, options, cookie, mutationResult);
     return FAILED(callbackHr) ? callbackHr : hr;
 }
@@ -6621,6 +6645,7 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::RenameItems(const FileSystem
         std::wstring existingLeafName;
         hr = SplitParentAndLeaf(CanonicalizeInputPath(items[i].sourcePath), parentPath, existingLeafName);
         std::wstring destinationPath;
+        std::optional<MoveCommitResult> commitResult;
         if (SUCCEEDED(hr))
         {
             if (! items[i].newName || items[i].newName[0] == L'\0' || wcschr(items[i].newName, L'/') || wcschr(items[i].newName, L'\\'))
@@ -6630,10 +6655,13 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::RenameItems(const FileSystem
             else
             {
                 destinationPath = JoinMicrosoftDrivePath(parentPath, items[i].newName);
-                hr              = RenameItem(items[i].sourcePath, destinationPath.c_str(), flags, options, nullptr, nullptr);
+                hr              = RenameGraphItem(*this, items[i].sourcePath, destinationPath.c_str(), flags, options, nullptr, nullptr, commitResult);
             }
         }
 
+        FileSystemItemMutationResult itemMutationResult{};
+        const FileSystemItemMutationResult* mutationResult =
+            commitResult.has_value() ? BuildMoveMutationResult(commitResult.value(), itemMutationResult) : nullptr;
         const HRESULT callbackHr = ReportItemResult(callback,
                                                     FILESYSTEM_RENAME,
                                                     count,
@@ -6643,7 +6671,8 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::RenameItems(const FileSystem
                                                     destinationPath.empty() ? nullptr : destinationPath.c_str(),
                                                     hr,
                                                     options,
-                                                    cookie);
+                                                    cookie,
+                                                    mutationResult);
         if (FAILED(callbackHr))
         {
             return callbackHr;
@@ -9395,12 +9424,13 @@ public:
                                                       [[maybe_unused]] const wchar_t* sourcePath,
                                                       [[maybe_unused]] const wchar_t* destinationPath,
                                                       HRESULT status,
-                                                      [[maybe_unused]] const FileSystemItemMutationResult* mutationResult,
+                                                      const FileSystemItemMutationResult* mutationResult,
                                                       [[maybe_unused]] FileSystemOptions* options,
                                                       [[maybe_unused]] void* cookie) noexcept override
     {
         ++completionCount;
         lastCompletionStatus = status;
+        lastMutation         = mutationResult ? std::optional{*mutationResult} : std::nullopt;
         return S_OK;
     }
 
@@ -9436,6 +9466,7 @@ public:
     unsigned int issueCount      = 0u;
     unsigned int completionCount = 0u;
     HRESULT lastCompletionStatus = E_UNEXPECTED;
+    std::optional<FileSystemItemMutationResult> lastMutation;
 };
 
 enum class PublicOverwriteMutationKind
@@ -9918,6 +9949,104 @@ void RunDebugPatchRetryMergeSelfTest(unsigned int& passed, unsigned int& failed)
     DebugCheck(! graph.Exists(L"/src/Foo/child.txt", false), L"retried child move should leave no source child behind", passed, failed);
     DebugCheck(graph.Exists(L"/src/Foo", true), L"merged source folder should remain because Graph cannot delete it atomically only-if-empty", passed, failed);
     DebugCheck(graph.CountRequests(L"DELETE") == 0u, L"directory merge should never issue recursive source-folder DELETE", passed, failed);
+}
+
+void RunDebugPublicRenameReceiptsSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"public Rename receipt fixture should allocate Microsoft Drive instance", passed, failed))
+        return;
+
+    DebugGraphDrive graph;
+    graph.AddFile(L"/source.txt");
+    graph.AddFile(L"/occupied.txt");
+    graph.AddFolder(L"/elsewhere");
+    const std::wstring sourceId   = graph.ItemId(L"/source.txt");
+    const std::wstring occupiedId = graph.ItemId(L"/occupied.txt");
+
+    DebugHttpRequestHookScope hook(DebugGraphHook, &graph);
+    DebugFlagScope tokenBypass(g_debugMicrosoftDriveBypassAccessTokenForSelfTest, true);
+    DebugFlagScope noRetrySleep(g_debugMicrosoftDriveSuppressRetrySleepForSelfTest, true);
+    DebugFlagScope syntheticContext(g_debugMicrosoftDriveUseSyntheticContextForSelfTest, true);
+    DebugOverwriteIssueCallback callback;
+    constexpr wchar_t sourcePath[]   = L"/@conn:microsoft-drive-selftest/source.txt";
+    constexpr wchar_t occupiedPath[] = L"/@conn:microsoft-drive-selftest/occupied.txt";
+    constexpr wchar_t occupiedLeaf[] = L"occupied.txt";
+    const auto knownCollision        = [&]() noexcept
+    {
+        return callback.lastCompletionStatus == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) && callback.lastMutation.has_value() &&
+               callback.lastMutation.value().outcomeKnown == TRUE && callback.lastMutation.value().mutationCommitted == FALSE &&
+               callback.lastMutation.value().originalStillPresent == TRUE;
+    };
+    const auto started   = std::chrono::steady_clock::now();
+    const HRESULT single = fs->RenameItem(sourcePath, occupiedPath, FILESYSTEM_FLAG_ALLOW_OVERWRITE, nullptr, &callback, nullptr);
+    DebugCheck(single == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) && callback.completionCount == 1u && knownCollision(),
+               L"An observed Graph Rename collision should produce a known refusal even with the overwrite flag",
+               passed,
+               failed);
+
+    FileSystemArenaOwner arena;
+    if (! DebugCheck(SUCCEEDED(arena.Initialize(512u)), L"Batch Rename should allocate the caller arena", passed, failed))
+        return;
+    auto* pair = static_cast<FileSystemRenamePair*>(AllocateFromFileSystemArena(arena.Get(), sizeof(FileSystemRenamePair), alignof(FileSystemRenamePair)));
+    auto* arenaSource = static_cast<wchar_t*>(AllocateFromFileSystemArena(arena.Get(), sizeof(sourcePath), alignof(wchar_t)));
+    auto* arenaLeaf   = static_cast<wchar_t*>(AllocateFromFileSystemArena(arena.Get(), sizeof(occupiedLeaf), alignof(wchar_t)));
+    if (! DebugCheck(pair && arenaSource && arenaLeaf, L"Batch Rename inputs should fit the caller arena", passed, failed))
+        return;
+    std::ranges::copy(sourcePath, arenaSource);
+    std::ranges::copy(occupiedLeaf, arenaLeaf);
+    *pair = {sizeof(FileSystemRenamePair), arenaSource, arenaLeaf};
+
+    const HRESULT batch = fs->RenameItems(pair, 1u, FILESYSTEM_FLAG_ALLOW_OVERWRITE, nullptr, &callback, nullptr);
+    DebugCheck(batch == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) && callback.completionCount == 2u && knownCollision() && graph.CountRequests(L"PATCH") == 0u &&
+                   graph.CountRequests(L"DELETE") == 0u && graph.ItemId(L"/source.txt") == sourceId && graph.ItemId(L"/occupied.txt") == occupiedId,
+               L"Batch Rename should preserve both IDs and forward the same collision receipt without mutations",
+               passed,
+               failed);
+
+    constexpr wchar_t caseOnlyLeaf[] = L"Source.txt";
+    static_assert(sizeof(caseOnlyLeaf) <= sizeof(occupiedLeaf));
+    std::ranges::copy(caseOnlyLeaf, arenaLeaf);
+    const HRESULT caseOnly = fs->RenameItems(pair, 1u, FILESYSTEM_FLAG_NONE, nullptr, &callback, nullptr);
+    const bool revisionPinned =
+        std::ranges::any_of(graph.requests, [](const DebugDriveRequest& request) noexcept { return request.method == L"PATCH" && request.hasIfMatch; });
+    DebugCheck(caseOnly == S_OK && callback.completionCount == 3u && callback.lastMutation.has_value() && callback.lastMutation.value().outcomeKnown == TRUE &&
+                   callback.lastMutation.value().mutationCommitted == TRUE && callback.lastMutation.value().originalStillPresent == FALSE &&
+                   graph.CountRequests(L"PATCH") == 1u && revisionPinned && graph.ItemId(L"/Source.txt") == sourceId &&
+                   graph.HasExactLeafName(L"/Source.txt", L"Source.txt"),
+               L"Case-only Graph Rename should keep its ID and forward the revision-guarded commit receipt",
+               passed,
+               failed);
+    Debug::Perf::Emit(L"FileOps.SelfTest.GraphRenameReceiptUs",
+                      L"collision-and-case-only",
+                      static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count()),
+                      graph.CountRequests(L"GET"),
+                      graph.CountRequests(L"PATCH"),
+                      caseOnly);
+
+    const auto dropReplyAfterExternalMove = [](void* cookie,
+                                               std::wstring_view method,
+                                               std::wstring_view url,
+                                               std::span<const HttpHeader> headers,
+                                               std::string_view bodyUtf8,
+                                               bool allowRetry,
+                                               HttpResponse& response) noexcept
+    {
+        const HRESULT hr = DebugGraphHook(cookie, method, url, headers, bodyUtf8, allowRetry, response);
+        if (SUCCEEDED(hr) && method == L"PATCH" && response.statusCode == 200u &&
+            static_cast<DebugGraphDrive*>(cookie)->MoveAndRewriteExternally(L"/renamed.txt", L"/elsewhere", L"renamed.txt", "fixture"))
+        {
+            return HRESULT_FROM_WIN32(ERROR_CONNECTION_ABORTED);
+        }
+        return hr;
+    };
+    DebugHttpRequestHookScope replyLoss(dropReplyAfterExternalMove, &graph);
+    const HRESULT uncertain = fs->RenameItem(sourcePath, L"/@conn:microsoft-drive-selftest/renamed.txt", FILESYSTEM_FLAG_NONE, nullptr, &callback, nullptr);
+    DebugCheck(uncertain == HRESULT_FROM_WIN32(ERROR_CONNECTION_ABORTED) && callback.completionCount == 4u && ! callback.lastMutation.has_value() &&
+                   graph.ItemId(L"/elsewhere/renamed.txt") == sourceId && graph.ItemId(L"/occupied.txt") == occupiedId && graph.CountRequests(L"DELETE") == 0u,
+               L"Reconciliation must keep a lost reply unknown when the ID has the requested name under another parent",
+               passed,
+               failed);
 }
 
 void RunDebugCaseOnlyRenameSelfTest(unsigned int& passed, unsigned int& failed)
@@ -11282,6 +11411,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderMicrosoftDriveDe
     RunDebugMergeLateDestinationFailsClosedSelfTest(*passed, *failed);
     RunDebugPatchRetryMergeSelfTest(*passed, *failed);
     RunDebugCaseOnlyRenameSelfTest(*passed, *failed);
+    RunDebugPublicRenameReceiptsSelfTest(*passed, *failed);
     RunDebugDeleteRetrySelfTest(*passed, *failed);
     RunDebugR0dRecycleDeleteSelfTest(*passed, *failed);
     RunDebugCommittedDeleteRetryNotFoundSelfTest(*passed, *failed);
