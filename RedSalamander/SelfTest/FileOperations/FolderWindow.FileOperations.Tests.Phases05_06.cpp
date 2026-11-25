@@ -12606,6 +12606,12 @@ case SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation:
                 return false;
             }
         }
+        std::error_code sourceError;
+        if (! std::filesystem::is_directory(srcDir, sourceError) || sourceError)
+        {
+            fail(std::format(L"{}: the source must remain present until the held Copy is released.", label));
+            return true;
+        }
         AppendLog(std::format(L"{}: releasing held Copy after observing the Delete {}.", label, dontStart ? L"cancellation" : L"queue wait"));
         releaseCopyPause();
         state.stepState = 3u;
@@ -12657,14 +12663,15 @@ case SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation:
             NextStep(state, SelfTestState::Step::R4A02_ReadReadDoesNotWarn);
             return false;
         }
-        if (FAILED(deleteDone->second.hr) || sourceExists || FAILED(copyDone->second.hr) || deleteDone->second.interlockWaitCount == 0u)
+        // Explicit Queue time is recorded separately from a Parallel task's interlock waits.
+        if (FAILED(deleteDone->second.hr) || ec || sourceExists || FAILED(copyDone->second.hr) || deleteDone->second.queueWaitUs == 0u)
         {
-            fail(std::format(L"{}: Queue after must run the Delete after the Copy (delete hr=0x{:08X}, source exists={}, copy hr=0x{:08X}, waits={}).",
+            fail(std::format(L"{}: Queue after must run the Delete after the Copy (delete hr=0x{:08X}, source exists={}, copy hr=0x{:08X}, queue wait={} us).",
                              label,
                              static_cast<unsigned long>(deleteDone->second.hr),
                              sourceExists,
                              static_cast<unsigned long>(copyDone->second.hr),
-                             deleteDone->second.interlockWaitCount));
+                             deleteDone->second.queueWaitUs));
             return true;
         }
         NextStep(state, SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation);

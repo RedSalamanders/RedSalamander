@@ -603,6 +603,7 @@ struct CompletedTaskInfo
     uint64_t conflictWaitUs                              = 0;
     uint64_t conflictConvergenceWaitUs                   = 0;
     uint64_t conflictPromptCount                         = 0;
+    uint64_t queueWaitUs                                 = 0;
     uint64_t interlockWaitUs                             = 0;
     uint64_t interlockWaitCount                          = 0;
     uint64_t bridgeDirectoryEnsureCount                  = 0;
@@ -19336,6 +19337,7 @@ void FileOperationsSelfTest::NotifyTaskCompleted(FolderWindow* owner, std::uint6
             info.conflictWaitUs                              = task->_perf.conflictWaitUs;
             info.conflictConvergenceWaitUs                   = task->_perf.conflictConvergenceWaitUs;
             info.conflictPromptCount                         = task->_perf.conflictPromptCount;
+            info.queueWaitUs                                 = task->_perf.queueWaitUs;
             info.interlockWaitUs                             = task->_perf.interlockWaitUs;
             info.interlockWaitCount                          = task->_perf.interlockWaitCount;
             info.bridgeDirectoryEnsureCount                  = task->_bridgeDirectoryEnsureCount.load(std::memory_order_acquire);

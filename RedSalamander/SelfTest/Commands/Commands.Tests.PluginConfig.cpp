@@ -5099,18 +5099,44 @@ private:
             SourceBetween(fileSystemCommandsSource, "void FolderWindow::CommandCreateDirectory", "void FolderWindow::CommandEditNew");
         state.Require(! createDirectoryCommand.empty() && createDirectoryCommand.find("GetCreateDirectoryDefaultSuffix(") != std::string_view::npos &&
                           createDirectoryCommand.find("ReadDirectoryInfo(") == std::string_view::npos &&
+                          createDirectoryCommand.find("QueryChildNameContract(") == std::string_view::npos &&
                           createDirectoryCommand.find("FindCreateDirectorySuggestedSuffix(") == std::string_view::npos &&
-                          createDirectoryCommand.find("QualifyCreateDirectory(") == std::string_view::npos,
+                          createDirectoryCommand.find("QualifyCreateDirectory(") == std::string_view::npos &&
+                          createDirectoryCommand.find("AdmitCreateDirectory(") != std::string_view::npos,
                       L"F7 must open from its displayed listing and leave provider queries to the Create Folder worker.");
+        state.Require(fileSystemCommandsSource.find("DirectoryNamesMatch") == std::string::npos &&
+                          fileSystemCommandsSource.find("treatSuggestedNamesCaseInsensitive") == std::string::npos,
+                      L"F7 suggested-name selection must not use a Local short-ID case rule.");
+        state.Require(fileSystemCommandsSource.find("ChangeCase::BuildRenameOperations") != std::string::npos &&
+                          fileSystemCommandsSource.find("ChangeCase::DebugApplyToPathsForTests") == std::string::npos,
+                      L"Production Change Case must perform discovery only and must not retain a private mutation executor.");
+    }
+
+    std::string folderViewFileOpsSource;
+    if (readRequired(L"RedSalamander/FolderView.FileOps.cpp", folderViewFileOpsSource))
+    {
+        const std::string_view suggestionBody = SourceBetween(folderViewFileOpsSource, "unsigned int FolderView::GetCreateDirectoryDefaultSuffix", "namespace");
+        state.Require(! suggestionBody.empty() && suggestionBody.find("EquivalentProviderComponent(") != std::string_view::npos,
+                      L"F7 must compare the displayed names using the pane's provider component rules.");
     }
 
     std::string fileOperationsSource;
     if (readRequired(L"RedSalamander/FolderWindow.FileOperations.cpp", fileOperationsSource))
     {
+        const std::string_view suggestedSuffixBody = SourceBetween(fileOperationsSource,
+                                                                   "HRESULT FileOperations::FindCreateDirectorySuggestedSuffix",
+                                                                   "HRESULT FolderWindow::FileOperationState::AdmitCreateDirectory");
+        state.Require(! suggestedSuffixBody.empty() && suggestedSuffixBody.find("QueryChildNameCollisionKey(") != std::string_view::npos &&
+                          suggestedSuffixBody.find("QueryChildNameContract(") != std::string_view::npos &&
+                          suggestedSuffixBody.find("existingKeys.contains(candidateContract.collisionKey)") != std::string_view::npos,
+                      L"F7 worker suggestions must compare provider collision keys for existing and candidate names.");
+
         const std::string_view createDirectoryBody = SourceBetween(
             fileOperationsSource, "HRESULT FolderWindow::FileOperationState::QualifyCreateDirectory", "HRESULT FolderWindow::StartFileOperationFromFolderView");
-        state.Require(! createDirectoryBody.empty() && createDirectoryBody.find("QueryChildNameContract") != std::string_view::npos,
-                      L"F7 admission must consume the canonical provider child-name contract.");
+        state.Require(! createDirectoryBody.empty() && createDirectoryBody.find("QueryChildNameContract(") != std::string_view::npos &&
+                          createDirectoryBody.find("nameContract.joinedPath") != std::string_view::npos &&
+                          createDirectoryBody.find("nameContract.collisionKey") != std::string_view::npos,
+                      L"F7 admission must consume the canonical provider child-name join and collision key.");
         state.Require(createDirectoryBody.find("IsSupportedLocalFileOperationPath") == std::string_view::npos,
                       L"F7 admission must not reapply Local/Win32 path validation after provider acceptance.");
         state.Require(createDirectoryBody.find("JoinFileSystemPath") == std::string_view::npos &&
@@ -5139,6 +5165,14 @@ private:
     std::string stateSource;
     if (readRequired(L"RedSalamander/FolderWindow.FileOperations.State.cpp", stateSource))
     {
+        const std::string_view createDirectoryExecutionBody = SourceBetween(stateSource,
+                                                                            "HRESULT FolderWindow::FileOperationState::Task::ExecuteCreateDirectory",
+                                                                            "HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation");
+        state.Require(! createDirectoryExecutionBody.empty() &&
+                          createDirectoryExecutionBody.find("FindCreateDirectorySuggestedSuffix(") != std::string_view::npos &&
+                          createDirectoryExecutionBody.find("QualifyCreateDirectory(") != std::string_view::npos &&
+                          createDirectoryExecutionBody.find("CreateDirectory(current.candidateProviderPath.c_str())") != std::string_view::npos,
+                      L"F7 retries must requalify the generated name and use the provider-joined path for mutation.");
         const std::string_view destinationNamesBody      = SourceBetween(stateSource,
                                                                          "HRESULT FolderWindow::FileOperationState::Task::PrepareTransferDestinationNames",
                                                                          "HRESULT FolderWindow::FileOperationState::Task::PrepareForExecution");
@@ -5195,19 +5229,6 @@ private:
                       L"Change Case must consume the canonical provider child-name contract.");
         state.Require(changeCaseSource.find("GuessPreferredSeparator") == std::string::npos && changeCaseSource.find("JoinFolderAndLeaf") == std::string::npos,
                       L"Change Case must not guess a provider separator or joined path.");
-    }
-
-    std::string commandSource;
-    if (readRequired(L"RedSalamander/FolderWindow.FileSystem.Commands.cpp", commandSource))
-    {
-        state.Require(commandSource.find("DirectoryNamesMatch") == std::string::npos &&
-                          commandSource.find("treatSuggestedNamesCaseInsensitive") == std::string::npos,
-                      L"F7 suggested-name selection must not use a Local short-ID case rule.");
-        state.Require(commandSource.find("QueryChildNameContract") != std::string::npos,
-                      L"F7 suggested-name selection and retries must consume provider collision keys and joins.");
-        state.Require(commandSource.find("ChangeCase::BuildRenameOperations") != std::string::npos &&
-                          commandSource.find("ChangeCase::DebugApplyToPathsForTests") == std::string::npos,
-                      L"Production Change Case must perform discovery only and must not retain a private mutation executor.");
     }
 
     std::string fileSystemSource;

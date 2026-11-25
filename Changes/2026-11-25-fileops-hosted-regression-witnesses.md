@@ -1,0 +1,1 @@
+- Align File Operations regression checks with worker-side Create Folder names and explicit queue wait telemetry. Audit the named hidden fixture owners with visible and wrong-path controls.

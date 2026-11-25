@@ -5,8 +5,9 @@
 .DESCRIPTION
     Scans owned source roots for native font, GDI text, device-context, and visible
     control patterns. A residual is allowed only by an exact category, source path, and
-    line-pattern entry with visibility, owner, reason, and exit condition. Use
-    -FailOnFindings to make unclassified findings fail automation.
+    line-pattern entry with visibility, owner, reason, and exit condition. Hidden File
+    Operations fixture parents match only the reviewed title, source path, and popup style.
+    Use -FailOnFindings to make unclassified findings fail automation.
 
 .PARAMETER RepoRoot
     Repository root to scan. Defaults to the parent of the Tools directory.
@@ -260,11 +261,11 @@ $allowedResidualDependencies = @(
     @{
         Category      = 'Native visible control creation'
         Path          = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
-        LinePattern   = 'CreateWindowExW\(0, L"STATIC", L"Owned completion teardown fixture", WS_POPUP'
+        LinePattern   = 'CreateWindowExW\(0,\s*L"STATIC",\s*L"Owned (?:completion teardown fixture|Create Folder check|Rename fixture|Graph test)",\s*WS_POPUP,\s*0,\s*0,\s*640,\s*480,\s*nullptr,\s*nullptr,\s*GetModuleHandleW\(nullptr\),\s*nullptr\)\)'
         Visibility    = 'test-only hidden FolderWindow owner'
-        Owner         = 'RunFileOpsCompletionOwnerDestroyChecks self-test'
-        Reason        = 'The hidden popup HWND is the real parent for a secondary FolderWindow in the owned-completion teardown regression; WS_POPUP is used without WS_VISIBLE.'
-        ExitCondition = 'Replace when the teardown ownership contract can create its FolderWindow against a non-window host fixture.'
+        Owner         = 'Private File Operations FolderWindow self-tests'
+        Reason        = 'The four hidden popup HWNDs are parents for private FolderWindow teardown, Create Folder, Rename, and Graph fixtures; the exact calls omit WS_VISIBLE.'
+        ExitCondition = 'Remove each title when its private FolderWindow fixture no longer needs a real HWND parent.'
     },
     @{
         Category      = 'Native visible control creation'
