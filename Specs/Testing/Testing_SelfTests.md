@@ -1180,7 +1180,8 @@ the same synchronous reporter and counter path as the pointer overload.
   `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`,
   `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, `FileOps_SmbExactRenameProvider`,
   `FileOps_SmbCorroboratedRenameProvider`, `C0_CurlCommittedMutationResponseLost`, `FileOps_ProviderCapabilityMatrix`,
-  `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage`, `R0fGraph_FakeGraphReadWriteCreateRenameRecycle`, or
+  `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage`, `R0fGraph_FakeGraphReadWriteCreateRenameRecycle`,
+  `Phase16_RemoteOneDrivePersonalFileOps`, or
   `Delete_IdentityLessPinnedTreeChangedEntry` case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
   copies and, for progress witnesses, owned HWND WGC capture;
@@ -1190,6 +1191,7 @@ the same synchronous reporter and counter path as the pointer overload.
   the Curl reply-loss case runs the owned loopback FTP endpoint through a joined worker with no UI;
   the repeated non-clipboard Copy and Move cases use owned task controls and sandbox files under the activation blocker;
   `R0fGraph_FakeGraphReadWriteCreateRenameRecycle` uses the loopback Graph fixture, owned pane and sandbox without desktop activation;
+  `Phase16_RemoteOneDrivePersonalFileOps` uses saved sign-in, owned task controls and a fresh child of a configured test folder;
   the provider capability matrix uses private providers, owned data and direct task controls;
   its managed cleanup witness checks Retry for sharing, access and disk-full failures and verifies that a path-length failure offers Skip and Cancel;
   the exact cadence case uses a private nonactivating popup and preserves its existing

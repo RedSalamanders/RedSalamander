@@ -1583,10 +1583,20 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
         }
 
         const std::string payload = std::format("onedrive-personal-fileops-{}-roundtrip", static_cast<unsigned long long>(GetTickCount64()));
-        if (! EnsureDirectoryExistsFsOps(remoteDirOps, caseRoot) || ! EnsureDirectoryExistsFsOps(remoteDirOps, uploadDir) ||
-            ! EnsureDirectoryExistsFsOps(remoteDirOps, moveDir))
+        // Create only a fresh child of the configured fixture. An absent parent
+        // or an existing child cannot authorize setup or cleanup outside this run.
+        const HRESULT createCaseHr = remoteDirOps->CreateDirectory(caseRoot.c_str());
+        if (createCaseHr != S_OK)
         {
-            Fail(L"Phase16_RemoteOneDrivePersonalFileOps failed to prepare the remote sandbox.");
+            Fail(std::format(L"Phase16_RemoteOneDrivePersonalFileOps could not create the owned remote sandbox (hr=0x{:08X}).",
+                             static_cast<unsigned long>(createCaseHr)));
+            return true;
+        }
+        state.fsRemoteOneDrivePersonal           = entry->fileSystem;
+        state.remoteOneDrivePersonalCaseRootConn = caseRootConn;
+        if (remoteDirOps->CreateDirectory(uploadDir.c_str()) != S_OK || remoteDirOps->CreateDirectory(moveDir.c_str()) != S_OK)
+        {
+            Fail(L"Phase16_RemoteOneDrivePersonalFileOps failed to prepare the owned remote directories.");
             return true;
         }
 
@@ -1609,9 +1619,7 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
             return true;
         }
 
-        state.fsRemoteOneDrivePersonal               = entry->fileSystem;
         state.remoteOneDrivePersonalProfileName      = profileName;
-        state.remoteOneDrivePersonalCaseRootConn     = caseRootConn;
         state.remoteOneDrivePersonalUploadDirConn    = ToPluginPathText(uploadDir);
         state.remoteOneDrivePersonalMoveDirConn      = ToPluginPathText(moveDir);
         state.remoteOneDrivePersonalSeedFileConn     = ToPluginPathText(seedFile);

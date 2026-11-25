@@ -99,6 +99,7 @@
     FileOps_ProviderCapabilityMatrix supports -NonInteractive through private providers and task controls.
     FileOps_RepeatedNonClipboardCopyStorage and FileOps_RepeatedNonClipboardMoveStorage support -NonInteractive through owned tasks and sandbox files.
     R0fGraph_FakeGraphReadWriteCreateRenameRecycle supports -NonInteractive using only the owned Graph loopback fixture and local sandbox.
+    Phase16_RemoteOneDrivePersonalFileOps supports -NonInteractive using saved sign-in and a unique child of a configured OneDrive test folder.
 
 .PARAMETER CommandsFamily
     With Suite Commands, runs one governed Commands source family in its own process.

@@ -8070,11 +8070,40 @@ HRESULT FileSystemMicrosoftDrive::AcquireAccessTokenForConnection(std::wstring_v
         accessTokenOut = "microsoft-drive-selftest-token";
         return S_OK;
     }
+
+    // A selftest that blocks activation must never enter the system browser or
+    // write back a refresh token to the credential used by the installed profile.
+    static const bool nonActivatingSelfTest = []() noexcept
+    {
+        int argc = 0;
+        wil::unique_hlocal_ptr<wchar_t*> argv(CommandLineToArgvW(GetCommandLineW(), &argc));
+        if (argv)
+        {
+            for (int i = 1; i < argc; ++i)
+            {
+                if (OrdinalString::EqualsNoCase(argv.get()[i], L"--selftest-no-activate"))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }();
+    if (nonActivatingSelfTest)
+    {
+        persistRefreshToken = false;
+    }
 #endif
 
     const Settings settings = SnapshotSettings();
     if (settings.clientId.empty())
     {
+#if defined(ENABLE_TESTS)
+        if (nonActivatingSelfTest)
+        {
+            return HRESULT_FROM_WIN32(ERROR_BAD_CONFIGURATION);
+        }
+#endif
         ShowMissingClientIdAlert();
         return HRESULT_FROM_WIN32(ERROR_BAD_CONFIGURATION);
     }
@@ -8155,6 +8184,14 @@ HRESULT FileSystemMicrosoftDrive::AcquireAccessTokenForConnection(std::wstring_v
             return cacheToken(refreshed);
         }
 
+#if defined(ENABLE_TESTS)
+        if (nonActivatingSelfTest)
+        {
+            Debug::Warning(L"Microsoft Drive: saved sign-in failed during non-activating selftest (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+            return hr;
+        }
+#endif
+
         const std::wstring_view oauthError = refreshed.error.empty() ? std::wstring_view(L"<none>") : std::wstring_view(refreshed.error);
         const std::wstring_view oauthErrorDescription =
             refreshed.errorDescription.empty() ? std::wstring_view(L"<none>") : std::wstring_view(refreshed.errorDescription);
@@ -8173,6 +8210,13 @@ HRESULT FileSystemMicrosoftDrive::AcquireAccessTokenForConnection(std::wstring_v
             static_cast<void>(hostConnections->DeleteConnectionSecret(cacheKey.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, TRUE));
         }
     }
+
+#if defined(ENABLE_TESTS)
+    if (nonActivatingSelfTest)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+#endif
 
     TokenResponse interactive{};
     Debug::Info(L"Microsoft Drive: starting interactive auth for '{}' authority='{}' clientId='{}' scope='{}' loginHintPresent={} persistRefreshToken={}",
