@@ -294,6 +294,7 @@ extern SelfTestPausePoint g_fileOpsSelectedLeafDiscoveryPublishedPausePoint;
 extern SelfTestPausePoint g_fileOpsBridgeOpenListingPausePoint;
 extern SelfTestPausePoint g_fileOpsPreparingBeforePublishPausePoint;
 extern SelfTestPausePoint g_fileOpsPackBeforePublishPausePoint;
+extern SelfTestPausePoint g_fileOpsUnpackBeforePublishPausePoint;
 extern SelfTestPausePoint g_fileOpsConflictConvergenceItemPausePoint;
 extern std::atomic<unsigned long> g_fileOpsNativeMoveCreateDirectoryRaceCount;
 extern std::atomic<unsigned long> g_fileOpsNativeMoveCreateDirectoryRaceAttempts;

@@ -315,11 +315,12 @@ enum class ObjectBindingSupport : uint8_t
             }
             return S_OK;
         }
-        else if constexpr (std::is_same_v<Plan, FileOperations::PackArchiveAdmission>)
+        else if constexpr (std::is_same_v<Plan, FileOperations::ArchiveTaskAdmission>)
         {
-            if (! IsQualifiedEndpointValid(typedPlan.endpoint) || ! IsLocalFileSystemEndpointImpl(typedPlan.endpoint))
+            if (! IsArchiveTaskOperation(typedPlan.operation) || ! IsQualifiedEndpointValid(typedPlan.endpoint) ||
+                ! IsLocalFileSystemEndpointImpl(typedPlan.endpoint))
                 return RejectPlan(PlanRejectionBucket::MalformedEndpoint, rejectionBucket);
-            if (! Common::Paths::IsSupportedLocalFileOperationPath(typedPlan.archivePath.native()))
+            if (! Common::Paths::IsSupportedLocalFileOperationPath(typedPlan.targetPath.native()))
                 return RejectPlan(PlanRejectionBucket::MalformedDestination, rejectionBucket);
             if (typedPlan.selectedItems.empty())
                 return RejectPlan(PlanRejectionBucket::EmptySelection, rejectionBucket);
@@ -517,9 +518,9 @@ enum class ObjectBindingSupport : uint8_t
             for (const auto& item : typedPlan.selectedItems)
                 bytes += itemBytes(item);
         }
-        else if constexpr (std::is_same_v<Plan, FileOperations::PackArchiveAdmission>)
+        else if constexpr (std::is_same_v<Plan, FileOperations::ArchiveTaskAdmission>)
         {
-            bytes += endpointBytes(typedPlan.endpoint) + stringBytes(typedPlan.archivePath.native());
+            bytes += endpointBytes(typedPlan.endpoint) + stringBytes(typedPlan.targetPath.native());
             for (const auto& source : typedPlan.selectedItems)
                 bytes += endpointBytes(source.endpoint) + stringBytes(source.providerPath);
         }
@@ -3738,13 +3739,13 @@ HRESULT FolderWindow::FileOperationState::PublishPreparingTask(std::unique_ptr<T
     return S_OK;
 }
 
-HRESULT FolderWindow::FileOperationState::AdmitPackArchive(FolderWindow::Pane sourcePane,
+HRESULT FolderWindow::FileOperationState::AdmitArchiveTask(FolderWindow::Pane sourcePane,
                                                            const wil::com_ptr<IFileSystem>& fileSystem,
                                                            std::wstring pluginId,
                                                            std::wstring pluginShortId,
                                                            std::wstring instanceContext,
                                                            std::vector<std::filesystem::path> sources,
-                                                           std::shared_ptr<FileOperations::PackArchiveState> pack,
+                                                           std::shared_ptr<FileOperations::ArchiveTaskState> archive,
                                                            uint64_t& taskId)
 {
     taskId = 0u;
@@ -3752,7 +3753,8 @@ HRESULT FolderWindow::FileOperationState::AdmitPackArchive(FolderWindow::Pane so
         return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
     if (_owner.IsFileOperationsExitPending())
         return FolderWindow::kFileOperationRefusedForPendingExit;
-    if (! fileSystem || ! OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system") || sources.empty() || ! pack || pack->request.archivePath.empty())
+    if (! fileSystem || ! OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system") || sources.empty() || ! archive ||
+        ! FileOperations::IsArchiveTaskOperation(archive->request.operation) || archive->request.targetPath.empty())
         return E_INVALIDARG;
 
     auto task = std::make_unique<Task>(*this);
@@ -3763,7 +3765,7 @@ HRESULT FolderWindow::FileOperationState::AdmitPackArchive(FolderWindow::Pane so
     const uint64_t id = task->_taskId;
     task->_admissionKey.store(id, std::memory_order_release);
     task->_queueOrderKey.store(id, std::memory_order_release);
-    task->_operation               = FileOperations::kPackArchiveOperation;
+    task->_operation               = archive->request.operation;
     task->_sourcePane              = sourcePane;
     task->_sourcePluginId          = std::move(pluginId);
     task->_sourcePluginShortId     = std::move(pluginShortId);
@@ -3771,14 +3773,15 @@ HRESULT FolderWindow::FileOperationState::AdmitPackArchive(FolderWindow::Pane so
     task->_fileSystem              = fileSystem;
     task->_sourcePaths             = std::move(sources);
     task->_progressSourcePath      = task->_sourcePaths.front().native();
-    task->_progressDestinationPath = pack->request.archivePath.native();
+    task->_progressDestinationPath = archive->request.targetPath.native();
     task->_waitForOthers.store(ShouldQueueNewTask(), std::memory_order_release);
     task->_holdsQueuePlace.store(true, std::memory_order_release);
 
     AdmissionDestinationInputs destination{};
-    destination.folder = pack->request.archivePath.parent_path();
+    const bool packing = task->_operation == FileOperations::kPackArchiveOperation;
+    destination.folder = packing ? archive->request.targetPath.parent_path() : archive->request.targetPath;
     task->InitializeAdmissionInputs({}, std::move(destination));
-    task->_packArchive = std::move(pack);
+    task->_archiveTask = std::move(archive);
     task->InitializeSourceItemResultBuilders();
     const ULONGLONG now = TaskPresentationNowTick();
     task->_presentationState.store(Task::TaskPresentationState::Hidden, std::memory_order_release);
@@ -3786,16 +3789,16 @@ HRESULT FolderWindow::FileOperationState::AdmitPackArchive(FolderWindow::Pane so
                                           ? std::numeric_limits<ULONGLONG>::max()
                                           : now + FileOperations::kTaskCardRevealDelayMs;
 
-    RETURN_IF_FAILED(PublishPreparingTask(std::move(task), L"Pack"));
+    RETURN_IF_FAILED(PublishPreparingTask(std::move(task), packing ? L"Pack" : L"Unpack"));
     taskId = id;
     return S_OK;
 }
 
-HRESULT FolderWindow::FileOperationState::Task::PreparePackArchiveAdmission() noexcept
+HRESULT FolderWindow::FileOperationState::Task::PrepareArchiveTaskAdmission() noexcept
 {
-    if (! _packArchive)
+    if (! _archiveTask)
         return E_UNEXPECTED;
-    const auto& request = _packArchive->request;
+    const auto& request = _archiveTask->request;
     const auto qualify  = [&](std::wstring_view path, bool destination, FileOperations::QualifiedEndpoint& endpoint) noexcept -> HRESULT
     {
         if (CancelRequestedDurable())
@@ -3818,15 +3821,16 @@ HRESULT FolderWindow::FileOperationState::Task::PreparePackArchiveAdmission() no
         return S_OK;
     };
 
-    FileOperations::PackArchiveAdmission plan{};
-    plan.archivePath = request.archivePath;
+    FileOperations::ArchiveTaskAdmission plan{};
+    plan.operation  = request.operation;
+    plan.targetPath = request.targetPath;
     plan.options.executionMode =
         _waitForOthers.load(std::memory_order_acquire) ? FileOperations::ExecutionMode::Queue : FileOperations::ExecutionMode::Parallel;
-    RETURN_IF_FAILED(qualify(plan.archivePath.native(), true, plan.endpoint));
+    RETURN_IF_FAILED(qualify(plan.targetPath.native(), true, plan.endpoint));
     plan.selectedItems.reserve(_sourcePaths.size());
     for (const std::filesystem::path& path : _sourcePaths)
     {
-        FileOperations::PackArchiveSource source{};
+        FileOperations::ArchiveTaskSource source{};
         source.providerPath = path.native();
         RETURN_IF_FAILED(qualify(source.providerPath, false, source.endpoint));
         plan.selectedItems.push_back(std::move(source));
