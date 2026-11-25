@@ -65,6 +65,7 @@ private:
 class FileSystemDummy final : public IFileSystem,
                               public FileSystemRouteCapabilitiesBase,
                               public IFileSystemIO,
+                              public IFileSystemProbedRename,
                               public IFileSystemAtomicWriter,
                               public IFileSystemDirectoryOperations,
                               public IFileSystemDirectoryWatch,
@@ -84,6 +85,10 @@ public:
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) noexcept override;
     ULONG STDMETHODCALLTYPE AddRef() noexcept override;
     ULONG STDMETHODCALLTYPE Release() noexcept override;
+
+    HRESULT STDMETHODCALLTYPE CaptureProbedRenameSource(const wchar_t* path,
+                                                        const FileSystemOptions* options,
+                                                        IFileSystemProbedRenameSource** source) noexcept override;
 
     HRESULT STDMETHODCALLTYPE GetMetaData(const PluginMetaData** metaData) noexcept override;
     HRESULT STDMETHODCALLTYPE GetConfigurationSchema(const char** schemaJsonUtf8) noexcept override;
@@ -189,6 +194,8 @@ protected:
     HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
+    class ProbedRenameSource;
+
     struct DummyNode
     {
         std::wstring name;
@@ -200,6 +207,7 @@ private:
         __int64 lastWriteTime           = 0;
         __int64 changeTime              = 0;
         std::uint64_t generationSeed    = 0;
+        uint64_t renameIdentity         = 0;
         unsigned long plannedChildCount = 0;
         bool childrenGenerated          = false;
         std::shared_ptr<std::vector<std::byte>> materializedContent;
@@ -421,6 +429,7 @@ private:
     inline static std::atomic_uint _liveInstanceCount{0};
     inline static std::uint64_t _effectiveSeed      = 0;
     inline static std::uint64_t _generationBaseTime = 0;
+    inline static uint64_t _nextRenameIdentity      = 0; // Protected by _mutex.
     inline static std::vector<std::unique_ptr<DummyRoot>> _roots;
 
     inline static std::mutex _watchMutex;

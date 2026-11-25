@@ -326,6 +326,7 @@ struct MutationInterlockScope
     HRESULT byNamePinStatus = S_OK;
     // An inline Rename source observation holds no filesystem handles while this scope waits.
     wil::com_ptr<IFileSystemCorroboratedRenameSource> corroboratedRenameSource;
+    wil::com_ptr<IFileSystemProbedRenameSource> probedRenameSource;
 };
 
 enum class TaskLifecyclePhase : uint8_t

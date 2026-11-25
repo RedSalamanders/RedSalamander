@@ -1575,12 +1575,20 @@ Base Rename capability admits a task. Executing the task also requires qualified
 | Provider path profile | Base `rename` claim | Object binding / conditional rename | Current host behavior |
 |---|---:|---:|---|
 | Local FileSystem | `true` | Implemented and contract-tested | `RenamePlan(InlineRename)` executes on a File Operations worker with exact binding, or through qualified corroboration when its parent chain and source lack exact identity. |
-| FileSystemDummy, Microsoft Drive, and S3 flat-prefix | May be `true` | Not implemented in the current slice | Admission may publish a task, but interlock preparation fails closed before provider mutation and the failed task remains visible. Advertising base Rename does not imply identity-owned Inline Rename execution. |
-| 7-Zip, Curl, Google Drive, and every profile advertising `rename: false` | `false` | Absent or irrelevant | Admission rejects before task publication; FolderView presents the existing pane error overlay because no central task exists. |
+| FileSystemDummy | `true` | Probed same-parent source token | A single-item inline Rename can publish a free sibling. A collision offers Keep both or Cancel. |
+| Other providers advertising `rename: true` without exact, corroborated or probed authority | `true` | Additional provider qualification required | Preparation refuses before mutation and the failed task remains visible. |
+| Any profile advertising `rename: false` | `false` | Unavailable | Admission rejects before task publication and FolderView shows its pane error overlay. |
 
 Providers execute exact Inline Rename through `IFileSystemObjectBinding::BindObject` with
 `FILESYSTEM_BIND_RENAME` and `IFileSystemBoundObject::RenameIfUnchanged`. A failed bound mutation
 grants no authority for pathname `RenameItem`.
+
+The optional `IFileSystemProbedRename` source token holds provider facts for a selected item,
+its parent, and its root. Preparation keeps the parent interlock conservative. Execution rechecks
+the captured facts and the proposed sibling. A current occupant permits a known collision before
+dispatch. Keep both validates another sibling and repeats the check. Cancellation and stale facts
+refuse mutation. Only the bound-object route can grant Replace. The Dummy witness keeps both
+objects on collision and tests final spelling, cancellation and changed-source refusal.
 
 The built-in Local provider's `IFileSystemCorroboratedRename` capture requires a successful
 no-follow open of a regular file or directory and an explicitly unsupported exact-ID query.

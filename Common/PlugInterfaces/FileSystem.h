@@ -1401,6 +1401,27 @@ interface __declspec(uuid("fed503c6-991a-4e3a-a4e1-e7a62b4eedba")) __declspec(no
         const wchar_t* path, const FileSystemOptions* options, IFileSystemCorroboratedRenameSource** source) noexcept = 0;
 };
 
+// Optional Rename of a selected leaf to another name in the same parent. The token owns
+// provider-specific source, root and parent witnesses across queueing. The provider revalidates
+// them on the worker, checks the destination with its current sibling-name rules, and keeps
+// replacement authority unavailable. The provider's documented server semantics govern races
+// after the lookup.
+interface __declspec(uuid("8558f2a8-2caf-4aef-91c8-d83233e65dad")) __declspec(novtable) IFileSystemProbedRenameSource : public IUnknown
+{
+    // An observed collision may report a known non-commit with the source present and
+    // mutationAttempted FALSE. Other pre-dispatch refusals leave the receipt unset.
+    // After dispatch, prove commit or non-commit with the existing item receipt. A commit
+    // or an uncertain dispatch ends the token's authority to mutate.
+    virtual HRESULT STDMETHODCALLTYPE RenameToFreeSibling(
+        const wchar_t* leaf, const FileSystemOptions* options, FileSystemCorroboratedRenameResult* result) noexcept = 0;
+};
+
+interface __declspec(uuid("f87b3f7a-3d43-4e37-aa12-b70dbaec3fdd")) __declspec(novtable) IFileSystemProbedRename : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE CaptureProbedRenameSource(
+        const wchar_t* path, const FileSystemOptions* options, IFileSystemProbedRenameSource** source) noexcept = 0;
+};
+
 // The facts a provider reads on an existing destination it can open and cannot identify. The host
 // keeps them from the user's decision to the publication and never interprets them.
 struct FileSystemExpectedOccupant
