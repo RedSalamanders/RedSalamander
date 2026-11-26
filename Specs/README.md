@@ -1,13 +1,11 @@
-# Specification Authority Catalog
+# RedSalamander specification authority and workflow
 
 Status: current normative repository policy
-Last reviewed: 2026-08-13
+Last reviewed: 2026-11-26
 
 ## Purpose
 
 This catalog defines which repository artifacts state current requirements, which record proposed work or evidence, and how a mismatch is resolved. Location alone does not make prose authoritative.
-
-Run `Tools/Get-SpecInventory.ps1` to classify the current tracked and non-ignored untracked tree, validate links and WIP ownership, reconcile the normative consistency ledger, protect completed-plan history, and emit disposable catalog reports under `.build/SpecInventory/`. Validation uses `-FailOnFindings -NoReports`: it runs the same specification and test-inventory checks without creating report files or directories. `-PassThru` returns the same specification object in either mode; an explicit `-OutputRoot` cannot be combined with `-NoReports`. Validation logs and evidence remain in the existing marked test run, never the repository `.build`. Run `Tools/Get-ToolInventory.ps1 -Validate` for the separate machine-enforced tooling catalog governed by `Testing/Testing_ToolingGovernance.md`.
 
 [The root capability record](../capabilities.json) summarizes supported features and qualifications still open in the owning specifications and plans.
 
@@ -47,7 +45,11 @@ Neither prose nor implementation wins solely because of its file type. When code
 
 Do not copy a public ABI definition, generated inventory, mutable count, dependency version, or machine schema into prose when the owning artifact can be linked instead. Prose may state semantics and compatibility rules.
 
-## Plan lifecycle
+## Change workflow
+
+Read the owning spec before editing behavior. Update the owning contract, implementation, and validation together. Update the user guide for user-facing changes.
+
+### Plan lifecycle
 
 - New scoped work lives in `Specs/Plans/WIP/` and is indexed exactly once as `ACTIVE`, `HOLD`, `DECISION`, or `RETIRED`.
 - Documentation surveys and improvement plans use that same indexed location. Do not create a parallel root queue. The [retired August advisor survey](Plans/Done/AdvisorSurvey_Index_2026-08-25.md) has one current residual owner, [I58](Plans/WIP/PlanningLifecycleAndOwnerReconciliation_2026-11-03.md).
@@ -86,7 +88,32 @@ Do not copy a public ABI definition, generated inventory, mutable count, depende
   archive caps and semantics. Directory aliases do not rewrite archived payloads,
   embedded IDs, manifests, or provenance.
 
-## Pinned runtime and evidence paths
+## Naming
+
+- Domain specs: `Domain_Title.md` without spaces.
+- RFCs: `RFC_Domain_Title.md` under WIP while undecided; move them to Done after decision/implementation closeout.
+- Use descriptive `_YYYY-MM-DD.md` names for other plans. Move the file to Done when complete.
+- WIP index bullets open with a status marker such as `- **ACTIVE**:`. Link the rank and title to the plan and follow the link with an em dash and the next action.
+
+## Domain entry points
+
+| Domain | Start with |
+|---|---|
+| Core | [Core/Core_SharedHelpers.md](Core/Core_SharedHelpers.md), [Core/Core_SettingsStore.md](Core/Core_SettingsStore.md), [Core/Core_Search.md](Core/Core_Search.md), [Core/Core_ConnectionManager.md](Core/Core_ConnectionManager.md), [Core/Core_StartupBootstrap.md](Core/Core_StartupBootstrap.md) |
+| UI | [UI/UI_DxUiWinUIDesign.md](UI/UI_DxUiWinUIDesign.md), [UI/UI_FolderWindow.md](UI/UI_FolderWindow.md), [UI/UI_FolderView.md](UI/UI_FolderView.md), [UI/UI_DxUiSharedGrid.md](UI/UI_DxUiSharedGrid.md), [UI/UI_TopLevelToolWindows.md](UI/UI_TopLevelToolWindows.md), [UI/UI_PreferencesDialog.md](UI/UI_PreferencesDialog.md) |
+| File systems | [FileSystem/FileSystem_FileOperations.md](FileSystem/FileSystem_FileOperations.md), [FileSystem/FileSystem_FtpSftpScp.md](FileSystem/FileSystem_FtpSftpScp.md), and the provider-specific specs |
+| Plugins | [Plugins/Plugins_PluginAPI.md](Plugins/Plugins_PluginAPI.md), [Plugins/Plugins_VirtualFileSystem.md](Plugins/Plugins_VirtualFileSystem.md), [Plugins/Plugins_ViewerPlugins.md](Plugins/Plugins_ViewerPlugins.md) |
+| Installer/release | [Installer/Installer_PortableZip.md](Installer/Installer_PortableZip.md), [Installer/WingetIntegration.md](Installer/WingetIntegration.md) |
+| Terminal | [Terminal/Terminal_EmbeddedPlugin.md](Terminal/Terminal_EmbeddedPlugin.md), [Terminal/TerminalEngineDecision.md](Terminal/TerminalEngineDecision.md) |
+| Testing and tooling | [Testing/Testing_SelfTests.md](Testing/Testing_SelfTests.md), [Testing/Testing_TestCoverage.md](Testing/Testing_TestCoverage.md), [Testing/Testing_PerformanceValidation.md](Testing/Testing_PerformanceValidation.md), [Testing/Testing_SelfTestRemoteCredentials.md](Testing/Testing_SelfTestRemoteCredentials.md), [Testing/Testing_ToolingGovernance.md](Testing/Testing_ToolingGovernance.md), [Testing/Testing_AgentGuidance.md](Testing/Testing_AgentGuidance.md), [Testing/Testing_ValidationEvidence.md](Testing/Testing_ValidationEvidence.md), [TestRuns/README.md](TestRuns/README.md) |
+
+## Shared contracts
+
+The [Changes workflow](Core/Core_Changes.md) owns fragment format, validation and folding on the default branch after merge; a change keeps its fragment and never edits `CHANGELOG.md`.
+
+Common native build policy, zero-warning acceptance, terminal output and short consumer paths: [Build_ConsoleAndPaths](Build/Build_ConsoleAndPaths.md).
+
+### Pinned runtime and evidence paths
 
 These locations are consumed by build/runtime/test workflows and must not be moved without updating their consumers:
 
@@ -96,26 +123,9 @@ These locations are consumed by build/runtime/test workflows and must not be mov
 - `Specs/Testing/FolderViewPerfBudgets.json5`
 - `Specs/NormativeConsistency.json`
 
-## Naming
+## Specification validation
 
-- Domain specs: `Domain_Title.md` without spaces.
-- RFCs: `RFC_Domain_Title.md` under WIP while undecided; move them to Done after decision/implementation closeout.
-- Use descriptive `_YYYY-MM-DD.md` names for other plans. Move the file to Done when complete.
-- WIP index bullets open with a status marker such as `- **ACTIVE**:`. Link the rank and title to the plan and follow the link with an em dash and the next action.
-
-## Primary domain entry points
-
-| Domain | Start with |
-|---|---|
-| Core | `Core/Core_SharedHelpers.md`, `Core/Core_SettingsStore.md`, `Core/Core_Search.md`, `Core/Core_ConnectionManager.md`, `Core/Core_StartupBootstrap.md` |
-| UI | `UI/UI_DxUiWinUIDesign.md`, `UI/UI_FolderWindow.md`, `UI/UI_FolderView.md`, `UI/UI_DxUiSharedGrid.md`, `UI/UI_TopLevelToolWindows.md`, `UI/UI_PreferencesDialog.md` |
-| File systems | `FileSystem/FileSystem_FileOperations.md`, `FileSystem/FileSystem_FtpSftpScp.md`, and the provider-specific specs |
-| Plugins | `Plugins/Plugins_PluginAPI.md`, `Plugins/Plugins_VirtualFileSystem.md`, `Plugins/Plugins_ViewerPlugins.md` |
-| Installer/release | `Installer/Installer_PortableZip.md`, `Installer/WingetIntegration.md` |
-| Terminal | `Terminal/Terminal_EmbeddedPlugin.md`, `Terminal/TerminalEngineDecision.md` |
-| Testing and tooling | `Testing/Testing_SelfTests.md`, `Testing/Testing_TestCoverage.md`, `Testing/Testing_PerformanceValidation.md`, `Testing/Testing_SelfTestRemoteCredentials.md`, `Testing/Testing_ToolingGovernance.md`, `Testing/Testing_AgentGuidance.md`, `Testing/Testing_ValidationEvidence.md`, `TestRuns/README.md` |
-
-## Required validation
+Run `Tools/Get-SpecInventory.ps1` to classify the current tracked and non-ignored untracked tree, validate links and WIP ownership, reconcile the normative consistency ledger, protect completed-plan history, and emit disposable catalog reports under `.build/SpecInventory/`. Validation uses `-FailOnFindings -NoReports`: it runs the same specification and test-inventory checks without creating report files or directories. `-PassThru` returns the same specification object in either mode; an explicit `-OutputRoot` cannot be combined with `-NoReports`. Validation logs and evidence remain in the existing marked test run, never the repository `.build`. Run `Tools/Get-ToolInventory.ps1 -Validate` for the separate machine-enforced tooling catalog governed by `Testing/Testing_ToolingGovernance.md`.
 
 Before closing specification-governance work:
 
@@ -139,8 +149,6 @@ fence MUST use the opening character with at least the opening run length and a 
 tail. A fence-like line with trailing nonwhitespace stays inside its current fence.
 These checks do not expand the parser to general Markdown lists or indented code blocks. The separate bounded provenance comment-delimiter mask accepts at most 2,048 UTF-16 units, masks every raw comment-shaped span even in code-looking text, preserves offsets and line endings, and masks an unclosed span to end. It is a conservative validation policy, not a Markdown renderer; existing heading and link parsing stays unchanged.
 
-The [Changes workflow](Core/Core_Changes.md) owns fragment format, validation and folding on the default branch after merge; a change keeps its fragment and never edits `CHANGELOG.md`.
+## Repository rules
 
 The snapshot migration retains the original 133-file protected Done baseline as parentless commit 4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853. Its Specs/Plans/Done tree is byte-identical to the former baseline. Both integrated master and the public source snapshot retain that commit in ancestry, so ordinary fresh clones can enforce the existing guard without importing DualTail history or changing completed documents.
-
-Common native build policy, zero-warning acceptance, terminal output and short consumer paths: [Build_ConsoleAndPaths](Build/Build_ConsoleAndPaths.md).
