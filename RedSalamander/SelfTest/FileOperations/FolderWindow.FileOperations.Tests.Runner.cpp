@@ -15008,12 +15008,11 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     if (! paneFileSystem || folder->GetFileSystemPluginId(pane) != kPluginIdLocal)
         return reject(L"the test-owned window has no Local provider pane");
 
-    const auto verifyScheduledRename =
-        [&](FileOperations::RenameOrigin origin,
-            std::wstring_view detail,
-            const std::filesystem::path& from,
-            const std::filesystem::path& to,
-            HRESULT expectedStatus) noexcept
+    const auto verifyScheduledRename = [&](FileOperations::RenameOrigin origin,
+                                           std::wstring_view detail,
+                                           const std::filesystem::path& from,
+                                           const std::filesystem::path& to,
+                                           HRESULT expectedStatus) noexcept
     {
         BatchRenameExecutionOp row{};
         row.originalSource = from;
@@ -15051,14 +15050,15 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         if (FAILED(expectedStatus))
         {
             const bool noCommit = completion->hr == expectedStatus && completion->operation == FILESYSTEM_RENAME && completion->itemOutcomes.size() == 1u &&
-                                  std::ranges::all_of(completion->itemOutcomes, [&](const FolderWindow::FileOperationItemOutcome& outcome) noexcept
+                                  std::ranges::all_of(completion->itemOutcomes,
+                                                      [&](const FolderWindow::FileOperationItemOutcome& outcome) noexcept
             {
                 return outcome.sourceIndex == 0u && outcome.status == expectedStatus && outcome.completion == FileOperations::ItemCompletion::Failed &&
                        outcome.publication == FileOperations::PublicationState::NotAttempted &&
                        outcome.sourceDisposition == FileOperations::SourceDisposition::Retained;
             });
-            const bool refused = noCommit && leafMatches(from, true) && leafMatches(to, false) &&
-                                 hasBytes(from, kSourceBytes) && hasBytes(occupied, kOccupantBytes);
+            const bool refused =
+                noCommit && leafMatches(from, true) && leafMatches(to, false) && hasBytes(from, kSourceBytes) && hasBytes(occupied, kOccupantBytes);
             Debug::Perf::Emit(L"FileOps.Smb.SharedRenameTaskUs", detail, Debug::Perf::ElapsedUs(started), 1u, 1u, refused ? S_OK : E_FAIL);
             if (! refused)
                 return reject(std::format(L"scheduled Rename did not refuse unavailable exact binding without mutation (0x{:08X})",
