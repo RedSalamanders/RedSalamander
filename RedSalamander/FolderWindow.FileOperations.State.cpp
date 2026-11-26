@@ -1153,7 +1153,7 @@ void MaybePauseBeforeBridgeDirectoryRestoreForSelfTest(const std::wstring& desti
 }
 
 // Hold the test after selected regular-file discovery closes and before writer, stage or payload work.
-// The selected-file prepass uses this boundary after it closes every selected leaf. Record its timing
+// The multi-file prepass uses this boundary after it closes every selected leaf. Record its timing
 // before entering the hold.
 void MaybePauseAfterSelectedLeafDiscoveryPublishedForSelfTest() noexcept
 {
@@ -26686,7 +26686,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                               _sourcePaths.size(),
                               S_OK);
 #ifdef ENABLE_TESTS
-            if (countedFiles == _sourcePaths.size())
+            if (countedFiles > 1u && countedFiles == _sourcePaths.size())
                 MaybePauseAfterSelectedLeafDiscoveryPublishedForSelfTest();
 #endif
         }
