@@ -1034,6 +1034,7 @@ struct SelfTestState
         FileOps_SmbExactRenameProvider,
         FileOps_SmbCorroboratedRenameProvider,
         FileOps_SmbRecycleRefusal,
+        FileOps_SmbMixedMove,
         Cleanup_RestorePluginConfig,
         Done,
         Failed,
@@ -1688,6 +1689,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::FileOps_SmbExactRenameProvider: return L"FileOps_SmbExactRenameProvider";
         case SelfTestState::Step::FileOps_SmbCorroboratedRenameProvider: return L"FileOps_SmbCorroboratedRenameProvider";
         case SelfTestState::Step::FileOps_SmbRecycleRefusal: return L"FileOps_SmbRecycleRefusal";
+        case SelfTestState::Step::FileOps_SmbMixedMove: return L"FileOps_SmbMixedMove";
         case SelfTestState::Step::Cleanup_RestorePluginConfig: return L"Cleanup_RestorePluginConfig";
         case SelfTestState::Step::Done: return L"Done";
         case SelfTestState::Step::Failed: return L"Failed";
@@ -1881,6 +1883,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::FileOps_SmbExactRenameProvider,
     SelfTestState::Step::FileOps_SmbCorroboratedRenameProvider,
     SelfTestState::Step::FileOps_SmbRecycleRefusal,
+    SelfTestState::Step::FileOps_SmbMixedMove,
     SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns, // R0f-SMB - a wedged synchronous provider call returns on cancel
     SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete,       // R0f-SMB - read/write/create/rename/delete on a loopback share
     SelfTestState::Step::R0fSmb_LoopbackRecycleNeverDestroys,        // R0f-SMB - Recycle on a share keeps every item and asks before permanent delete
@@ -2257,6 +2260,7 @@ constexpr std::array kFileOpsFamilyR0fSmbContainment{
     SelfTestState::Step::FileOps_SmbExactRenameProvider,
     SelfTestState::Step::FileOps_SmbCorroboratedRenameProvider,
     SelfTestState::Step::FileOps_SmbRecycleRefusal,
+    SelfTestState::Step::FileOps_SmbMixedMove,
     SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns,
     SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete,
     SelfTestState::Step::R0fSmb_LoopbackRecycleNeverDestroys,
@@ -14266,6 +14270,161 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
     return true;
 }
 
+[[nodiscard]] bool RunFileOpsSmbMixedMoveChecks(SelfTestState& state, std::wstring& unavailableReason) noexcept
+{
+    const auto reject = [](std::wstring_view reason) noexcept
+    {
+        AppendLog(std::format(L"SMB mixed Move: {}", reason));
+        return false;
+    };
+    const auto registeredRoot = ResolveSmbSelfTestRootForSelfTest(unavailableReason);
+    if (! registeredRoot.has_value())
+        return true;
+
+    auto* const operations = TryGetFileOps(TryGetFolderWindow(state.mainWindow));
+    wil::com_ptr<IFileSystemIO> io;
+    wil::com_ptr<IFileSystemObjectBinding> binding;
+    if (! operations || operations->HasActiveOperations() || ! state.fsLocal || ! state.fsLocal.try_query_to(io.put()) ||
+        ! state.fsLocal.try_query_to(binding.put()))
+        return reject(L"the Local provider or quiet task owner is unavailable");
+
+    RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
+    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
+        return reject(L"no-activation guard is unavailable");
+
+    const auto isOrdinaryDirectory = [](const std::filesystem::path& path) noexcept
+    {
+        const DWORD attributes = GetFileAttributesW(path.c_str());
+        return attributes != INVALID_FILE_ATTRIBUTES && (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == FILE_ATTRIBUTE_DIRECTORY;
+    };
+    const auto isAbsent = [](const std::filesystem::path& path) noexcept
+    {
+        if (GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES)
+            return false;
+        const DWORD error = GetLastError();
+        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
+    };
+    const std::filesystem::path remoteRoot(registeredRoot.value());
+    if (! isOrdinaryDirectory(remoteRoot))
+        return reject(L"the registered root must be an ordinary directory");
+
+    constexpr auto bindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+    wil::com_ptr<IFileSystemBoundObject> share;
+    const HRESULT shareIdentity = binding->BindObject(remoteRoot.c_str(), bindFlags, share.put());
+    if (shareIdentity == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && ! share)
+    {
+        unavailableReason = L"the registered share does not provide exact SMB identities for Managed Move";
+        return true;
+    }
+    if (shareIdentity != S_OK || ! share)
+        return reject(std::format(L"the registered root identity probe returned 0x{:08X}", static_cast<uint32_t>(shareIdentity)));
+    share.reset();
+
+    const auto localRoot   = state.tempRoot / L"smb-mixed-move";
+    const auto destination = localRoot / L"destination";
+    std::error_code createError;
+    if (! std::filesystem::create_directories(destination, createError) || createError)
+        return reject(L"could not create the Local fixture and destination");
+
+    const auto remoteFixture = remoteRoot / std::format(L"mixed-move-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    if (! CreateDirectoryW(remoteFixture.c_str(), nullptr))
+        return reject(std::format(L"could not create an exclusive SMB fixture child (error {})", GetLastError()));
+    AppendLog(std::format(L"SMB mixed Move fixture: {}", remoteFixture.filename().native()));
+    uint64_t taskId    = 0u;
+    bool removed       = false;
+    const auto release = wil::scope_exit([&]() noexcept
+    {
+        if (taskId != 0u && CancelOutstandingSelfTestOperations(operations))
+        {
+            operations->DismissCompletedTask(taskId);
+            operations->DebugRemoveDiagnosticsForTask(taskId);
+            state.completedTasks.erase(taskId);
+        }
+        if (! removed)
+            AppendLog(std::format(L"SMB mixed Move retained fixture {}", remoteFixture.filename().native()));
+    });
+
+    constexpr std::string_view nativeBytes  = "Local workshop inventory to relocate.";
+    constexpr std::string_view managedBytes = "Remote workshop inventory to verify before removing.";
+    const auto nativeSource                 = localRoot / L"local.txt";
+    const auto managedSource                = remoteFixture / L"remote.txt";
+    if (! SelfTest::WriteTextFile(nativeSource, nativeBytes) || ! SelfTest::WriteTextFile(managedSource, managedBytes))
+        return reject(L"could not write both fixture files");
+
+    wil::com_ptr<IFileSystemBoundObject> sourceBinding;
+    const HRESULT sourceIdentity = binding->BindObject(managedSource.c_str(), bindFlags, sourceBinding.put());
+    if (sourceIdentity != S_OK || ! sourceBinding)
+        return reject(std::format(L"the owned SMB file identity probe returned 0x{:08X}", static_cast<uint32_t>(sourceIdentity)));
+    sourceBinding.reset();
+
+    const auto started      = std::chrono::steady_clock::now();
+    const auto promptBase   = HostGetTestPromptRequestCount();
+    const HRESULT admission = [&]() noexcept
+    {
+        const auto original = HostGetTestPromptResultOverride();
+        const auto restore  = wil::scope_exit([&]() noexcept { HostSetTestPromptResultOverride(original); });
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
+        return operations->AdmitOperation(FILESYSTEM_MOVE,
+                                          FolderWindow::Pane::Left,
+                                          FolderWindow::Pane::Right,
+                                          state.fsLocal,
+                                          {nativeSource, managedSource},
+                                          destination,
+                                          FILESYSTEM_FLAG_NONE,
+                                          false,
+                                          0u,
+                                          FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                          false,
+                                          state.fsLocal,
+                                          &taskId);
+    }();
+    if (admission != S_OK || taskId == 0u || HostGetTestPromptRequestCount() != promptBase)
+        return reject(std::format(L"expected one admitted Move without a Copy-only question (HRESULT 0x{:08X})", static_cast<uint32_t>(admission)));
+
+    const auto finished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return state.completedTasks.contains(taskId) && ! operations->HasActiveOperations();
+    }, {.timeout = SelfTest::Scale(std::chrono::seconds(20)), .operationName = L"SMB mixed Move completion"});
+    if (! finished.conditionMet)
+        return reject(L"the mixed Move did not settle");
+
+    const auto& result   = state.completedTasks.at(taskId);
+    const auto checkItem = [&](FileOperations::OperationStrategy strategy, const std::filesystem::path& source, std::string_view expected) noexcept
+    {
+        const auto output = destination / source.filename();
+        std::string actual;
+        return std::ranges::any_of(result.sourceItemResults,
+                                   [&](const std::optional<FileOperations::FileOperationItemResult>& entry) noexcept
+        {
+            if (! entry.has_value())
+                return false;
+            const auto& item = entry.value();
+            return item.strategy == strategy && item.status == S_OK && item.completion == FileOperations::ItemCompletion::Completed &&
+                   item.publication == FileOperations::PublicationState::Published && item.sourceDisposition == FileOperations::SourceDisposition::Removed &&
+                   item.finalDestinationPath == output.native();
+        }) && isAbsent(source) &&
+               ReadFileTextFsIo(io, output, actual) && actual == expected;
+    };
+    const bool nativeMoved  = checkItem(FileOperations::OperationStrategy::Native, nativeSource, nativeBytes);
+    const bool managedMoved = checkItem(FileOperations::OperationStrategy::Managed, managedSource, managedBytes);
+    if (result.hr != S_OK || result.sourceItemResults.size() != 2u || ! nativeMoved || ! managedMoved || result.bridgeStageCreateCount != 1u)
+        return reject(std::format(
+            L"expected one Native result and one Managed result with equal bytes and removed sources (task 0x{:08X}, native={}, managed={}, stages={})",
+            static_cast<uint32_t>(result.hr),
+            nativeMoved,
+            managedMoved,
+            result.bridgeStageCreateCount));
+
+    // The child is empty after Managed cleanup. Remove only that exact child.
+    if (! isOrdinaryDirectory(remoteRoot) || ! isOrdinaryDirectory(remoteFixture) || ! RemoveDirectoryW(remoteFixture.c_str()) || ! isAbsent(remoteFixture))
+        return reject(L"could not retire the empty SMB fixture nonrecursively");
+    removed = true;
+    Debug::Perf::Emit(
+        L"FileOps.SelfTest.SmbMixedMove", L"local-native-and-smb-managed", Debug::Perf::ElapsedUs(started), 2u, result.bridgeStageCreateCount, S_OK);
+    AppendLog(
+        L"SMB mixed Move: one task completed the Local Native and SMB Managed items. Both destinations matched their sources and the SMB fixture retired.");
+    return true;
+}
+
 // The nested fixture of the SMB cases: four folder levels with files at every level, an empty folder and a folder of
 // 300 small files. Each folder gets its own last-write time in 2001 once its contents exist, so a folder whose basic
 // information was not restored after its children were copied shows the copy time instead.
@@ -19087,6 +19246,25 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             if (! RunFileOpsSmbRecycleRefusalChecks(state, unavailableReason))
             {
                 Fail(L"The registered SMB Recycle refusal failed. See the File Operations trace.");
+                return true;
+            }
+            RecordCurrentPhase(state,
+                               unavailableReason.empty() ? SelfTest::SelfTestCaseResult::Status::passed : SelfTest::SelfTestCaseResult::Status::skipped,
+                               unavailableReason);
+            NextStep(state, SelfTestState::Step::FileOps_SmbMixedMove);
+            return false;
+        }
+        case SelfTestState::Step::FileOps_SmbMixedMove:
+        {
+            static bool active = false;
+            if (active || ! TryGetFolderWindow(state.mainWindow))
+                return false;
+            active            = true;
+            const auto finish = wil::scope_exit([]() noexcept { active = false; });
+            std::wstring unavailableReason;
+            if (! RunFileOpsSmbMixedMoveChecks(state, unavailableReason))
+            {
+                Fail(L"The registered SMB mixed Move failed. See the File Operations trace.");
                 return true;
             }
             RecordCurrentPhase(state,
