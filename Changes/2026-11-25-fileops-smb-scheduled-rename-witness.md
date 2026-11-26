@@ -1,0 +1,1 @@
+- Verify the shared Batch Rename and Change Case task results on a registered Windows SMB fixture with exact file identity.
