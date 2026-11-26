@@ -1,1 +1,0 @@
-- Fix OneDrive Personal Copy when Graph returns an upload session on its Microsoft consumer content origin. Keep the existing transport and credential controls.
