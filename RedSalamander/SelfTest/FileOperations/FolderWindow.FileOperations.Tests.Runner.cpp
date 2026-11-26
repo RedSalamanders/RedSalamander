@@ -11264,6 +11264,7 @@ using TickResult = std::optional<bool>;
             return reject(L"the parallel credential fixture did not publish both owned Copies");
 
         bool sawCredentialAndActive = false;
+        bool steadyAfterMotion      = false;
         {
             Task::OnCredentialWait(operations->FindTask(waitingId), true);
             const auto leaveWait = wil::scope_exit([&]() noexcept
@@ -11274,22 +11275,28 @@ using TickResult = std::optional<bool>;
             const auto settled   = waitForInterval(100u, SelfTest::Scale(2s), L"parallel credential active cadence after card entrance");
             if (! measure(L"engine-credential-active-peer", 700ms, before, after))
                 return reject(L"the parallel credential cadence measurement pump failed");
-            using Snapshot = FileOperationsPopupInternal::TaskSnapshot;
+            // The credential card may resize after its first 100 ms frame. Require the
+            // active cadence again after that bounded motion while both tasks are still held.
+            steadyAfterMotion = waitForInterval(100u, SelfTest::Scale(3s), L"parallel credential active cadence after motion").conditionMet;
+            using Snapshot    = FileOperationsPopupInternal::TaskSnapshot;
             Snapshot waiting{}, active{};
             const bool bothProjected =
                 DebugGetFileOperationsPopupTaskSnapshot(popup, waitingId, waiting) && DebugGetFileOperationsPopupTaskSnapshot(popup, activeId, active);
             const auto popupWork   = operations->GetPopupTelemetryWork();
-            sawCredentialAndActive = settled.conditionMet && bothProjected && waiting.waitingForCredentials &&
+            sawCredentialAndActive = settled.conditionMet && steadyAfterMotion && bothProjected && waiting.waitingForCredentials &&
                                      waiting.statusKind == Snapshot::StatusKind::AwaitingCredentials && ! active.waitingForCredentials &&
                                      active.statusKind == Snapshot::StatusKind::Running && popupWork == State::PopupTelemetryWork::Active &&
-                                     after.popup.timerIntervalMs == 100u && after.popup.timerTicks - before.popup.timerTicks >= 3u;
-            note(std::format(L"credential and active peer: settled={} projected={} waitingStatus={} activeStatus={} work={} intervalMs={}",
-                             settled.conditionMet,
-                             bothProjected,
-                             static_cast<unsigned>(waiting.statusKind),
-                             static_cast<unsigned>(active.statusKind),
-                             work(popupWork),
-                             after.popup.timerIntervalMs));
+                                     (after.popup.timerIntervalMs == 100u || after.popup.timerIntervalMs == 16u) &&
+                                     after.popup.timerTicks - before.popup.timerTicks >= 3u;
+            note(std::format(
+                L"credential and active peer: settled={} steadyAfterMotion={} projected={} waitingStatus={} activeStatus={} work={} sampleIntervalMs={}",
+                settled.conditionMet,
+                steadyAfterMotion,
+                bothProjected,
+                static_cast<unsigned>(waiting.statusKind),
+                static_cast<unsigned>(active.statusKind),
+                work(popupWork),
+                after.popup.timerIntervalMs));
         }
         ReleaseFileOpsLiveOutputPublishedPauseForSelfTest();
         const auto bothRetired     = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
@@ -11300,7 +11307,7 @@ using TickResult = std::optional<bool>;
                           L"two-owned-copies",
                           static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(bothPublished.elapsed).count()),
                           after.popup.timerTicks - before.popup.timerTicks,
-                          after.popup.timerIntervalMs,
+                          steadyAfterMotion ? 100u : 0u,
                           parallelCadence ? S_OK : E_FAIL);
         if (! parallelCadence)
             fail(L"the credential-waiting Copy did not coexist with an active Copy at the active cadence through clean retirement");

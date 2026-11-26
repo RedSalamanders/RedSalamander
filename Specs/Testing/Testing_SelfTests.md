@@ -223,7 +223,7 @@ Pack keeps the originals when a link is omitted from the archive.
 
 The `FileOps_PopupIdleCadence` witness also submits two independent Local Copies and holds them after
 publication. It projects an owned credential wait on one Copy and verifies that the other remains
-active, the popup keeps its 100 ms cadence, and both workers retire after release.
+active, the popup returns to its 100 ms cadence after bounded card motion, and both workers retire after release.
 
 Before opening any fixture, bind `LOCALAPPDATA`, `TEMP` and `TMP` to marked
 capture scratch through the canonical `ScopedEnvironmentVariable` helper. Refuse
