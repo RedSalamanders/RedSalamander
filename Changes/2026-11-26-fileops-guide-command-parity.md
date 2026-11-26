@@ -1,1 +1,0 @@
-- Align the User Guide and Main Window shortcut summary with the current Move, Rename, New Folder and Delete workflows.
