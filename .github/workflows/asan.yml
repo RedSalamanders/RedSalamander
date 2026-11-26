@@ -8,7 +8,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   qualification:
-    uses: RedSalamanders/.github/.github/workflows/qualification.yml@5319f7b89491e52012a9e90d857c365f9dd4cc1f
+    uses: RedSalamanders/.github/.github/workflows/qualification.yml@4b9b7b66ce22c248eed578f22a8d9d82580223c5
     with:
-      engine_ref: 5319f7b89491e52012a9e90d857c365f9dd4cc1f
+      engine_ref: 4b9b7b66ce22c248eed578f22a8d9d82580223c5
       configuration: ASan Debug

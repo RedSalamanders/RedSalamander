@@ -137,6 +137,29 @@ function Test-RSValidationImpactGovernance {
     return [pscustomobject]@{ IsValid = ($unmapped.Count -eq 0); UnmappedBuildInputs = @($unmapped) }
 }
 
+function New-RSSharedAffectedPlanner {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][ValidateSet('Debug','Release','ASan Debug')][string]$Configuration
+    )
+
+    Import-Module (Join-Path $RepoRoot '.ci-engine/Tools/Modules/Ci.EngineBinding.psm1') -Scope Local
+    $modulePath = Resolve-CiPinnedEngineModule -ProjectRoot $RepoRoot -Name 'ScopedTesting.psm1'
+    $scopeModule = Import-Module $modulePath -Scope Local -PassThru
+    $manifest = & $scopeModule { param($root) Read-ScopedTestManifest -Root $root } $RepoRoot
+    $nativeNames = [string[]]@($manifest.scopes | Where-Object native | ForEach-Object name)
+    $native = [Collections.Generic.HashSet[string]]::new($nativeNames, [StringComparer]::Ordinal)
+    return {
+        param([string[]]$ChangedPaths)
+        $plan = & $scopeModule {
+            param($data,$paths,$profile)
+            Get-ScopedTestPlan -Manifest $data -ChangedPaths $paths -Configuration $profile
+        } $manifest $ChangedPaths $Configuration
+        $plan.scopes | Where-Object { $native.Contains($_) }
+    }.GetNewClosure()
+}
+
 function Get-RSValidationImpactDecision {
     [CmdletBinding()]
     param(
@@ -145,7 +168,8 @@ function Get-RSValidationImpactDecision {
         [Parameter(Mandatory = $true)][object]$ValidationPlan,
         [hashtable]$EntryFingerprints = @{},
         [hashtable]$EstimatedDurationMs = @{},
-        [ValidateSet('shadow', 'enforced')][string]$PlannerMode = 'shadow'
+        [ValidateSet('shadow', 'enforced')][string]$PlannerMode = 'shadow',
+        [scriptblock]$SelectSharedAffectedEntries
     )
 
     $changed = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -168,11 +192,18 @@ function Get-RSValidationImpactDecision {
             }
         }
     }
+    # Keep the product build requirement and any native entry required by its impact contract.
+    # The shared planner contributes native scopes only when the product admits build work.
+    $shared = $null
+    if ($SelectSharedAffectedEntries -and $buildAction -cin @('targeted','full')) {
+        $names = [string[]]@(& $SelectSharedAffectedEntries -ChangedPaths $changedPaths)
+        $shared = [Collections.Generic.HashSet[string]]::new($names, [StringComparer]::Ordinal)
+    }
     $entries = @()
     for ($ordinal = 0; $ordinal -lt @($ValidationPlan.entries).Count; $ordinal++) {
         $entry = $ValidationPlan.entries[$ordinal]
         $matchedEntryTags = @($entry.impact_tags | Where-Object { $impactTags.Contains([string]$_) } | Sort-Object -Unique)
-        $affected = ($matchedEntryTags.Count -gt 0)
+        $affected = $matchedEntryTags.Count -gt 0 -or ($null -ne $shared -and $shared.Contains([string]$entry.id))
         $expected = if ($EntryFingerprints.ContainsKey([string]$entry.id)) {
             [string]$EntryFingerprints[[string]$entry.id]
         } else {
@@ -299,6 +330,7 @@ Export-ModuleMember -Function @(
     'Read-RSValidationImpactManifest',
     'Get-RSValidationImpactRulesForPath',
     'Test-RSValidationImpactGovernance',
+    'New-RSSharedAffectedPlanner',
     'Get-RSValidationImpactDecision',
     'Get-RSValidationAffectedBuildSelection',
     'Get-RSValidationModeGateMatrix'
