@@ -43,8 +43,18 @@ correction became necessary. The next attempt recorded the artifact attestation 
 `20261126T182948Z-70848-84971f3d49204699b1c77072615f7086`. The pinned x64 dependency
 repair and full x64 Release rebuild then passed with zero warnings and errors. PrePush accepted
 receipt `ae81cdaaa43a746e9f342988c98157a314f6ad20e107fa129f40baaab6d11eb7`.
-Run `20261126T183940Z-47540-d7fc757cdfcb4c6db9285c919d3e9c23` is executing on frozen `4aa1629a5`.
-The four desktop entries remain pending.
+Run `20261126T183940Z-47540-d7fc757cdfcb4c6db9285c919d3e9c23` finished on frozen `4aa1629a513f74ca091f107188f76a1d423d17aa`.
+Toolchain Pester passed all 35 checks and the runner re-attested the rebuilt x64 Release outputs
+with zero warnings and errors. The final receipt is `b57038de54bb7c6a443655098395d2b940400e66f63d6539ea60e029ca7bc974`.
+All 14 scheduled entries completed and were promoted. Tooling Pester passed 1,502 checks and the full
+selection recorded 1,803 passes, zero failures and 29 environment skips. The change verdict is
+`PASSED` and the repository verdict is `NOT_EVALUATED` with filtered coverage. The four desktop
+entries remain pending.
+
+The canonical v2 result SHA-256 is `3ccd33d2c5851347ae5aace6f28f5361e1e5ea43d366d09912a78c04365221dd`.
+The v1 report SHA-256 is `e8d33f11a88b452e2483c7927c252f78b2d953a005d31ffe291dc9d25a1853f3`.
+The v1 report includes the 13 separate sandbox audit findings. Both results and the final source
+snapshot are in the completed-run archive.
 
 ## Build-tooling baseline integration
 
