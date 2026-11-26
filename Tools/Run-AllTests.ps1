@@ -1553,6 +1553,7 @@ else {
 }
 
 $artifactOperationLock = $null
+$scopedProfileLease = $null
 $testMachineResourceEnvironmentLease = $null
 $testRunContext = $null
 $runnerOwnsRunDirectory = $false
@@ -1571,6 +1572,12 @@ foreach ($environmentName in $runnerEnvironmentNames) {
     $runnerEnvironmentPrevious[$environmentName] = [Environment]::GetEnvironmentVariable($environmentName, 'Process')
 }
 try {
+    if ($ScopedEntryId.Count) {
+        Import-Module (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.EngineBinding.psm1') -Scope Local
+        $scopedModule = Resolve-CiPinnedEngineModule -ProjectRoot $repoRoot -Name 'ScopedTesting.psm1'
+        Import-Module $scopedModule -Scope Local -Prefix CI
+        $scopedProfileLease = Enter-CIScopedProfileLease -Root $repoRoot -Platform $Platform -Configuration $Configuration
+    }
     $operationMode = if ($SkipBuild) { 'existing artifacts' } else { 'build and test' }
     $artifactOperationScope = @{
         kind = 'test'
@@ -3010,11 +3017,15 @@ finally {
     } catch {
         $archiveError = $_
     } finally {
-        Restore-RSTestMachineResourceEnvironment -Lease $testMachineResourceEnvironmentLease
-        foreach ($entry in $runnerEnvironmentPrevious.GetEnumerator()) {
-            [Environment]::SetEnvironmentVariable([string]$entry.Key, $entry.Value, 'Process')
+        try {
+            Restore-RSTestMachineResourceEnvironment -Lease $testMachineResourceEnvironmentLease
+            foreach ($entry in $runnerEnvironmentPrevious.GetEnumerator()) {
+                [Environment]::SetEnvironmentVariable([string]$entry.Key, $entry.Value, 'Process')
+            }
+            Exit-RSArtifactOperationLock -Lock $artifactOperationLock
+        } finally {
+            if ($null -ne $scopedProfileLease) { Exit-CIScopedProfileLease $scopedProfileLease }
         }
-        Exit-RSArtifactOperationLock -Lock $artifactOperationLock
     }
     if ($null -ne $archiveError) {
         Write-Error "Run evidence archival failed; retained paths require review: $archiveError" -ErrorAction Continue

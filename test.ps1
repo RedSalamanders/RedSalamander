@@ -3,8 +3,9 @@
 Runs affected RedSalamander tests or explicitly selected full coverage.
 .DESCRIPTION
 Reuses Run-AllTests impact, receipts and explicit exact Resume. Default iteration is
-Affected. PrePush keeps all native obligations local because the PR gate runs
-compiler-free checks.
+Affected. Full uses the shared planner for one native profile. PrePush plans all
+six profiles, running native suites on matching hosts and building the cross profiles.
+The canonical runner owns native receipts and re-attestation.
 .PARAMETER Mode
 Affected (default), Full, or PrePush.
 .PARAMETER Full
@@ -26,8 +27,8 @@ Build number forwarded to the canonical runner for its build.
 Canonical test entry IDs selected by the shared scope planner. Runs only those
 entries without desktop admission and projects the completed archive to suite reports.
 .PARAMETER SkipTooling
-Compatibility switch for the shared runner. The Suites adapter runs only the
-explicit list, including any named tooling entries in their canonical order.
+Indicates that the shared runner already checked changelog fragments and native names.
+The Suites adapter keeps the explicit entries in canonical order, including its artifact writer.
 .PARAMETER ResumeFrom
 Explicit exact promoted Full origin; valid only with Mode Full. No automatic widening.
 .PARAMETER Interactive
@@ -59,7 +60,7 @@ through the canonical runner; no second evidence cache or desktop lease is intro
 .EXAMPLE
 ./test.ps1 -Suite Commands -CommandsFamily file-operations -SkipBuild
 .EXAMPLE
-./test.ps1 -Mode PrePush -Configuration Debug
+./test.ps1 -Mode PrePush
 .EXAMPLE
 ./test.ps1 -Full -Interactive -AllowAlternateVolumeTestRoot -TestRoot E:\RedSalamander.Perf
 #>
@@ -81,24 +82,55 @@ param(
     [Parameter(ParameterSetName='Mode')][Parameter(ParameterSetName='Full')][switch]$AllowAlternateVolumeTestRoot,
     [Parameter(ParameterSetName='Mode')][ValidateSet('','Commands','Compare','FileOps')][string]$Suite='',
     [Parameter(ParameterSetName='Mode')][string]$CaseFilter='',
-    [Parameter(ParameterSetName='Mode')][string]$CommandsFamily=''
+    [Parameter(ParameterSetName='Mode')][string]$CommandsFamily='',
+    [Parameter(ParameterSetName='Mode', DontShow)][switch]$CanonicalProfile
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 if ($Full) { $Mode = 'Full' }
+if ($Suite -and $Mode -ne 'Affected') { throw 'Focused Suite is valid only for Affected iteration.' }
+if (-not $Suite -and ($CaseFilter -or $CommandsFamily)) { throw 'CaseFilter and CommandsFamily require a focused Suite.' }
+if ($ResumeFrom -and ($Mode -ne 'Full' -or -not $Interactive)) { throw 'Exact Full Resume requires Mode Full and the same interactive coverage as its origin.' }
+
+# Preserve explicitly governed runs and the original one-profile Test-Changes.ps1 interface.
+$useCanonicalRunner = $CanonicalProfile -or $Interactive -or $ResumeFrom -or $AllowAlternateVolumeTestRoot -or
+    $PSBoundParameters.ContainsKey('TestRoot') -or $PSBoundParameters.ContainsKey('BuildNumber')
+if ($Mode -eq 'PrePush' -and ($PSBoundParameters.ContainsKey('Platform') -or $PSBoundParameters.ContainsKey('Configuration'))) {
+    $useCanonicalRunner = $true
+}
+if ($Mode -in @('Full', 'PrePush') -and -not $useCanonicalRunner) {
+    $binding = Join-Path $PSScriptRoot '.ci-engine/Tools/Modules/Ci.EngineBinding.psm1'
+    if (-not [IO.File]::Exists($binding)) { throw 'Full and PrePush require the .ci-engine checkout pinned by .ci/project.json.' }
+    Import-Module $binding -Scope Local
+    $command = Resolve-CiPinnedEngineCommand -ProjectRoot $PSScriptRoot -Name 'Test-Changes.ps1'
+    $engineArguments = @('-NoProfile', '-NonInteractive', '-File', $command, '-Root', $PSScriptRoot, '-Mode', $Mode)
+    if ($Mode -eq 'Full') {
+        if (-not $PSBoundParameters.ContainsKey('Platform') -and
+            [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ceq 'Arm64') { $Platform = 'ARM64' }
+        $engineArguments += @('-Platform', $Platform, '-Configuration', $Configuration)
+    }
+    if ($PSBoundParameters.ContainsKey('BaseRef') -and $BaseRef) { $engineArguments += @('-BaseRef', $BaseRef) }
+    if ($SkipBuild) { $engineArguments += '-SkipBuild' }
+    if ($Explain) { $engineArguments += '-Explain' }
+    & (Join-Path $PSHOME 'pwsh.exe') @engineArguments
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    # A successful restricted run still leaves the repository verdict unevaluated.
+    exit 2
+}
+
 # Pending fragments are folded on the default branch after merge. The pinned validator checks the exact fold or generated release transition.
 # BaseRef defaults to origin/HEAD for the impact comparison; the changelog is compared with origin/main unless a BaseRef is supplied.
-if (-not $Explain) {
+if (-not $Explain -and -not $SkipTooling) {
     $changelogArguments = @{}
     if ($Mode -eq 'PrePush') {
         $changelogArguments.Base = if ($PSBoundParameters.ContainsKey('BaseRef') -and $BaseRef) { $BaseRef } else { 'origin/main' }
     }
     & (Join-Path $PSScriptRoot 'Tools/Test-Changelog.ps1') @changelogArguments
 }
-Import-Module (Join-Path $PSScriptRoot 'Tools/Modules/Testing/ScopedTesting.psm1') -Force
-Write-Host "Native test naming: $(Assert-ScopedTestNames $PSScriptRoot) files checked."
-if ($Suite -and $Mode -ne 'Affected') {throw 'Focused Suite is valid only for Affected iteration.'}
-if ($ResumeFrom -and ($Mode -ne 'Full' -or -not $Interactive)) {throw 'Exact Full Resume requires Mode Full and the same interactive coverage as its origin.'}
+if (-not $SkipTooling) {
+    Import-Module (Join-Path $PSScriptRoot 'Tools/Modules/Testing/ScopedTesting.psm1') -Force
+    Write-Host "Native test naming: $(Assert-ScopedTestNames $PSScriptRoot) files checked."
+}
 $arguments = @{
     Suite = 'Full'
     Configuration = $Configuration
@@ -121,8 +153,6 @@ if ($Suite) {
     $arguments.ValidationMode = 'Fresh'
     $arguments.CaseFilter = $CaseFilter
     $arguments.CommandsFamily = $CommandsFamily
-} elseif ($CaseFilter -or $CommandsFamily) {
-    throw 'CaseFilter and CommandsFamily require a focused Suite.'
 }
 if ($ResumeFrom) {
     $arguments.ValidationMode = 'Resume'

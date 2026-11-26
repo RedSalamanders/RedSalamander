@@ -23,11 +23,8 @@ The next part implements the RedSalamander adapter in the [shared scoped-testing
    Keep the external archive authoritative for failure details, build attestations and exact Full Resume. Keep shared
    native reuse disabled until the receipt review verifies source, binary, profile and environment parity.
    The selected path preserves the canonical Full order and re-attestation around the toolchain writer.
-   The shared runner's default dispatch still needs the native handoff for an artifact-mutating selection
-   before the product switches ordinary Full or PrePush to that runner.
-4. Switch normal affected, full and pre-push calls to the engine shim. Keep the existing focused suite, case filter,
-   Commands family, interactive, alternate-volume, explicit evidence root and exact Resume paths available through
-   the compatibility adapter. Preserve incomplete-coverage and failure exit categories in the compatibility path.
+   [Engine #125](https://github.com/RedSalamanders/.github/pull/125) adds the native profile handoff and verifies fresh reports after canonical re-attestation.
+4. The root Full and PrePush paths use the engine handoff. Full selects one native profile and PrePush covers all six profiles with cross builds. The compatibility adapter preserves the single-profile path, focused suite, case filter, Commands family, interactive, alternate-volume, explicit evidence root and exact Resume. The canonical affected path remains active pending its evidence comparison.
 5. Prove selected native execution, failure reporting, build-only ARM64 on x64, and exact Resume through the normal
    entry points. Compare x64 and native ARM64 behavior in the same combined tooling qualification. Run focus-taking
    work only in the separately authorized desktop boundary.

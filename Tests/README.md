@@ -8,11 +8,12 @@ checks use the exact clean external pin through the shared resolver, never a rem
 ```powershell
 ./test.ps1 -Explain
 ./test.ps1 -Configuration Debug
-./test.ps1 -Mode PrePush -Configuration Debug
+./test.ps1 -Mode PrePush -Explain
+./test.ps1 -Mode PrePush
 ./test.ps1 -Full -Configuration Debug
 ```
 
-The default uses local merge-base changes plus staged, unstaged and untracked work. `Test-Changes.ps1` still accepts the existing parameters. Read the explanation before a large run. Unknown code/build inputs widen coverage. Selected work is partial evidence. PrePush keeps the full native obligation local. GitHub PR checks are compiler-free.
+The default uses local merge-base changes plus staged, unstaged and untracked work. Unknown code and build inputs widen coverage. `-Full` runs one native profile, defaulting to the host architecture. PrePush checks all six profiles, running unattended suites on the host architecture and building the other architecture. Review the matrix with `-Explain`. Use `Test-Changes.ps1` or pass `-Configuration` or `-Platform` to `test.ps1 -Mode PrePush` for the single-profile path. GitHub PR checks are compiler-free. Unattended runs retain the repository verdict `NOT_EVALUATED`.
 
 Native test files use `Scope.Tests.Something.h/.cpp`; register new active files in `native-test-files.json`. `Tools/validation-impact.json` owns affected selection through the canonical run plan. The version 2 `Tests/test-scopes.json` maps the shared planner to those same entry IDs. Explicit shared selections produce archive-bound suite report metadata while native evidence stays in the marked sandbox. Shared-library or runtime byte changes conservatively invalidate local standalone reuse. No consumer dependency pin changes are part of this workflow.
 

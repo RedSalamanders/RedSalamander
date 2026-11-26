@@ -2,7 +2,8 @@
 .SYNOPSIS
 Compatibility entry point for RedSalamander scoped tests.
 .DESCRIPTION
-Forwards the existing parameters to the root test.ps1 and returns its exit code.
+Forwards the existing parameters to the root test.ps1, preserving single-profile
+execution and returning its exit code.
 .PARAMETER Mode
 Affected (default), Full, or PrePush.
 .PARAMETER BaseRef
@@ -67,5 +68,5 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-& (Join-Path $PSScriptRoot 'test.ps1') @PSBoundParameters
+& (Join-Path $PSScriptRoot 'test.ps1') -CanonicalProfile @PSBoundParameters
 exit $LASTEXITCODE

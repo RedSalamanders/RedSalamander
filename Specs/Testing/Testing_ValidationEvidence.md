@@ -558,8 +558,20 @@ The human-managed planning note and archived test evidence do not participate in
 The shared runner calls `test.ps1 -Suites <entry IDs>` with exact noninteractive scopes. The adapter preserves the
 canonical Full order, including the toolchain artifact writer and re-attestation before any artifact readers.
 It refuses empty, unknown, duplicate, desktop-required and non-native selections before any run-directory or
-build work. `-SkipBuild` still requires the canonical test-enabled artifact receipt. Normal Full, PrePush and
-exact Resume continue through their existing entry points.
+build work. `-SkipBuild` uses the canonical test-enabled artifact receipt for native runtime. The selected
+runner holds the shared checkout/profile lease through report publication.
+
+Ordinary `test.ps1 -Full` uses the pinned shared planner for one profile, defaulting to the host architecture.
+`test.ps1 -Mode PrePush` applies the committed changelog check and the six-profile matrix. Profiles matching
+the host run their native suites. The other architecture builds only through `build.ps1` and uses the shared
+build receipt for `-SkipBuild`. The shared runner verifies unchanged source, index and environment and
+requires fresh named reports. The canonical runner owns native profile builds, byte verification, the
+artifact writer and re-attestation. `-Explain` plans without running builds or suites.
+
+`Test-Changes.ps1`, explicit PrePush profiles and runs with explicit sandbox, build-number, alternate-volume
+or interactive controls keep the single-profile canonical path. Affected, focused selection and exact Resume
+keep their canonical execution contracts. A completed unattended Full or PrePush reports exit 2 for
+`NOT_EVALUATED`. The handoff preserves the native runner failure code.
 
 Once the canonical runner seals the archived summary, the adapter compares its bytes with the just-completed result
 and writes [shared suite report metadata](ScopedSuiteReport.schema.json) to the owning profile's
@@ -574,7 +586,7 @@ neither that resource nor the forwarding switch supplies authorization to initia
 
 Exact local continuation uses the existing explicit Full Resume and its promoted artifact/epoch contracts. Commands families and timing/network-dependent entries retain their declared non-cacheable policies. Affected never consumes reusable evidence.
 
-`-Mode Full` selects the full local obligation. `-Mode PrePush` retains the full native obligation locally and validates changelog fragments against the comparison base. The GitHub PR gate performs compiler-free checks. Main and release acceptance require evidence for their admitted source and configured native profiles.
+The GitHub PR gate performs compiler-free checks. Main and release acceptance require evidence for their admitted source and configured native profiles.
 
 RedSalamander defers only entries whose complete portable entry contracts equal the PR plan, retaining writers, in-product cases and extra scenarios locally. Its `-NonInteractive` option omits entries that require desktop-global state and records incomplete coverage; it cannot alter an exact Resume. When every selected entry is omitted (for example FileOps admission coverage with shared foreground invariants) the run executes nothing, lists the omitted entries as `PENDING_INTERACTIVE`, writes no pass claim and ends repository `NOT_EVALUATED` with exit 2. Only `-Suite FileOps` with one exact, case-sensitive filter from `DiscoveryScope_LocalDirectApi`, `DiscoveryScope_FolderLiveProgress`, `DiscoveryScope_MultipleFoldersLiveProgress`, `FileOps_RepeatDecisionContracts`, `FileOps_AlertOverlayUxAccessibility`, `FileOps_ReviewRemediationContracts`, `FileOps_DeferredExitRefusesNewWork`, `FileOps_ClearCompletedScope`, `FileOps_PopupIdleCadence`, `FileOps_IdentityInterlockWaiting`, `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`, `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, `FileOps_SmbExactRenameProvider`, `FileOps_SmbCorroboratedRenameProvider`, `FileOps_SmbRecycleRefusal`, `C0_CurlCommittedMutationResponseLost`, `FileOps_ProviderCapabilityMatrix`, `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage`, `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof`, `R0fGraph_FakeGraphReadWriteCreateRenameRecycle`, `Phase16_RemoteOneDrivePersonalInlineRename`, `Phase16_RemoteSftpInlineRename`, `Delete_IdentityLessPinnedTreeChangedEntry` or `Delete_IdentityLessPinnedTreeArchiveWriter`, and no flaky/order proof injection, is admitted without that desktop lease. These owned callback, storage and progress witnesses retain `--selftest-no-activate`; application captures use the canonical owned HWND WGC path; broad suites, families, prefixes, wildcards, multiple-case filters, casing near-misses and unknown filters remain leased. The plan module stays in the recursive runner dependency digest, invalidating prior entry identity after a classification change. Focused successes still report filtered coverage and repository `NOT_EVALUATED`. DxUi foreground suites remain explicit `test.ps1 -Interactive` work after agreement to the time. Noninteractive iteration and CI do not claim those manual gates; no desktop automation is introduced.
 

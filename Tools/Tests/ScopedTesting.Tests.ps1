@@ -39,7 +39,7 @@ $global:LASTEXITCODE=2
         (Test-Path -LiteralPath $launched) | Should Be $true
         $global:LASTEXITCODE=0
     }
-    It 'preserves legacy selection and forwards the root defaults, Full, and alternate-volume opt-in' {
+    It 'preserves legacy profile controls and hands ordinary Full and PrePush to the engine' {
         $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('alternate-forwarding-'+[guid]::NewGuid().ToString('N'))
         $succeeded=$false
         try {
@@ -72,7 +72,8 @@ $global:LASTEXITCODE=2
             )
             foreach ($case in $cases) {
                 foreach ($optIn in @($false,$true)) {
-                    $arguments = @('-NoProfile','-File',(Join-Path $fixture $case.script),'-TestRoot',$env:REDSALAMANDER_TEST_ROOT) + $case.arguments
+                    $arguments = @('-NoProfile','-File',(Join-Path $fixture $case.script)) + $case.arguments
+                    if ($case.name -cne 'LegacyPrePush' -or $optIn) { $arguments += @('-TestRoot',$env:REDSALAMANDER_TEST_ROOT) }
                     if ($optIn) { $arguments += '-AllowAlternateVolumeTestRoot' }
                     Invoke-RSTestFixtureNative -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments $arguments *> (Join-Path $fixture "child-$($case.name)-$optIn.log")
                     $LASTEXITCODE | Should Be 2
@@ -84,6 +85,42 @@ $global:LASTEXITCODE=2
                     $captured.buildNumber | Should Be $case.number
                     $captured.nonInteractive | Should Be $true
                     $captured.testRoot | Should Be $env:REDSALAMANDER_TEST_ROOT
+                }
+            }
+            $engine = Join-Path $fixture '.ci-engine/Tools'
+            [void](New-Item -ItemType Directory -Path (Join-Path $engine 'Modules') -Force)
+            @'
+function Resolve-CiPinnedEngineCommand {
+    param($ProjectRoot,$Name)
+    Join-Path $ProjectRoot ".ci-engine/Tools/$Name"
+}
+Export-ModuleMember -Function Resolve-CiPinnedEngineCommand
+'@ | Set-Content -LiteralPath (Join-Path $engine 'Modules/Ci.EngineBinding.psm1')
+            @'
+param($Root,$Mode,[string]$Platform,[string]$Configuration,[string]$BaseRef,[switch]$SkipBuild,[switch]$Explain)
+[ordered]@{
+    mode=$Mode; platform=$Platform; configuration=$Configuration; base=$BaseRef
+    skipBuild=[bool]$SkipBuild; explain=[bool]$Explain
+} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Root 'shared.json')
+if ($BaseRef -ceq 'blocked-fixture') { exit 4 }
+exit 0
+'@ | Set-Content -LiteralPath (Join-Path $engine 'Test-Changes.ps1')
+            $hostPlatform = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ceq 'Arm64') { 'ARM64' } else { 'x64' }
+            $sharedCases = @(
+                @{ name='Full'; arguments=@('-Full','-Configuration','ASan Debug','-BaseRef','reviewed-base','-SkipBuild');
+                    mode='Full'; platform=$hostPlatform; configuration='ASan Debug'; base='reviewed-base'; skipBuild=$true; explain=$false; exitCode=2 },
+                @{ name='PrePush'; arguments=@('-Mode','PrePush','-Explain');
+                    mode='PrePush'; platform=''; configuration=''; base=''; skipBuild=$false; explain=$true; exitCode=2 },
+                @{ name='Blocked'; arguments=@('-Mode','Full','-Platform','x64','-BaseRef','blocked-fixture');
+                    mode='Full'; platform='x64'; configuration='Debug'; base='blocked-fixture'; skipBuild=$false; explain=$false; exitCode=4 }
+            )
+            foreach ($case in $sharedCases) {
+                $arguments = @('-NoProfile','-File',(Join-Path $fixture 'test.ps1')) + $case.arguments
+                Invoke-RSTestFixtureNative -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments $arguments *> (Join-Path $fixture "shared-$($case.name).log")
+                $LASTEXITCODE | Should Be $case.exitCode
+                $captured = Get-Content -LiteralPath (Join-Path $fixture 'shared.json') -Raw | ConvertFrom-Json
+                foreach ($property in 'mode','platform','configuration','base','skipBuild','explain') {
+                    $captured.$property | Should Be $case[$property]
                 }
             }
             $succeeded=$true
@@ -105,6 +142,8 @@ Describe 'Shared scope data and report contract' {
         Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationImpact.psm1') -Scope Local
         Import-Module (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.ScopedTesting.psm1') -Scope Local -Prefix CI
         $shared = Read-CIScopedTestManifest -Root $repoRoot
+        $shared.nativeProfileOwner | Should Be 'product'
+        @($shared.prePushProfiles | Where-Object { $_.buildOnly -ceq 'cross' }).Count | Should Be 6
         $impact = Read-RSValidationImpactManifest -RepoRoot $repoRoot `
             -Path (Join-Path $repoRoot 'Tools/validation-impact.json') `
             -SchemaPath (Join-Path $repoRoot 'Specs/Testing/ValidationImpact.schema.json')
@@ -142,9 +181,17 @@ Describe 'Shared scope data and report contract' {
                 $selection = @(Select-RSScopedTestRunEntries -Entries $plan -EntryId @('standalone.settings-schema','tooling.pester-build-toolchain'))
                 ($selection.Id -join ',') | Should Be 'tooling.pester-build-toolchain,standalone.settings-schema'
                 @($selection[0].ArtifactWriteIds).Count | Should BeGreaterThan 0
-                { Select-RSScopedTestRunEntries -Entries $plan -EntryId @('selftest.commands') } | Should Throw
-                { Select-RSScopedTestRunEntries -Entries $plan -EntryId @('missing.entry') } | Should Throw
-                { Select-RSScopedTestRunEntries -Entries $plan -EntryId @('selftest.compare-directories','selftest.compare-directories') } | Should Throw
+                $invalidSelections = @(
+                    @{ ids=@('selftest.commands'); message="Unknown or desktop-required scoped test entry 'selftest.commands'." },
+                    @{ ids=@('missing.entry'); message="Unknown or desktop-required scoped test entry 'missing.entry'." },
+                    @{ ids=@('selftest.compare-directories','selftest.compare-directories'); message="Duplicate scoped test entry 'selftest.compare-directories'." }
+                )
+                foreach ($invalid in $invalidSelections) {
+                    $refusal = ''
+                    try { $null = Select-RSScopedTestRunEntries -Entries $plan -EntryId $invalid.ids }
+                    catch { $refusal = $_.Exception.Message }
+                    $refusal | Should Be $invalid.message
+                }
             }
         }
     }
@@ -188,7 +235,10 @@ Describe 'Shared scope data and report contract' {
             $arguments.RunExitCode = 5
             (Get-RSScopedSuiteReports @arguments).exitCode | Should Be 1
             $legacy.run_id = 'another-run'
-            { Get-RSScopedSuiteReports @arguments } | Should Throw
+            $refusal = ''
+            try { $null = Get-RSScopedSuiteReports @arguments }
+            catch { $refusal = $_.Exception.Message }
+            $refusal | Should Be 'Shared suite reports require a matching Fresh selected run.'
         } $schema
     }
 }

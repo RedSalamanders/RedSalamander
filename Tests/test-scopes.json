@@ -2,6 +2,7 @@
   "version": 2,
   "defaultBranch": "main",
   "buildNumber": "none",
+  "nativeProfileOwner": "product",
   "nativeInventory": {"path":"Tests/native-test-files.json","exclude":["Specs/**","Measurements/**","legacy/**","External/**","Tools/TerminalEngine/TerminalEngineGate0ContractTestAdapter.cpp"],"testFolders":["Tests/**","RedSalamander/SelfTest/**"]},
   "prose": ["docs/**","Changes/*.md"],
   "unscoped": ["Specs/TestRuns/**","Specs/Plans/WIP/Notes_Scratch.md"],
@@ -107,11 +108,11 @@
   ],
   "watchedProcesses": ["CrashHandlingTests.exe","FileSystemCurlTests.exe","LocalizationTests.exe","PluginContractTests.exe","ProductUiTests.exe","RedConfigureTests.exe","RedSalamander.exe","SettingsSchemaTests.exe","ViewerPETests.exe","ViewerSqliteTests.exe"],
   "prePushProfiles": [
-    {"platform":"x64","configuration":"Debug"},
-    {"platform":"x64","configuration":"Release"},
-    {"platform":"x64","configuration":"ASan Debug"},
-    {"platform":"ARM64","configuration":"Debug","buildOnly":true},
-    {"platform":"ARM64","configuration":"Release","buildOnly":true},
-    {"platform":"ARM64","configuration":"ASan Debug","buildOnly":true}
+    {"platform":"x64","configuration":"Debug","buildOnly":"cross"},
+    {"platform":"x64","configuration":"Release","buildOnly":"cross"},
+    {"platform":"x64","configuration":"ASan Debug","buildOnly":"cross"},
+    {"platform":"ARM64","configuration":"Debug","buildOnly":"cross"},
+    {"platform":"ARM64","configuration":"Release","buildOnly":"cross"},
+    {"platform":"ARM64","configuration":"ASan Debug","buildOnly":"cross"}
   ]
 }
