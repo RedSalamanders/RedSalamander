@@ -93,6 +93,7 @@ class FileSystemCurl final : public IFileSystem,
                              public IFileSystemAtomicWriter,
                              public IFileSystemDirectoryOperations,
                              public IFileSystemDirectoryWatch,
+                             public IFileSystemProbedRename,
                              public IInformations,
                              public INavigationMenu,
                              public IDriveInfo
@@ -205,6 +206,10 @@ public:
     HRESULT STDMETHODCALLTYPE SetFileBasicInformation(const wchar_t* path, const FileSystemBasicInformation* info) noexcept override;
     HRESULT STDMETHODCALLTYPE GetItemProperties(const wchar_t* path, const char** jsonUtf8) noexcept override;
 
+    HRESULT STDMETHODCALLTYPE CaptureProbedRenameSource(const wchar_t* path,
+                                                        const FileSystemOptions* options,
+                                                        IFileSystemProbedRenameSource** source) noexcept override;
+
     // IFileSystemDirectoryOperations
     HRESULT STDMETHODCALLTYPE CreateDirectory(const wchar_t* path) noexcept override;
     HRESULT STDMETHODCALLTYPE GetDirectorySize(const wchar_t* path,
@@ -220,6 +225,7 @@ protected:
     HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
+    class ProbedRenameSource;
     ~FileSystemCurl();
 
     static constexpr wchar_t kPluginIdFtp[]  = L"builtin/file-system-ftp";

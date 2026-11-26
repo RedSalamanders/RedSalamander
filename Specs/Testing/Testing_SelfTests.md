@@ -1207,7 +1207,7 @@ the same synchronous reporter and counter path as the pointer overload.
   `FileOps_SmbCorroboratedRenameProvider`, `FileOps_SmbRecycleRefusal`, `C0_CurlCommittedMutationResponseLost`, `FileOps_ProviderCapabilityMatrix`,
   `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage`,
   `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof`, `R0fGraph_FakeGraphReadWriteCreateRenameRecycle`,
-  `Phase16_RemoteOneDrivePersonalInlineRename`, or
+  `Phase16_RemoteOneDrivePersonalInlineRename`, `Phase16_RemoteSftpInlineRename`, or
   `Delete_IdentityLessPinnedTreeChangedEntry` or `Delete_IdentityLessPinnedTreeArchiveWriter` case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
   copies and, for progress witnesses, owned HWND WGC capture;
@@ -1222,6 +1222,10 @@ the same synchronous reporter and counter path as the pointer overload.
   the Copy-only Move witness uses an owned provider and synthetic task decisions under the same blocker;
   `R0fGraph_FakeGraphReadWriteCreateRenameRecycle` uses a loopback Graph fixture and an owned pane;
   `Phase16_RemoteOneDrivePersonalInlineRename` uses saved sign-in and a fresh test-only fixture child, with exact file and folder Rename, case-only spelling, occupied-name refusal, and Recycle verification;
+  `Phase16_RemoteSftpInlineRename` requires saved sign-in and the approved existing SFTP test folder.
+  It creates one fresh child and verifies occupied-name refusal and scheduled file, case-only and
+  folder Rename. Cleanup verifies every generated payload and removes only the named fixture entries
+  nonrecursively.
   `FileOps_SmbRecycleRefusal` uses one fresh child of `path.smb.primary`. It checks that the guarded Local Shell route
   reports a known non-commit on the share, offers one item-specific permanent-delete decision on the independently
   probed exact or by-name route and retains the same bytes
