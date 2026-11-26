@@ -11621,8 +11621,9 @@ constexpr auto kCommandSurfaceCoverage = std::to_array<CommandSurfaceCoverageEnt
         g_folderWindow.SetActivePane(pane);
         const auto started = std::chrono::steady_clock::now();
         SendMessageW(mainWindow, WM_INITMENUPOPUP, reinterpret_cast<WPARAM>(filesMenu), 0);
+        constexpr std::array<UINT, 2> kScheduledRenameCommands{IDM_PANE_BATCH_RENAME, IDM_PANE_CHANGE_CASE};
         bool expectedAvailability = true;
-        for (const UINT command : {IDM_PANE_BATCH_RENAME, IDM_PANE_CHANGE_CASE})
+        for (const UINT command : kScheduledRenameCommands)
         {
             const UINT flags = GetMenuState(filesMenu, command, MF_BYCOMMAND);
             expectedAvailability = expectedAvailability && flags != std::numeric_limits<UINT>::max() && ((flags & MF_GRAYED) == 0u) == enabled;
