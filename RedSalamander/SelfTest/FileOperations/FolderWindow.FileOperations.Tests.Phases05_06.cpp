@@ -9731,7 +9731,8 @@ case SelfTestState::Step::R0fGraph_FakeGraphReadWriteCreateRenameRecycle:
         {
             inlineRenameActive = true;
             const auto leave   = wil::scope_exit([]() noexcept { inlineRenameActive = false; });
-            return RunGraphInlineRenameForSelfTest(graph, std::filesystem::path(graphPath(L"source/payload-01.bin")), L"renamed.bin");
+            return RunRemoteInlineRenameForSelfTest(
+                graph, kPluginIdOneDrivePersonal, std::filesystem::path(graphPath(L"source/payload-01.bin")), L"renamed.bin");
         }();
         if (renameHr != S_OK || graphExists(L"source/payload-01.bin") || ! graphExists(L"source/renamed.bin"))
         {
