@@ -86,7 +86,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Verify the reviewed R0e source projections, closed raw archives, exact sample invariants and matched five-process diagnostic comparison.",
+      "purpose": "Verify the reviewed R0e case fixtures and measured projections, closed raw archives, exact sample invariants and matched five-process diagnostic comparison.",
       "usage": "Imported by the hosted paired command and its focused negative controls; never promotes repository coverage.",
       "consumerClosure": "derived-references",
       "usedBy": ["Tools/Invoke-R0ePairedValidation.ps1", "Tools/Tests/R0ePairedValidation.Tests.ps1"],

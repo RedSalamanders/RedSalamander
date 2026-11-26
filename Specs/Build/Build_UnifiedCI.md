@@ -317,9 +317,10 @@ The separate manual `R0ePaired` scope is Release-only. It requires a nonzero ful
 descriptor. The candidate and an isolated, retained baseline worktree use full-solution test-enabled Embedded Release
 builds with the same positive frozen hosted build number and verified matching dependency/toolchain identity. Run five
 fresh canonical `FileOps_ProviderCapabilityMatrix` processes per side on the same native architecture and machine, at
-timeout scale 1 and repeat 1. Verify the reviewed source projections, raw archive closure, profile, quarantine, counts
-and timing gates before reduction. The owning [performance contract](../Testing/Testing_PerformanceValidation.md)
-retains the two-second ceiling and matched p95 bound.
+timeout scale 1 and repeat 1. Require matching reviewed source projections, including the fixture setup and assertions
+outside the timed section. Verify raw archive closure, profile, quarantine, counts and timing gates before reduction.
+The owning [performance contract](../Testing/Testing_PerformanceValidation.md) retains the two-second ceiling
+and matched p95 bound.
 
 This paired study always leaves repository coverage NOT_EVALUATED and produces no regression or production receipt. A
 baseline may be described as timing-only RED solely when all other reviewed predicate clauses and complete raw evidence

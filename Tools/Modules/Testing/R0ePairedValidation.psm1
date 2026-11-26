@@ -5,21 +5,29 @@ Import-Module (Join-Path $PSScriptRoot 'TestSandbox.psm1') -Scope Local
 # independently reviewed. A different body requires a new review, not a new hash here.
 function Get-RSR0eCaseIdentity {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$SourceText)
+    param(
+        [Parameter(Mandatory)][string]$SourceText,
+        [switch]$Candidate
+    )
     $text = $SourceText.Replace("`r`n", "`n")
     $match = [regex]::Match($text, '(?ms)^case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:\s*\n.*?(?=^case SelfTestState::Step::)')
     if (-not $match.Success) { throw 'R0e case body not found.' }
     $case = $match.Value.TrimEnd() + "`n"
     $hash = { param([string]$value) [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($value))) }
     $full = & $hash $case
-    # The current matrix adds a no-activation guard and updates the later cleanup and Recycle
-    # assertions. Its measured workload is shared, but it must pair with this exact projection.
-    $reviewed = if ($full -cin @('AB2DE533491C1816F373655E164C89A38ED38D3EC3D6DE6B8F90502BBB3F9517', 'A3541BB88E72E6BC41EAD4C77D37F9136A39EF123C8AAB780ECEF63039F020CE')) {
+    $historicalBaseline = 'AB2DE533491C1816F373655E164C89A38ED38D3EC3D6DE6B8F90502BBB3F9517'
+    $reviewed = if ($full -cin @($historicalBaseline, 'A3541BB88E72E6BC41EAD4C77D37F9136A39EF123C8AAB780ECEF63039F020CE')) {
         @{ prefix = 'B061625FED5FFB3ADF57BCE2B0FA02E57C055B4E0EEE034628F0719852611833'; suffix = 'BAE1AC8644A3D3994F4DFCB39E763F67859562A095C13903EC3AD71C73582C6B' }
+    } elseif ($full -ceq 'AC19290438FF0A6C57A810263AD6C371DC34C4531FF45FBD12147A6EB394227F') {
+        # Complete mappings and a distinct-source control revise the untimed Rename fixture.
+        @{ prefix = 'E5BDBF77A737E15012F0FD30DA7741B07739ECD83393B62623CD3FB9B59BBA59'; suffix = '681389C78B53E92548FD3D86563E6AAECC0AB5B3AE00E21AFAC8C6D0FC46FA01' }
     } elseif ($full -ceq '2E5558B523D99D73528B2664EA56CE2E1A7733952CB572CF62FF00E2636FA329') {
         @{ prefix = 'B5580DB8FC0D352F49ACAF2FE5E99100816D7CFB8B20AC676A2F06A2A93AD488'; suffix = '681389C78B53E92548FD3D86563E6AAECC0AB5B3AE00E21AFAC8C6D0FC46FA01' }
     } else {
         throw 'Unreviewed R0e case body.'
+    }
+    if ($Candidate -and $full -ceq $historicalBaseline) {
+        throw 'Candidate R0e case is not the reviewed candidate.'
     }
     $start = 'providerOperationCallCount == 0u && r0eElapsedUs < kR0eSelfTestCeilingUs,'
     $end = "`n        {`n            return true;`n        }`n`n        std::string missingCreateDirectoryJson(localCapabilitiesJsonSnapshot);"

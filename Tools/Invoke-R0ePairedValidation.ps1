@@ -3,7 +3,8 @@
 Runs a source-bound paired R0e diagnostic on one native hosted machine.
 .DESCRIPTION
 Builds an isolated baseline and measures five fresh filtered FileOps processes per side.
-The two sides require matching reviewed case projections. The preserved diagnostic-only
+The two sides require matching reviewed case projections, including the untimed Rename fixture.
+Choose a baseline with the same reviewed fixture. The preserved diagnostic-only
 wording difference in the historical pair is allowed. The workload, two-second ceiling,
 safety assertions and matched p95 bound are unchanged.
 A timing-only RED baseline is retained and reports NOT_EVALUATED. No product, Full, or release
@@ -110,8 +111,7 @@ $state=[ordered]@{schema='red-salamander.r0e-paired-result.v1';cohort=$cohortId;
 try {
     Set-ScopedEnvironment 'RSBuildEnableTests' 'true';Set-ScopedEnvironment 'RSBuildCompilerDebugInformation' 'Embedded';Set-ScopedEnvironment 'REDSALAMANDER_TEST_ROOT' $TestRoot
     $candidateReceipt=Read-VerifiedReceipt $root $CandidateHead; $state.candidate_receipt=$candidateReceipt.receipt_id
-    $candidateCase=Get-RSR0eCaseIdentity ([IO.File]::ReadAllText((Join-Path $root 'RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Phases05_06.cpp')))
-    if($candidateCase.full -cnotin @('A3541BB88E72E6BC41EAD4C77D37F9136A39EF123C8AAB780ECEF63039F020CE', '2E5558B523D99D73528B2664EA56CE2E1A7733952CB572CF62FF00E2636FA329')){throw 'Candidate R0e case is not the reviewed candidate.'}
+    $candidateCase=Get-RSR0eCaseIdentity -Candidate -SourceText ([IO.File]::ReadAllText((Join-Path $root 'RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Phases05_06.cpp')))
     $state.candidate_case=$candidateCase
     $buildRoot=Join-Path $root '.build';$buildItem=Get-Item -LiteralPath $buildRoot -Force
     if(($buildItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'Build root is a reparse point.'}
