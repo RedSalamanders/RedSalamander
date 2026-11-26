@@ -1152,7 +1152,7 @@ Describe 'Direct Commands no-activation admission' {
 
     It 'admits only one exact direct case without proofs or a desktop lease' {
         foreach ($caseName in @('cmd_directory_cache_invalidation_during_enumeration_is_retained', 'folderView_drop_integrity_guards',
-                'cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation')) {
+                'cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation', 'main_menu_information_architecture')) {
             $arguments = @{
                 Suite = 'Commands'
                 RepoRoot = $repoRoot

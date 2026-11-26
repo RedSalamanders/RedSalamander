@@ -147,6 +147,11 @@ Describe 'Product documentation capture fixtures' {
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"'
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"folderView_drop_integrity_guards"'
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation"'
+        $startupAdmission.Value | Should Match 'selectedCaptureCase == L"main_menu_information_architecture"'
+        $menuCase = [regex]::Match($settingsCommands, '(?ms)\[\[nodiscard\]\] bool TestMainMenuInformationArchitecture\(.*?^}')
+        $menuCase.Success | Should Be $true
+        $menuCase.Value | Should Match 'SendMessageW\(mainWindow,\s*WM_INITMENUPOPUP'
+        $menuCase.Value | Should Not Match '\b(?:SendInput|SetCursorPos|SetFocus|SetForegroundWindow|RequestForegroundWindow|AttachThreadInput|TryActivateOwnedWindow|PrepareMainWindowForIsolatedUiCase|DirectedSelfTestInputWarning|UIAutomation)\s*(?:\(|\b)'
         foreach ($flag in @('--selftest', '--compare-selftest', '--fileops-selftest')) {
             $startupAdmission.Value | Should Match ([regex]::Escape('! hasArg(L"' + $flag + '")'))
         }
@@ -155,7 +160,7 @@ Describe 'Product documentation capture fixtures' {
         }
         $startupAdmission.Value | Should Not Match '_wcsicmp|starts_with|SelfTestCaseNameEquals'
         $runner = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp'
-        $runner | Should Match 'const bool noActivationDirectCase\s*=\s*\(\s*options\.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"\s*\|\|\s*options\.caseFilter == L"folderView_drop_integrity_guards"\s*\|\|\s*options\.caseFilter == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation"\s*\)\s*&&\s*options\.flakyProofCaseName\.empty\(\)\s*&&\s*options\.orderProofCaseName\.empty\(\)'
+        $runner | Should Match 'const bool noActivationDirectCase\s*=\s*\(\s*options\.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"\s*\|\|\s*options\.caseFilter == L"folderView_drop_integrity_guards"\s*\|\|\s*options\.caseFilter == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation"\s*\|\|\s*options\.caseFilter == L"main_menu_information_architecture"\s*\)\s*&&\s*options\.flakyProofCaseName\.empty\(\)\s*&&\s*options\.orderProofCaseName\.empty\(\)'
         $bypass = [regex]::Match($runner, '(?s)if \(! options\.listCasesOnly && noActivationDirectCase &&\s*RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread\(\)\)\s*\{\s*runRegisteredCases\(options\);\s*\}')
         $bypass.Success | Should Be $true
         $warningIndex = $runner.IndexOf('const DirectedSelfTestInputWarning inputWarning', [StringComparison]::Ordinal)
@@ -5718,8 +5723,10 @@ Specs\TestRuns\local_scratch
         $commands | Should Match 'ValidateArchiveOutputOutsideSelectedSources\(selectedPaths,\s*archivePath\.value\(\)\)'
         $commands | Should Match 'sourceIsDirectory[\s\S]{0,220}IsSameOrDescendantNormalizedWindowsPath'
         $commands | Should Match 'IDS_MSG_ARCHIVE_OUTPUT_INSIDE_SOURCE'
-        $commands | Should Match 'if\s*\(FAILED\(result\.hr\)\)[\s\S]{0,1600}if\s*\(deleteSourcesAfterPack\)'
-        ($commands -replace '\s+', ' ') | Should Match 'deleteRequest\.operation\s*=\s*FILESYSTEM_DELETE\s*;\s*deleteRequest\.origin\s*=\s*FolderView::FileOperationRequest::Origin::PackCleanup[\s\S]{0,320}StartFileOperationFromFolderView\(pane,\s*std::move\(deleteRequest\),\s*exactCleanup\)'
+        $compactCommands = $commands -replace '\s+', ' '
+        $compactCommands | Should Match 'if \(! completed\.published\) \{.{0,700}return; \} .{0,460}if \(request\.deleteAfter\)'
+        $compactCommands | Should Match 'if \(event\.hr != S_OK \|\| completed\.hr != S_OK \|\| ! exactCleanup \|\| ! publishedArchive \|\|.{0,1040}return; \} FolderView::FileOperationRequest deleteRequest'
+        $compactCommands | Should Match 'deleteRequest\.operation = FILESYSTEM_DELETE; deleteRequest\.origin = FolderView::FileOperationRequest::Origin::PackCleanup.{0,670}cleanup\.publishedArchive = std::make_shared<const wil::unique_hfile>\(std::move\(publishedArchive\)\);.{0,120}StartFileOperationFromFolderView\(pane, std::move\(deleteRequest\), &cleanup\)'
         $commands | Should Not Match 'DeletePackedSources\('
     }
 

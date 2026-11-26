@@ -3956,6 +3956,14 @@ void OnInitMenuPopup(HWND hWnd, HMENU menu)
 
     EnsureMenuHandles(hWnd);
 
+    if (menu == g_filesMenu)
+    {
+        const UINT scheduledRenameFlags = g_folderWindow.CanScheduleRename(g_folderWindow.GetActivePane()) ? MF_ENABLED : MF_GRAYED;
+        EnableMenuItem(menu, IDM_PANE_BATCH_RENAME, MF_BYCOMMAND | scheduledRenameFlags);
+        EnableMenuItem(menu, IDM_PANE_CHANGE_CASE, MF_BYCOMMAND | scheduledRenameFlags);
+        return;
+    }
+
     if (menu == g_viewWithMenu)
     {
         RebuildFileActionMenuDynamicItems(menu, true);
@@ -7522,7 +7530,8 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         hasArg(L"--commands-selftest") && getArgValue(L"--selftest-case=", selectedCaptureCase) &&
         (selectedCaptureCase == L"cmd_product_documentation_gallery" ||
          selectedCaptureCase == L"cmd_directory_cache_invalidation_during_enumeration_is_retained" ||
-         selectedCaptureCase == L"folderView_drop_integrity_guards" || selectedCaptureCase == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation") &&
+         selectedCaptureCase == L"folderView_drop_integrity_guards" || selectedCaptureCase == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation" ||
+         selectedCaptureCase == L"main_menu_information_architecture") &&
         ! hasArg(L"--selftest") && ! hasArg(L"--compare-selftest") && ! hasArg(L"--fileops-selftest") &&
         ! getArgValue(L"--selftest-flaky-proof-case=", selectedCaptureProof) && ! getArgValue(L"--selftest-order-proof-case=", selectedCaptureProof) &&
         ! getArgValue(L"--selftest-crash-case=", selectedCaptureProof);
