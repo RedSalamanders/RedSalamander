@@ -368,7 +368,7 @@ native-pipeline/raw ownership without importing the engine-dependent process gra
 
 | Owner | Reviewed private transport and semantic distinction |
 |---|---|
-| ScopedTesting.psm1 | Invoke-ScopedGit retains raw NUL/path output; Invoke-ScopedWorkflowMetadata retains optional raw GH JSON and actual exit. |
+| ScopedTesting.psm1 | Invoke-ScopedGit retains raw NUL-delimited paths for the native test inventory. |
 | ToolInventory.psm1 | Invoke-RSToolInventoryGitCapture retains native-pipeline line/error/exit projection and inherited diagnostic encoding. |
 | SpecInformationArchitecture.psm1 | Existing Get-RSGitOutput preserves AllowFailure behavior, inherited diagnostic encoding and line results. |
 | GitMetadataCapture.psm1 | One internal export, Invoke-RSTestGitMetadataCapture, owns the unchanged shared Git line/stdin protocol, with no imports. |

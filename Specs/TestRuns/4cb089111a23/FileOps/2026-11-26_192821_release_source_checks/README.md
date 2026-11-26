@@ -1,0 +1,93 @@
+# Release source check corrections
+
+The non-interactive x64 Release PrePush on `3eed44771d3874e1f00d370d2e58adcbc07a38a7`
+used build receipt `7529c57d9b9f7e6e60e9e19cbc29b9ef738701eaa300798cf1b2a68e0420640e`.
+Run `20261126T173111Z-61920-ce6f482dfc3d40509c66ebd85a0141df` recorded 1,800 passes,
+three failures and 29 environment skips. Thirteen of 14 entries passed. The change and repository
+verdicts were both `FAILED` with filtered coverage. The three failures were in Tooling Pester.
+
+| Failed check | Correction |
+| --- | --- |
+| Published scenario links | Retired the Monitor Preferences entry from the active gallery. Its historical image and provenance remain available. |
+| Credential-bound Graph upload validation | Checked the mode-aware validation call and both typed upload-session parsing paths. |
+| Preferences reverse-navigation focus helper | Matched whitespace after the call's opening parenthesis and kept all category and key requirements. |
+
+The first focused run uncovered one new finding on the integrated main revision. The live remote
+Rename case creates a private hidden owner, and the Win32 audit lacked that exact fixture. The
+audit now applies the existing source, title, style and geometry rule to that owner. The fixture
+table exercises both the visible and wrong-path variants. A trial assertion left a visible variant
+in a shared fixture and caused a later assertion to fail. The final correction reuses the existing
+private-owner fixture and isolates each variant.
+
+| Focused run | Source | Documentation Drift | Test Harness Source |
+| --- | --- | --- | --- |
+| `20261126T182334Z-10452-2b34f95413da44c4b0c313ad8f0f4535` | `444dd03cd` | 30 passed, 1 failed | 244 passed |
+| `20261126T182619Z-45068-76beb13cdcfa46388de805888055450d` | `279da7ebc` | 30 passed, 1 failed | 244 passed |
+| `20261126T182821Z-72708-a7dc191ad6164f4699a24571c466d8e2` | `4aa1629a513f74ca091f107188f76a1d423d17aa` | 31 passed | 244 passed |
+
+All focused runs had zero skips. Each used an isolated run under the marked sandbox and archived its
+`artifacts/i66-release-source-checks.json`. The final result SHA-256 is
+`60ff83134196091fa9c132fa35fbb1bff134096d9512800c88483d579ef373cc`.
+The direct Win32 audit reported zero unclassified findings. The focused checks ran without a
+native build or desktop activation.
+
+The earlier broad archive retains both native results:
+`artifacts/selftest/last_run/run-all-tests-results.json` with SHA-256
+`30b01c8957b0b0d5252617b7d63966d39bf26aebcc3730e40bed6592c82181e1`
+and `artifacts/selftest/last_run/run-all-tests-results-v1.json` with case-level failure reasons
+and SHA-256 `f7b64eb443c034e04616fd2040a5b60c4211aed5da07ab7fb580237c980d4e7b`.
+Both are under the archived run in `C:/RedSalamander.Perf/evidence/completed-runs`.
+
+The earlier attempt to refresh PrePush was interrupted during its build when the test-fixture
+correction became necessary. The next attempt recorded the artifact attestation block in
+`20261126T182948Z-70848-84971f3d49204699b1c77072615f7086`. The pinned x64 dependency
+repair and full x64 Release rebuild then passed with zero warnings and errors. PrePush accepted
+receipt `ae81cdaaa43a746e9f342988c98157a314f6ad20e107fa129f40baaab6d11eb7`.
+Run `20261126T183940Z-47540-d7fc757cdfcb4c6db9285c919d3e9c23` finished on frozen `4aa1629a513f74ca091f107188f76a1d423d17aa`.
+Toolchain Pester passed all 35 checks and the runner re-attested the rebuilt x64 Release outputs
+with zero warnings and errors. The final receipt is `b57038de54bb7c6a443655098395d2b940400e66f63d6539ea60e029ca7bc974`.
+All 14 scheduled entries completed and were promoted. Tooling Pester passed 1,502 checks and the full
+selection recorded 1,803 passes, zero failures and 29 environment skips. The change verdict is
+`PASSED` and the repository verdict is `NOT_EVALUATED` with filtered coverage. The four desktop
+entries remain pending.
+
+The canonical v2 result SHA-256 is `3ccd33d2c5851347ae5aace6f28f5361e1e5ea43d366d09912a78c04365221dd`.
+The v1 report SHA-256 is `e8d33f11a88b452e2483c7927c252f78b2d953a005d31ffe291dc9d25a1853f3`.
+The v1 report includes the 13 separate sandbox audit findings. Both results and the final source
+snapshot are in the completed-run archive.
+
+## Build-tooling baseline integration
+
+Main advanced to `50a3be9e1` while the frozen Release run was active. The new baseline retired
+the PR workflow metadata query. On `546c7aaa8`, the documentation suite passed 31 checks and
+the harness source suite reported 243 passes and one obsolete query assertion. Run
+`20261126T184116Z-60540-cf5179d8b3d54c359b2c492a268e6ce5` preserves that failure.
+Its result SHA-256 is `f0015ad03aff8f1504de48766a9212913b35c5b58f3700f9d3a1cc03497eae8e`.
+
+The correction removed the retired query from the shared-helper catalog and the source test.
+The test still verifies that each retained Git transport sets no-window and redirection before
+process start and rejects a failing control. Exact integrated source `4386c570c97303ac79217c5f8a6aee98bce4f332`
+passed 31 documentation checks and 244 harness source checks with zero failures and skips in
+`20261126T184342Z-56024-cb5f53e672c54e2988751c4782618458`. Result SHA-256
+`28674761a9f3192d5599eb3f41e3d7676025a680df80b077fd3fccd9031b582c`.
+The guidance, inventory and changelog validators passed with the pinned CI engine.
+
+## Integrated x64 Release checks
+
+Exact publication source `1611a908605776c33098dca960f9477f4c4d1217` built test-enabled x64 Release
+with zero warnings and errors. The executable matched receipt
+`4549337f2a4ba851cfb6f4e834d7d3db4b3237a6ce4ad69730faab38438733fd`.
+
+| Run | Scope | Result |
+| --- | --- | --- |
+| `20261126T184751Z-75016-c486200f75d2405fa18e9549084d8d6f` | Before the native build | Scoped Testing passed 5 and Build Console passed 17. Runner Plan passed 129 and failed the native inventory prerequisite because the Release executable was absent. |
+| `20261126T185909Z-59660-6585735c09c04c5cbb274a5678194976` | Receipt-verified runner suites | Scoped Testing passed 5, Runner Plan passed 130, and Build Console passed 17. Zero failures and skips. |
+| `20261126T190037Z-61500-e5e926b7308e451e963d30ffb1a776e3` | Live single-item SFTP Rename | Passed 3/0/0 without activation. Three renames and one occupied-name refusal passed, and the fresh fixture was removed. |
+
+The verified runner result SHA-256 is
+`5241c77690c4d41efe1fd91d8a38a1505011c32df38c357a9adf57ab72aeeda1`.
+The SFTP launcher report SHA-256 is
+`2f0af837ffb53a77358c1553abad69a4a177ec67fd5b992762a746f33f38f182`.
+The isolated Hello-off SFTP settings retired and the installed settings digest matched.
+The earlier [SFTP record](../2026-11-26_190427_sftp_inline_rename/README.md) describes the execution scope.
+Hosted x64 and ARM64 and the remaining desktop and live-provider gates are still open.
