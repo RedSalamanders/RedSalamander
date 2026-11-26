@@ -223,17 +223,11 @@ foreach ($triplet in $tripletsToInstall) {
 # Install specific platform (one target)
 .\vcpkg-install.ps1 -Platform x64
 
-# Install specific platform + variant
-.\vcpkg-install.ps1 -Platform ARM64 -Asan
+# Install the ARM64 Windows dependencies
+.\vcpkg-install.ps1 -Platform ARM64
 
-# Install all platforms, variant only
-.\vcpkg-install.ps1 -Platform All -Asan
-
-# Install all platforms, standard only
-.\vcpkg-install.ps1 -Platform All -Asan:$false
-
-# Explicit override (bypass all logic)
-.\vcpkg-install.ps1 -Triplet x64-windows-static
+# Select a supported triplet explicitly
+.\vcpkg-install.ps1 -Triplet x64-windows
 ```
 
 ## Anti-Patterns

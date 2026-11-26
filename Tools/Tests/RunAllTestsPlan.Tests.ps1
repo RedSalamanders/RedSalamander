@@ -606,19 +606,17 @@ $durationEstimates = $Durations
         }
     }
 
-    It 'executes the real deferred Full reader selection with no cheap entries' {
+    It 'schedules the two Full interactive viewer readers when no cheap entries are selected' {
         $arguments = @{
             RepoRoot = $repoRoot; Platform = 'x64'; Configuration = 'Debug'
             RedSalamanderExePath = Join-Path $repoRoot '.build/x64/Debug/RedSalamander.exe'
         }
         $full = @(Get-RSTestRunPlan -Suite Full @arguments)
-        $pr = @(Get-RSTestRunPlan -Suite PR @arguments)
-        $deferred = @(Get-RSPrDeferredTestPlan -FullPlan $full -PrPlan $pr -RepoRoot $repoRoot)
-        $readers = @($deferred | Where-Object { $_.Kind -ne 'SelfTest' -and @($_.ArtifactWriteIds).Count -eq 0 })
-        Assert-RSSequenceEqual -Actual @($readers | ForEach-Object Id) -Expected @('viewer-pe.interactive', 'viewer-sqlite.interactive') -Message 'The real deferred reader selection keeps both interactive viewers.'
+        $readers = @($full | Where-Object Id -in @('viewer-pe.interactive', 'viewer-sqlite.interactive'))
+        Assert-RSSequenceEqual -Actual @($readers | ForEach-Object Id) -Expected @('viewer-pe.interactive', 'viewer-sqlite.interactive') -Message 'The Full plan keeps both interactive viewer readers.'
         $actual = & $schedule $readers @{}
         $actual.Early.Count | Should Be 0
-        Assert-RSSequenceEqual -Actual @($actual.Late | ForEach-Object Id) -Expected @('viewer-pe.interactive', 'viewer-sqlite.interactive') -Message 'Scheduling retains the real deferred viewers in order.'
+        Assert-RSSequenceEqual -Actual @($actual.Late | ForEach-Object Id) -Expected @('viewer-pe.interactive', 'viewer-sqlite.interactive') -Message 'Scheduling retains the real interactive viewer readers in order.'
     }
 }
 

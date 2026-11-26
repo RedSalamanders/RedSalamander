@@ -566,7 +566,10 @@ cost without invoking the C++ compiler.
 | Freeze and review an exact Ghostty candidate | `./Tools/New-GhosttyTerminalRuntimeCandidateReview.ps1` |
 | Validate a rederived Ghostty candidate overlay | `./Tools/New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1` |
 | Inspect test coverage | `./Tools/Get-TestInventory.ps1` |
-| Validate specification governance | `./Tools/Get-SpecInventory.ps1 -FailOnFindings -NoReports` |
+| Validate repository guidance and inventories | `./validate.ps1` |
+| Validate agent guidance | `./validate-skills.ps1` |
+| Validate specification governance | `./validate-specs.ps1` |
+| Verify the pinned RedMonitor client and tooling | `./Verify-RedMonitorClient.ps1` |
 | Validate this inventory | `./Tools/Get-ToolInventory.ps1 -FailOnFindings` |
 | Run raw cloc for solution directories | `./Tools/InvokeSolutionCloc.ps1` |
 | Review archived performance runs | `./Tools/Show-PerfRuns.ps1` |
@@ -615,7 +618,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Restore-DxUi.ps1` | Public dependency command | Restores the exact public DxUi source and isolated per-platform build inputs; optional advisory never advances the pin. |
 | `Restore-RedMonitor.ps1` | Compatibility command | Read-only local client verification; no restore or build. |
 | `Update-DxUi.ps1` | Public dependency-update command | Advances the DxUi lock only to a successfully validated main commit, then runs or explicitly skips Full product validation. |
-| `Verify-RedMonitorClient.ps1` | Public client verifier | Read-only local header and MIT hash verification. |
+| `Verify-RedMonitorClient.ps1` | Public client verifier | Read-only local command, header, and MIT notice hash verification. |
 | `Update-RedMonitorClient.ps1` | Explicit dependency update | Fetches only the header and MIT notice at one full commit; writes their lock. |
 | `Restore-TerminalEngineInputs.ps1` | Dormant generic lifecycle command | Downloads or verifies inputs only for an explicit reviewed generic lock. |
 | `Run-AllTests.ps1` | Public canonical test command | CI/Full execution with profile-scoped build inputs and all test-generated local data beneath exact `X:\RedSalamander.Perf` on a selected fixed local drive. PR delegation may leave only late interactive standalone work. First initialization and alternate-volume FileOps roots require explicit opt-in; `path.local.alternate` can pin cross-volume coverage to one exact second-drive root. Optional per-machine resources come from `config\machine-resources.json` beneath the primary root. |
@@ -649,6 +652,7 @@ and focused tests.
 | `Modules/Build/BuildEvidence.psm1` | Manifest-derived artifact/runtime closure, legacy/current vcpkg app-local path normalization, complete Ghostty lock/build-input identity, measured test-surface identity, canonical compiler/linker/RC/SDK identity, verified immutable receipts with idempotent same-projection publication that retains first-record bytes, receipt-derived portable payload staging/import, and final output rendering. |
 | `Modules/Build/DxUiDependency.psm1` | Silent captured no-window read-only Git identity/status and local consumer compiler-host metadata without artifact delegation; exact-pin public restore (Git long paths, sparse checkout, failed-restore cleanup), API-revision gate, compiler/SDK/CRT identity, source cleanliness, bounded update notice with red/yellow severity, linked-module provenance and package sidecar verification. The pinned upstream identity helper has a separate native-launch contract. |
 | `Modules/Build/DxUiPaths.psm1` | Short source/output locators with full-identity collision refusal and native compiler-policy digests. |
+| `Modules/Build/RedMonitorClientTools.psm1` | Validates the immutable RedMonitor command bundle before invoking a tool. |
 | `Modules/Build/RedMonitorDependency.psm1` | Resolves consumer-owned source-contract paths and rejects obsolete viewer ownership. |
 | `Modules/Build/DxUiUpdate.psm1` | Validated DxUi-main selection, atomic product-lock update, and caller-selected product validation. |
 | `Modules/Build/MSBuildInvocation.psm1` | MSBuild launch planning and one diagnostic-header classifier for streaming colors and captured-log counts, including unnumbered warnings/errors. |
@@ -669,7 +673,7 @@ and focused tests.
 | `Modules/Testing/HostedDiagnosticEvidence.psm1` | Validates the fixed filtered hosted diagnostic selections and their source-bound evidence. |
 | `Modules/Testing/R0ePairedValidation.psm1` | Validates the reviewed R0e source projections including untimed fixtures, closed raw sample archives and fixed same-machine paired comparison. |
 | `Modules/Testing/TestInventory.psm1` | Source-derived test registration plus stable-ID/policy/resource run-plan inventory. |
-| `Modules/Testing/ScopedTesting.psm1` | Native test naming, reviewed candidate PR coverage, and latest-attempt scheduled source-monitor decisions. |
+| `Modules/Testing/ScopedTesting.psm1` | Native test inventory and contextual source naming. |
 | `Modules/Testing/TestInvocation.psm1` | Self-test, Pester, and build invocation parameters, bounded Pester failure/skip case normalization, and result classification. |
 | `Modules/Testing/TestQuarantine.psm1` | Quarantine policy parsing, status, and metadata-preserving repair planning. |
 | `Modules/Testing/TestMachineResources.psm1` | Schema validation, non-secret capability digesting, and scoped environment projection for per-machine Connection Manager, SMB, MTP, and alternate local-root resources. |

@@ -13,8 +13,8 @@ Specs/ProjectCommands.md is the contract.
 .PARAMETER Root
 Repository root; defaults to the repository containing this command.
 .PARAMETER Base
-Ref whose merge base with HEAD the checkout is compared with: origin/main before a push; in CI, HEAD^1 for a pull
-request's merge commit and the replaced tip (github.event.before) for a push.
+Ref whose merge base with HEAD the checkout is compared with: origin/main before a push; in the compiler-free PR
+checks, the pull request's immutable base SHA, which the static adapter phase passes.
 .PARAMETER RequireFolded
 Also rejects pending fragments, even one. Equivalent to Fold-Changelog.ps1 -Check.
 .OUTPUTS

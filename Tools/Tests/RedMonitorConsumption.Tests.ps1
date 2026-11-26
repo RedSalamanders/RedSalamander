@@ -2,6 +2,20 @@ $repoRoot=Split-Path (Split-Path $PSScriptRoot)
 Describe 'Independent RedMonitor consumption' {
  It 'verifies the single vendored header and license entirely offline' {
   & (Join-Path $PSScriptRoot 'Helpers/RedMonitorClient.ps1') -RepositoryRoot $repoRoot
+  & (Join-Path $repoRoot 'Verify-RedMonitorClient.ps1') -RepositoryRoot $repoRoot
+ }
+ It 'refuses modified tooling before verifying the native client' {
+  Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1')
+  $scratch=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'RedMonitorClientTools' -Case ('wrong-tool-hash-'+[guid]::NewGuid().ToString('N'))
+  $tools=Join-Path $scratch 'Dependencies/RedMonitorClientTools'
+  [void][IO.Directory]::CreateDirectory($tools)
+  Copy-Item -LiteralPath (Join-Path $repoRoot 'Dependencies/RedMonitor.lock.json') -Destination (Join-Path $scratch 'Dependencies')
+  foreach($name in 'Verify-RedMonitorClient.ps1','Update-RedMonitorClient.ps1'){
+   Copy-Item -LiteralPath (Join-Path $repoRoot ('Dependencies/RedMonitorClientTools/'+$name)) -Destination $tools
+  }
+  [IO.File]::AppendAllText((Join-Path $tools 'Update-RedMonitorClient.ps1'),[Environment]::NewLine)
+  { & (Join-Path $repoRoot 'Tools/Verify-RedMonitorClient.ps1') -RepositoryRoot $scratch } |
+   Should Throw '*RedMonitor client tooling hash mismatch: Update-RedMonitorClient.ps1*'
  }
  It 'owns no viewer or viewer-test build target' {
   $solution=Get-Content -LiteralPath (Join-Path $repoRoot 'RedSalamander.sln') -Raw
@@ -47,8 +61,8 @@ Describe 'Direct native RedMonitor dependency verification' -Tag RequiresBuildTo
  ) {
   param($name,$native,$firstParty,$tamper,$expected,$verified)
   $scratch=New-RSTestSandboxScratchDirectory -RepoRoot $clientGuardRoot -Harness 'RedMonitorDirectBuild' -Case ($name+'-'+[guid]::NewGuid().ToString('N'))
-  foreach($directory in 'Tools','Dependencies','ThirdParty/RedMonitor/include/RedMonitor'){[void][IO.Directory]::CreateDirectory((Join-Path $scratch $directory))}
-  foreach($relativePath in 'Tools/Verify-RedMonitorClient.ps1','Dependencies/RedMonitor.lock.json','ThirdParty/RedMonitor/include/RedMonitor/Client.h','ThirdParty/RedMonitor/LICENSE.txt'){
+  foreach($directory in 'Tools/Modules/Build','Dependencies/RedMonitorClientTools','ThirdParty/RedMonitor/include/RedMonitor'){[void][IO.Directory]::CreateDirectory((Join-Path $scratch $directory))}
+  foreach($relativePath in 'Tools/Verify-RedMonitorClient.ps1','Tools/Modules/Build/RedMonitorClientTools.psm1','Dependencies/RedMonitor.lock.json','Dependencies/RedMonitorClientTools/Verify-RedMonitorClient.ps1','Dependencies/RedMonitorClientTools/Update-RedMonitorClient.ps1','ThirdParty/RedMonitor/include/RedMonitor/Client.h','ThirdParty/RedMonitor/LICENSE.txt'){
    Copy-Item -LiteralPath (Join-Path $clientGuardRoot $relativePath) -Destination (Join-Path $scratch $relativePath)
   }
   if($tamper){[IO.File]::AppendAllText((Join-Path $scratch 'ThirdParty/RedMonitor/include/RedMonitor/Client.h'),'tampered')}

@@ -297,20 +297,6 @@ function ConvertTo-RSValidationPlanEntry {
     }
 }
 
-function Get-RSPrDeferredTestPlan {
-    # Only complete contract identity permits delegation; an equal display name or executable is insufficient.
-    [CmdletBinding()]
-    param([object[]]$FullPlan, [object[]]$PrPlan, [string]$RepoRoot)
-    $covered = @{}
-    foreach ($entry in $PrPlan) {
-        $covered[$entry.Id] = Get-RSCanonicalJsonDigest (ConvertTo-RSValidationPlanEntry -Entry $entry -RepoRoot $RepoRoot)
-    }
-    foreach ($entry in $FullPlan) {
-        $digest = Get-RSCanonicalJsonDigest (ConvertTo-RSValidationPlanEntry -Entry $entry -RepoRoot $RepoRoot)
-        if (-not $covered.ContainsKey($entry.Id) -or $covered[$entry.Id] -cne $digest) { $entry }
-    }
-}
-
 function New-RSValidationPlan {
     [CmdletBinding()]
     param(
@@ -484,5 +470,4 @@ Export-ModuleMember -Function @(
     'New-RSTestRunId',
     'ConvertFrom-RSTestRunId',
     'Get-RSLiveProcessSnapshots'
-    'Get-RSPrDeferredTestPlan'
 )

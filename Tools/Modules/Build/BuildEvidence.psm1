@@ -780,7 +780,7 @@ function Get-RSBuildIdentityBundle {
         ToolchainIdentityDigest = $toolchain.Digest
         VcpkgIdentityDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath $vcpkgInputs
         GhosttyRuntimeIdentity = Get-RSGhosttyRuntimeIdentityDigest -RepoRoot $root
-        ProjectGraphDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath @($projectFiles + @('Dependencies/DxUi.lock.json','Tools/Modules/Build/DxUiDependency.psm1','Specs/Build/Build_DxUiSdkInput.schema.json','Dependencies/RedMonitor.lock.json','Tools/Verify-RedMonitorClient.ps1','ThirdParty/RedMonitor/include/RedMonitor/Client.h','ThirdParty/RedMonitor/LICENSE.txt'))
+        ProjectGraphDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath @($projectFiles + @('Dependencies/DxUi.lock.json','Tools/Modules/Build/DxUiDependency.psm1','Specs/Build/Build_DxUiSdkInput.schema.json','Dependencies/RedMonitor.lock.json','Tools/Verify-RedMonitorClient.ps1','Tools/Modules/Build/RedMonitorClientTools.psm1','Dependencies/RedMonitorClientTools/Verify-RedMonitorClient.ps1','Dependencies/RedMonitorClientTools/Update-RedMonitorClient.ps1','ThirdParty/RedMonitor/include/RedMonitor/Client.h','ThirdParty/RedMonitor/LICENSE.txt'))
         RuntimeDependencyDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath $runtimeFiles
     }
 }

@@ -542,25 +542,21 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate native test naming and verify reviewed candidate PR coverage against workflow/action/tooling execution closure and scheduled unchanged-source decisions. Private engine-independent no-window Git and optional workflow-metadata transports retain raw output, separate diagnostics and exact exit.",
+      "purpose": "Validate contextual native test naming and inventory membership. The Git query preserves repository-relative paths.",
       "usage": "Import from Test-Changes and its focused policy tests; canonical Startrail owns execution and evidence.",
       "usedBy": [
         "Test-Changes.ps1",
-        "Tools/Tests/ScopedTesting.Tests.ps1",
-        ".github/workflows/asan.yml",
-        ".github/workflows/nightly-ci.yml"
+        "Tools/Tests/ScopedTesting.Tests.ps1"
       ],
       "prerequisites": [
         "PowerShell 7",
         "Git"
       ],
       "sideEffects": [
-        "Read-only Git/GitHub scope discovery; canonical Startrail owns all execution receipts and source/artifact identities."
+        "Read-only Git and file inventory."
       ],
       "outputs": [
-        "Native naming findings",
-        "PR execution closure digest",
-        "PR delegation scopes"
+        "Native test count or naming and inventory diagnostics"
       ],
       "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
       "tests": [
@@ -2269,6 +2265,30 @@
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "tests": [
         "Tools/Tests/VcpkgToolCheckout.Tests.ps1"
+      ],
+      "replacement": null
+    },
+    {
+      "path": "Tools/Modules/Build/RedMonitorClientTools.psm1",
+      "kind": "module",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Checks the producer tooling pin and both script hashes before loading a client command.",
+      "usage": "Import from the RedMonitor client compatibility commands.",
+      "usedBy": [
+        "Tools/Verify-RedMonitorClient.ps1",
+        "Tools/Update-RedMonitorClient.ps1"
+      ],
+      "prerequisites": [
+        "Vendored RedMonitor tooling and lock"
+      ],
+      "sideEffects": [],
+      "outputs": [
+        "Verified command script block"
+      ],
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "tests": [
+        "Tools/Tests/RedMonitorConsumption.Tests.ps1"
       ],
       "replacement": null
     },
@@ -5092,9 +5112,10 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Explicitly fetch only the client header and MIT notice at one full upstream commit and update their lock.",
+      "purpose": "Explicitly fetch the client header and MIT notice at one reviewed commit and update their runtime lock.",
       "usage": "See command help and the RedMonitor integration contract.",
       "usedBy": [
+        "Update-RedMonitorClient.ps1",
         "Manual developer use"
       ],
       "prerequisites": [
@@ -5119,9 +5140,10 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Verify exactly the local pinned client header and MIT notice without Git or network.",
+      "purpose": "Verify the pinned local client tooling, header, and MIT notice without Git or network.",
       "usage": "See command help and the RedMonitor integration contract.",
       "usedBy": [
+        "Verify-RedMonitorClient.ps1",
         "Directory.Build.targets",
         "Tools/Restore-RedMonitor.ps1",
         "Tools/Tests/Helpers/RedMonitorClient.ps1"

@@ -9,6 +9,8 @@ This catalog defines which repository artifacts state current requirements, whic
 
 Run `Tools/Get-SpecInventory.ps1` to classify the current tracked and non-ignored untracked tree, validate links and WIP ownership, reconcile the normative consistency ledger, protect completed-plan history, and emit disposable catalog reports under `.build/SpecInventory/`. Validation uses `-FailOnFindings -NoReports`: it runs the same specification and test-inventory checks without creating report files or directories. `-PassThru` returns the same specification object in either mode; an explicit `-OutputRoot` cannot be combined with `-NoReports`. Validation logs and evidence remain in the existing marked test run, never the repository `.build`. Run `Tools/Get-ToolInventory.ps1 -Validate` for the separate machine-enforced tooling catalog governed by `Testing/Testing_ToolingGovernance.md`.
 
+[The root capability record](../capabilities.json) summarizes supported features and qualifications still open in the owning specifications and plans.
+
 ## Authority classes
 
 | Class | Location or identity | Meaning |

@@ -953,7 +953,8 @@ Describe 'Pinned build-tool and CI identity' {
         $nightly | Should Match '(?m)^        default: Full\s*$'
         $nightly | Should Match '(?m)^      scope: \$\{\{ inputs\.scope \}\}\s*$'
         $nightly | Should Not Match 'schedule:|pull_request:|push:'
-        @((Get-Content (Join-Path $repoRoot 'Tests/test-scopes.json') -Raw|ConvertFrom-Json).prCoverage).Count | Should Be 0
+        $scopedEntry = Get-Content -LiteralPath (Join-Path $repoRoot 'Test-Changes.ps1') -Raw
+        $scopedEntry | Should Not Match 'Get-ScopedPrCoverage|DeferPrGate'
     }
 
     It 'refuses desktop diagnostics outside hosted Qualification before engine or sandbox work' {
