@@ -247,9 +247,11 @@ folded on `main` after merge by `Tools/Submit-ChangelogFold.ps1`, which opens a 
 `Tools/Test-Changelog.ps1` while editing; PrePush and CI run it with `-Base`, which refuses any `CHANGELOG.md` change
 that is not an exact fold of fragments already on `main`. Validation is read-only.
 
+<!-- BEGIN SHARED NATIVE BUILD POLICY -->
 ## Shared native build policy (2026-10-28)
 
 The [shared native build profiles](https://github.com/RedSalamanders/.github/blob/e513a50b3aea60d86f41054188537fb7b418bac6/Specs/NativeBuildProfiles.md) define the common six-profile baseline and product exceptions.
+<!-- END SHARED NATIVE BUILD POLICY -->
 
 Use /Wall with /WX disabled in every first-party profile. A build is accepted
 only with zero warnings and zero errors; fix actionable diagnostics rather than
