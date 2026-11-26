@@ -143,6 +143,20 @@ Describe 'Specification information architecture' {
         ($inventory.Files | Where-Object Path -eq 'Specs/Plans/WIP/Notes_Scratch.md').AuthorityClass | Should Be 'HumanManagedNote'
     }
 
+    It 'keeps status, rank and path when reading a status-prefixed WIP entry' {
+        $root = New-RSSpecFixtureRepository
+        $indexPath = Join-Path $root 'Specs/Plans/WIP/README.md'
+        $index = Get-Content -LiteralPath $indexPath -Raw
+        $index = $index.Replace('| ACTIVE | I0 | [Plan](Plan.md) |', '- **ACTIVE**: [I0 Plan](Plan.md) — Execute the fixture.')
+        Set-Content -LiteralPath $indexPath -Value $index -Encoding utf8
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'WIP_UNINDEXED') | Should Be 0
+        @($inventory.WipIndexEntries).Count | Should Be 1
+        $inventory.WipIndexEntries[0].Status | Should Be 'ACTIVE'
+        $inventory.WipIndexEntries[0].Rank | Should Be 'I0'
+        $inventory.WipIndexEntries[0].Path | Should Be 'Specs/Plans/WIP/Plan.md'
+    }
+
     It 'accepts a compact retired tombstone with the required retrieval fields' {
         $root = New-RSSpecFixtureRepository
         Set-RSFixtureFile -Root $root -RelativePath 'Specs/Plans/WIP/Retired.md' -Content @'

@@ -100,7 +100,8 @@ These locations are consumed by build/runtime/test workflows and must not be mov
 
 - Domain specs: `Domain_Title.md` without spaces.
 - RFCs: `RFC_Domain_Title.md` under WIP while undecided; move them to Done after decision/implementation closeout.
-- Other plans: descriptive `_YYYY-MM-DD.md` names under WIP; move, do not copy, when complete.
+- Use descriptive `_YYYY-MM-DD.md` names for other plans. Move the file to Done when complete.
+- WIP index bullets open with a status marker such as `- **ACTIVE**:`. Link the rank and title to the plan and follow the link with an em dash and the next action.
 
 ## Primary domain entry points
 

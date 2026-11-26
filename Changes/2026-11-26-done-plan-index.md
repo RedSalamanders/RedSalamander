@@ -1,2 +1,2 @@
-- Index completed plans from the specification catalog and admit the index through the existing protected-history guard.
-  The focused guard checks that future sibling files still require exact admission.
+- Index all completed plans and adopt the shared WIP bullet format while preserving plan ranks and ownership.
+  The protected-history guard admits the new Done index and continues to require exact admission of new plan files.
