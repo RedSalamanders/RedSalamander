@@ -123,7 +123,7 @@ function Get-SourceFiles {
         $ext = [System.IO.Path]::GetExtension($_).ToLowerInvariant()
         $extensions -contains $ext
     } | Where-Object {
-        $_ -notmatch '^(vcpkg_installed|\.build|\.vs|x64|ARM64|\.git|Specs/TestRuns)[\\/]'
+        $_ -notmatch '^(vcpkg_installed|\.build|\.vs|x64|ARM64|\.git|Specs/TestRuns|Measurements/TestRuns)[\\/]'
     }
 }
 

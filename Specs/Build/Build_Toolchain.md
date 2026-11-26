@@ -428,7 +428,7 @@ version already resolved for its compiled profile.
 
 [`Operation_Startrail_TrustedIncrementalValidationAndResumableFullEvidence_2026-08-13.md`](../Plans/Done/Operation_Startrail_TrustedIncrementalValidationAndResumableFullEvidence_2026-08-13.md)
 records the completed implementation history. The active receipt and validation contracts
-live in this specification and `Testing_ValidationEvidence.md`; the completed
+live in this specification and `Testing_RunEvidence.md`; the completed
 [`cross-domain remediation`](../Plans/Done/CodeReview_CrossDomain_Remediation_2026-08-10.md)
 records the `L4-BUILD-01..08` and `L4-STAR-01..16` review repairs without
 remaining an active authority. Existing profile locks, containment rules,

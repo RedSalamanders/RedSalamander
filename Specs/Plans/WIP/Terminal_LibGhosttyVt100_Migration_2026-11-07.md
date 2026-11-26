@@ -192,7 +192,7 @@ Owning contracts and entrypoints:
   [loader declarations](../../../Plugins/Terminal/TerminalRuntimeLoader.h).
 - [Runtime tooling](../../../Tools/TerminalEngine/README.md),
   [tooling governance](../../Testing/Testing_ToolingGovernance.md),
-  [validation evidence](../../Testing/Testing_ValidationEvidence.md),
+  [validation evidence](../../Testing/Testing_RunEvidence.md),
   [selftests](../../Testing/Testing_SelfTests.md),
   [portable ZIP](../../Installer/Installer_PortableZip.md), and
   [unified CI](../../Build/Build_UnifiedCI.md).

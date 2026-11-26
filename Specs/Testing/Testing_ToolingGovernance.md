@@ -352,7 +352,7 @@ include the qualified new-file route without removing the original managed/verif
 [`Operation Startrail`](../Plans/Done/Operation_Startrail_TrustedIncrementalValidationAndResumableFullEvidence_2026-08-13.md)
 records the gated implementation history. Fresh remains the default and final-closeout
 authority; explicit local Resume and Affected use the narrower active contracts in
-`Testing_ValidationEvidence.md`.
+`Testing_RunEvidence.md`.
 The completed
 [`cross-domain remediation`](../Plans/Done/CodeReview_CrossDomain_Remediation_2026-08-10.md)
 records the post-completion `L4-BUILD-01..08` and `L4-STAR-01..16` repairs;
@@ -381,7 +381,7 @@ must retain complete help, stable exit categories, output-root contracts, and fo
 
 The shared scoped-suite projections under `.build/reports` are compatibility metadata for completed selected
 runs. Their archive reference and evidence digests are governed by
-[Testing_ValidationEvidence.md](Testing_ValidationEvidence.md). The runner keeps native outputs and Startrail
+[Testing_RunEvidence.md](Testing_RunEvidence.md). The runner keeps native outputs and Startrail
 evidence in their existing authority locations.
 
 The Full runner's initial test-enabled build and post-writer full-profile re-attestation

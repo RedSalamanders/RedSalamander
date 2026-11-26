@@ -2,7 +2,7 @@
 
 Status: ACTIVE: implementation and qualification in progress.
 Date: 2026-10-05
-Owner: [current validation contract](../../Testing/Testing_ValidationEvidence.md)
+Owner: [current validation contract](../../Testing/Testing_RunEvidence.md)
 
 2026-10-30 hosted cutover: [I55](../Done/CI_OrganizationStandardization_2026-10-29.md) owns the common compiler-free PR policy and post-merge native batching. All five scoped manifests declare zero native PR coverage with reviewed execution-contract digests. A future main batch cannot satisfy pre-merge delegation. Local naming, reuse, affected/Full qualification and interactive obligations remain with this owner. The original review evidence below is historical, not the current workflow inventory.
 

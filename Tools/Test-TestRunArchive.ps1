@@ -6,7 +6,7 @@
     Applies the canonical TestRuns archive path, area/version schema, generated-file, identity-binding, and size policies to changed files, explicitly selected run directories, or the complete checked-in inventory. With BaselineRunPath and CandidateRunPath, also recomputes Terminal VT nearest-rank percentiles and enforces the same-machine, same-corpus, reviewed-delta, and baseline x1.10 admission contract.
 
 .PARAMETER RepoRoot
-    Specifies the repository whose Specs/TestRuns archive is validated.
+    Specifies the repository whose Measurements/TestRuns and legacy Specs/TestRuns archives are validated.
 
 .PARAMETER RunPath
     Selects one or more run directories for explicit pre-stage validation.

@@ -48,13 +48,15 @@ _pkginfo.txt
 # vcpkg (canonical install is under .build\; this also covers in-tree mistakes)
 **/vcpkg_installed/
 
-# Logs (see Specs/TestRuns/README.md and Specs/Testing/Testing_ValidationEvidence.md)
+# Logs (see Specs/TestRuns/README.md and Specs/Testing/Testing_RunEvidence.md)
 *.log
 
 # Generated test-run archives. Curated evidence is force-added.
 # Do not add per-run exception lists; already-tracked files stay tracked.
 Specs/TestRuns/*
 !Specs/TestRuns/README.md
+/Measurements/TestRuns/*
+!/Measurements/TestRuns/README.md
 
 # Theme Gallery workbench (see Specs/Mockups/ThemeGalleryWorkbench/.gitignore)
 node_modules/

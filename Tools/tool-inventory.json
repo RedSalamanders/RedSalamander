@@ -28,7 +28,7 @@
       "outputs": [
         "Exact native exit, stdout lines and separate diagnostic text"
       ],
-      "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
+      "ownerSpec": "Specs/Testing/Testing_RunEvidence.md",
       "tests": [
         "Tools/Tests/ValidationFingerprint.Tests.ps1",
         "Tools/Tests/TestRunArchive.Tests.ps1",
@@ -558,7 +558,7 @@
       "outputs": [
         "Native test count or naming and inventory diagnostics"
       ],
-      "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
+      "ownerSpec": "Specs/Testing/Testing_RunEvidence.md",
       "tests": [
         "Tools/Tests/ScopedTesting.Tests.ps1",
         "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
@@ -2731,7 +2731,7 @@
         "Derived runner dependency closure",
         "Validated validation-record objects"
       ],
-      "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
+      "ownerSpec": "Specs/Testing/Testing_RunEvidence.md",
       "tests": [
         "Tools/Tests/ValidationFingerprint.Tests.ps1",
         "Tools/Tests/ToolInventory.Tests.ps1",
@@ -2771,7 +2771,7 @@
         "Crash-safe artifact epoch/read-barrier state",
         "Exact direct-child run resolution and identity-bound prune plans"
       ],
-      "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
+      "ownerSpec": "Specs/Testing/Testing_RunEvidence.md",
       "tests": [
         "Tools/Tests/ValidationEvidence.Tests.ps1"
       ],
@@ -2802,7 +2802,7 @@
         "Deterministic affected-set plan decisions",
         "Per-entry and total duration estimates"
       ],
-      "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
+      "ownerSpec": "Specs/Testing/Testing_RunEvidence.md",
       "tests": [
         "Tools/Tests/ValidationImpact.Tests.ps1"
       ],
@@ -2926,7 +2926,7 @@
         "Exact run-result reference JSON",
         "Shared suite reports with canonical run, archive hash and entry evidence digest"
       ],
-      "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
+      "ownerSpec": "Specs/Testing/Testing_RunEvidence.md",
       "tests": [
         "Tools/Tests/RunAllTestsPlan.Tests.ps1",
         "Tools/Tests/ValidationEvidence.Tests.ps1",
@@ -4930,7 +4930,7 @@
       "outputs": [
         "Pester pass/fail result"
       ],
-      "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
+      "ownerSpec": "Specs/Testing/Testing_RunEvidence.md",
       "tests": [
         "self"
       ],
@@ -4959,7 +4959,7 @@
       "outputs": [
         "Pester pass/fail result"
       ],
-      "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
+      "ownerSpec": "Specs/Testing/Testing_RunEvidence.md",
       "tests": [
         "self"
       ],
@@ -4989,7 +4989,7 @@
       "outputs": [
         "Pester pass/fail result"
       ],
-      "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
+      "ownerSpec": "Specs/Testing/Testing_RunEvidence.md",
       "tests": [
         "self"
       ],
@@ -5014,7 +5014,7 @@
       "outputs": [
         "Versioned validation impact policy"
       ],
-      "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
+      "ownerSpec": "Specs/Testing/Testing_RunEvidence.md",
       "tests": [
         "Tools/Tests/ValidationImpact.Tests.ps1"
       ],
@@ -5375,7 +5375,7 @@
       "outputs": [
         "Focused Pester results and retained fixture evidence"
       ],
-      "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
+      "ownerSpec": "Specs/Testing/Testing_RunEvidence.md",
       "tests": [
         "self"
       ],

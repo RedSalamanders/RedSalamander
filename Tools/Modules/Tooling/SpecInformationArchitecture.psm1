@@ -321,9 +321,10 @@ function Get-RSSpecAuthorityClass {
     if ($path -like 'Specs/Plans/WIP/*.md') { return 'ActivePlan' }
     if ($path -like 'Specs/Plans/Done/*' -or $path -like 'Specs/Reviews/*' -or $path -like 'plans/*') { return 'Historical' }
     if ($path -in @(
+            'Specs/Testing/Testing_ValidationEvidence.md',
             'Specs/UI/UI_PreferencesDialog_MigrationHistory.md',
             'Specs/FileSystem/FileSystem_FtpScpSftpPerformanceComparison.md')) { return 'Historical' }
-    if ($path -like 'Specs/TestRuns/*') { return 'Evidence' }
+    if ($path -like 'Specs/TestRuns/*' -or $path -like 'Measurements/TestRuns/*') { return 'Evidence' }
     if ($path -like 'Specs/Mockups/*') { return 'Prototype' }
     if ($path -eq 'Specs/Themes/THIRD-PARTY-NOTICES.md') { return 'Legal' }
     if ($path -like 'Specs/Themes/*') { return 'RuntimeData' }
@@ -1387,7 +1388,7 @@ function Get-RSSpecInventory {
     $markdownPaths = @($allPaths | Where-Object {
             $_ -match '\.md$' -and
             ($_ -notlike 'Specs/TestRuns/*' -or $_ -eq 'Specs/TestRuns/README.md') -and
-            ($_ -like "$Root/*" -or $_ -like 'plans/*' -or $_ -like 'docs/*' -or $_ -eq 'README.md' -or $_ -eq 'AGENTS.md' -or $_ -eq 'CLAUDE.md')
+            ($_ -like "$Root/*" -or $_ -like 'plans/*' -or $_ -like 'docs/*' -or $_ -in @('README.md', 'AGENTS.md', 'CLAUDE.md', 'Measurements/TestRuns/README.md'))
         })
     $ledger = Read-RSConsistencyLedger -RepositoryRoot $repositoryFull -LedgerPath $ConsistencyLedgerPath
     $files = [System.Collections.Generic.List[object]]::new()
@@ -1643,7 +1644,7 @@ function Get-RSSpecInventory {
         BlockingFindings = $blocking
         Summary = [pscustomobject]@{
             TrackedAndUntrackedPaths = $allPaths.Count
-            TestRunPaths = @($allPaths | Where-Object { $_ -like 'Specs/TestRuns/*' }).Count
+            TestRunPaths = @($allPaths | Where-Object { $_ -like 'Specs/TestRuns/*' -or $_ -like 'Measurements/TestRuns/*' }).Count
             Files = $files.Count
             InScopeFiles = @($files | Where-Object IsInScope).Count
             NormativeFiles = $normative.Count

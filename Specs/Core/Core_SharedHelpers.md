@@ -334,7 +334,7 @@ Exact native runner-to-CI result handoff uses `Write-RSRunResultReference` and
 `Read-RSRunResultReference` in `Tools/Modules/Testing/TestRunSummary.psm1`.
 The create-only sandbox record binds a final canonical summary's run ID/profile and
 SHA-256; consumers retain schema, gate and complete-execution checks. See the
-[validation evidence contract](../Testing/Testing_ValidationEvidence.md).
+[validation evidence contract](../Testing/Testing_RunEvidence.md).
 
 | Behavior | Canonical owner | Contract |
 | --- | --- | --- |
