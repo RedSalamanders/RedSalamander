@@ -14982,26 +14982,6 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     if (! SelfTest::WriteTextFile(source, kSourceBytes) || ! SelfTest::WriteTextFile(occupied, kOccupantBytes))
         return reject(L"could not write the owned fixtures");
 
-    constexpr auto readFlags   = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
-    constexpr auto renameFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_RENAME);
-    wil::com_ptr<IFileSystemBoundObject> probe;
-    const HRESULT capability = binding->BindObject(source.c_str(), readFlags, probe.put());
-    if (capability == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && ! probe)
-    {
-        wil::com_ptr<IFileSystemExpectedOccupantPublication> corroboration;
-        FileSystemExpectedOccupant facts{};
-        facts.sizeBytes = sizeof(facts);
-        if (FAILED(state.fsLocal->QueryInterface(__uuidof(IFileSystemExpectedOccupantPublication), corroboration.put_void())) || ! corroboration ||
-            corroboration->ReadExpectedOccupant(source.c_str(), &facts) != S_OK || facts.fileSizeBytes != kSourceBytes.size())
-            return reject(L"the refusal was not corroborated by an open of the owned file");
-        unavailableReason = L"The provider opened the owned file and reported that exact file identity is unavailable on this SMB endpoint.";
-        AppendLog(unavailableReason);
-        return removeFixture();
-    }
-    if (capability != S_OK || ! probe)
-        return reject(std::format(L"exact identity probe failed (0x{:08X})", static_cast<unsigned long>(capability)));
-    probe.reset();
-
     const auto leafMatches = [](const std::filesystem::path& path, bool exact) noexcept
     {
         WIN32_FIND_DATAW data{};
@@ -15016,6 +14996,115 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         std::string actual;
         return ReadFileTextFsIo(io, path, actual) && actual == expected;
     };
+    auto* const folder     = TryGetFolderWindow(state.mainWindow);
+    auto* const operations = TryGetFileOps(folder);
+    if (! folder || ! operations)
+        return reject(L"the test-owned File Operations pane is unavailable");
+
+    constexpr auto left       = FolderWindow::Pane::Left;
+    constexpr auto right      = FolderWindow::Pane::Right;
+    const auto pane           = folder->GetFileSystemPluginId(left) == kPluginIdLocal ? left : right;
+    const auto paneFileSystem = folder->GetFileSystem(pane);
+    if (! paneFileSystem || folder->GetFileSystemPluginId(pane) != kPluginIdLocal)
+        return reject(L"the test-owned window has no Local provider pane");
+
+    const auto verifyScheduledRename = [&](FileOperations::RenameOrigin origin,
+                                           std::wstring_view detail,
+                                           const std::filesystem::path& from,
+                                           const std::filesystem::path& to,
+                                           HRESULT expectedStatus) noexcept
+    {
+        BatchRenameExecutionOp row{};
+        row.originalSource = from;
+        row.finalLeaf      = to.filename().native();
+        if (FAILED(PopulateBatchRenameExactResultProviderFacts(paneFileSystem.get(), row)))
+            return reject(L"could not project the provider name policy for the scheduled Rename");
+
+        uint64_t taskId = 0u;
+        std::optional<FolderWindow::FileOperationCompletedEvent> completion;
+        const uint64_t subscription = folder->AddFileOperationCompletedCallback([&](const FolderWindow::FileOperationCompletedEvent& event)
+        {
+            if (taskId != 0u && event.taskId == taskId)
+                completion = event;
+        });
+        const auto unsubscribe      = wil::scope_exit([&]() noexcept { folder->RemoveFileOperationCompletedCallback(subscription); });
+        const auto started          = std::chrono::steady_clock::now();
+        const HRESULT admitted      = operations->AdmitScheduledRename(pane, paneFileSystem, origin, {std::move(row)}, {}, {}, &taskId);
+        if (admitted != S_OK || taskId == 0u)
+            return reject(std::format(L"scheduled Rename admission failed (0x{:08X})", static_cast<unsigned long>(admitted)));
+        const auto finished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+            return completion.has_value();
+        }, {.timeout = SelfTest::Scale(std::chrono::seconds(20)), .operationName = L"SMB scheduled Rename"});
+        if (! finished.conditionMet)
+        {
+            if (auto* task = operations->FindTask(taskId))
+                task->RequestCancel();
+            const auto stopped = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+                return completion.has_value();
+            }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"cancel the SMB scheduled Rename"});
+            if (! stopped.conditionMet)
+                cleanup.release();
+            return reject(L"scheduled Rename did not deliver an owned completion");
+        }
+
+        if (FAILED(expectedStatus))
+        {
+            const bool noCommit = completion->hr == expectedStatus && completion->operation == FILESYSTEM_RENAME && completion->itemOutcomes.size() == 1u &&
+                                  std::ranges::all_of(completion->itemOutcomes,
+                                                      [&](const FolderWindow::FileOperationItemOutcome& outcome) noexcept
+            {
+                return outcome.sourceIndex == 0u && outcome.status == expectedStatus && outcome.completion == FileOperations::ItemCompletion::Failed &&
+                       outcome.publication == FileOperations::PublicationState::NotAttempted &&
+                       outcome.sourceDisposition == FileOperations::SourceDisposition::Retained;
+            });
+            const bool refused =
+                noCommit && leafMatches(from, true) && leafMatches(to, false) && hasBytes(from, kSourceBytes) && hasBytes(occupied, kOccupantBytes);
+            Debug::Perf::Emit(L"FileOps.Smb.SharedRenameTaskUs", detail, Debug::Perf::ElapsedUs(started), 1u, 1u, refused ? S_OK : E_FAIL);
+            if (! refused)
+                return reject(std::format(L"scheduled Rename did not refuse unavailable exact binding without mutation (0x{:08X})",
+                                          static_cast<unsigned long>(completion->hr)));
+            return true;
+        }
+
+        const bool receipt   = completion->hr == S_OK && completion->operation == FILESYSTEM_RENAME && completion->itemOutcomes.size() == 1u &&
+                               std::ranges::any_of(completion->itemOutcomes,
+                                                   [&](const FolderWindow::FileOperationItemOutcome& outcome) noexcept
+        {
+            return outcome.sourceIndex == 0u && outcome.status == S_OK && outcome.completion == FileOperations::ItemCompletion::Completed &&
+                   outcome.publication == FileOperations::PublicationState::Published &&
+                   outcome.sourceDisposition == FileOperations::SourceDisposition::Removed && outcome.finalDestinationPath.filename() == to.filename();
+        });
+        const bool confirmed = receipt && leafMatches(to, true) && leafMatches(from, false) && hasBytes(to, kSourceBytes) && hasBytes(occupied, kOccupantBytes);
+        Debug::Perf::Emit(L"FileOps.Smb.SharedRenameTaskUs", detail, Debug::Perf::ElapsedUs(started), 1u, 0u, confirmed ? S_OK : E_FAIL);
+        if (! confirmed)
+            return reject(std::format(L"scheduled Rename did not prove its receipt and output (0x{:08X})", static_cast<unsigned long>(completion->hr)));
+        return true;
+    };
+
+    constexpr auto readFlags   = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+    constexpr auto renameFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_RENAME);
+    wil::com_ptr<IFileSystemBoundObject> probe;
+    const HRESULT capability = binding->BindObject(source.c_str(), readFlags, probe.put());
+    if (capability == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && ! probe)
+    {
+        wil::com_ptr<IFileSystemExpectedOccupantPublication> corroboration;
+        FileSystemExpectedOccupant facts{};
+        facts.sizeBytes = sizeof(facts);
+        if (FAILED(state.fsLocal->QueryInterface(__uuidof(IFileSystemExpectedOccupantPublication), corroboration.put_void())) || ! corroboration ||
+            corroboration->ReadExpectedOccupant(source.c_str(), &facts) != S_OK || facts.fileSizeBytes != kSourceBytes.size())
+            return reject(L"the refusal was not corroborated by an open of the owned file");
+        if (! verifyScheduledRename(FileOperations::RenameOrigin::BatchRename, L"Batch Rename exact binding refused", source, destination, capability) ||
+            ! verifyScheduledRename(FileOperations::RenameOrigin::ChangeCase, L"Change Case exact binding refused", source, nested / L"SOURCE.TXT", capability))
+            return false;
+        unavailableReason = L"The provider opened the owned file and reported that exact file identity is unavailable on this SMB endpoint. "
+                            L"Both scheduled Rename origins refused before mutation.";
+        AppendLog(unavailableReason);
+        return removeFixture();
+    }
+    if (capability != S_OK || ! probe)
+        return reject(std::format(L"exact identity probe failed (0x{:08X})", static_cast<unsigned long>(capability)));
+    probe.reset();
+
     {
         wil::unique_hfile watcher(CreateFileW(source.c_str(),
                                               FILE_READ_DATA | FILE_READ_ATTRIBUTES,
@@ -15084,73 +15173,10 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     }
     Debug::Perf::Emit(L"FileOps.Smb.ExactRenameControlUs", L"100 items", Debug::Perf::ElapsedUs(batchStart), kBatchCount, 0u, S_OK);
 
-    auto* const folder     = TryGetFolderWindow(state.mainWindow);
-    auto* const operations = TryGetFileOps(folder);
-    if (! folder || ! operations)
-        return reject(L"the test-owned File Operations pane is unavailable");
-
-    constexpr auto left       = FolderWindow::Pane::Left;
-    constexpr auto right      = FolderWindow::Pane::Right;
-    const auto pane           = folder->GetFileSystemPluginId(left) == kPluginIdLocal ? left : right;
-    const auto paneFileSystem = folder->GetFileSystem(pane);
-    if (! paneFileSystem || folder->GetFileSystemPluginId(pane) != kPluginIdLocal)
-        return reject(L"the test-owned window has no Local provider pane");
-
-    const auto verifyScheduledRename =
-        [&](FileOperations::RenameOrigin origin, std::wstring_view detail, const std::filesystem::path& from, const std::filesystem::path& to) noexcept
-    {
-        BatchRenameExecutionOp row{};
-        row.originalSource = from;
-        row.finalLeaf      = to.filename().native();
-        if (FAILED(PopulateBatchRenameExactResultProviderFacts(paneFileSystem.get(), row)))
-            return reject(L"could not project the provider name policy for the scheduled Rename");
-
-        uint64_t taskId = 0u;
-        std::optional<FolderWindow::FileOperationCompletedEvent> completion;
-        const uint64_t subscription = folder->AddFileOperationCompletedCallback([&](const FolderWindow::FileOperationCompletedEvent& event)
-        {
-            if (taskId != 0u && event.taskId == taskId)
-                completion = event;
-        });
-        const auto unsubscribe      = wil::scope_exit([&]() noexcept { folder->RemoveFileOperationCompletedCallback(subscription); });
-        const auto started          = std::chrono::steady_clock::now();
-        const HRESULT admitted      = operations->AdmitScheduledRename(pane, paneFileSystem, origin, {std::move(row)}, {}, {}, &taskId);
-        if (admitted != S_OK || taskId == 0u)
-            return reject(std::format(L"scheduled Rename admission failed (0x{:08X})", static_cast<unsigned long>(admitted)));
-        const auto finished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
-            return completion.has_value();
-        }, {.timeout = SelfTest::Scale(std::chrono::seconds(20)), .operationName = L"exact SMB scheduled Rename"});
-        if (! finished.conditionMet)
-        {
-            if (auto* task = operations->FindTask(taskId))
-                task->RequestCancel();
-            const auto stopped = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
-                return completion.has_value();
-            }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"cancel the exact SMB scheduled Rename"});
-            if (! stopped.conditionMet)
-                cleanup.release();
-            return reject(L"scheduled Rename did not deliver an owned completion");
-        }
-
-        const bool receipt   = completion->hr == S_OK && completion->operation == FILESYSTEM_RENAME && completion->itemOutcomes.size() == 1u &&
-                               std::ranges::any_of(completion->itemOutcomes,
-                                                   [&](const FolderWindow::FileOperationItemOutcome& outcome) noexcept
-        {
-            return outcome.sourceIndex == 0u && outcome.status == S_OK && outcome.completion == FileOperations::ItemCompletion::Completed &&
-                   outcome.publication == FileOperations::PublicationState::Published &&
-                   outcome.sourceDisposition == FileOperations::SourceDisposition::Removed && outcome.finalDestinationPath.filename() == to.filename();
-        });
-        const bool confirmed = receipt && leafMatches(to, true) && leafMatches(from, false) && hasBytes(to, kSourceBytes) && hasBytes(occupied, kOccupantBytes);
-        Debug::Perf::Emit(L"FileOps.Smb.SharedRenameTaskUs", detail, Debug::Perf::ElapsedUs(started), 1u, 0u, confirmed ? S_OK : E_FAIL);
-        if (! confirmed)
-            return reject(std::format(L"scheduled Rename did not prove its receipt and output (0x{:08X})", static_cast<unsigned long>(completion->hr)));
-        return true;
-    };
-
     const auto scheduled   = nested / L"scheduled-batch.txt";
     const auto changedCase = nested / L"SCHEDULED-BATCH.TXT";
-    if (! verifyScheduledRename(FileOperations::RenameOrigin::BatchRename, L"Batch Rename", caseOnly, scheduled) ||
-        ! verifyScheduledRename(FileOperations::RenameOrigin::ChangeCase, L"Change Case", scheduled, changedCase))
+    if (! verifyScheduledRename(FileOperations::RenameOrigin::BatchRename, L"Batch Rename", caseOnly, scheduled, S_OK) ||
+        ! verifyScheduledRename(FileOperations::RenameOrigin::ChangeCase, L"Change Case", scheduled, changedCase, S_OK))
         return false;
     return removeFixture();
 }

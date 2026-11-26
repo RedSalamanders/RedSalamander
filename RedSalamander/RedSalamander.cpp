@@ -7523,7 +7523,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         (selectedCaptureCase == L"cmd_product_documentation_gallery" ||
          selectedCaptureCase == L"cmd_directory_cache_invalidation_during_enumeration_is_retained" ||
          selectedCaptureCase == L"folderView_drop_integrity_guards" || selectedCaptureCase == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation" ||
-         selectedCaptureCase == L"cmd_pane_batchRename_admission_worker_owned_cancellable") &&
+         selectedCaptureCase == L"cmd_pane_batchRename_admission_worker_owned_cancellable" || selectedCaptureCase == L"main_menu_information_architecture") &&
         ! hasArg(L"--selftest") && ! hasArg(L"--compare-selftest") && ! hasArg(L"--fileops-selftest") &&
         ! getArgValue(L"--selftest-flaky-proof-case=", selectedCaptureProof) && ! getArgValue(L"--selftest-order-proof-case=", selectedCaptureProof) &&
         ! getArgValue(L"--selftest-crash-case=", selectedCaptureProof);

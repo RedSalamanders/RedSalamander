@@ -2598,10 +2598,38 @@ bool FolderWindow::RevealBatchRenamePathInPane(const Pane pane, const std::files
     return true;
 }
 
+bool FolderWindow::CanScheduleRename(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (! state.fileSystem)
+        return false;
+
+    wil::com_ptr<IFileSystemRouteCapabilities> route;
+    wil::com_ptr<IFileSystemObjectBinding> binding;
+    return SUCCEEDED(state.fileSystem->QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void())) && route &&
+           SUCCEEDED(state.fileSystem->QueryInterface(__uuidof(IFileSystemObjectBinding), binding.put_void())) && binding;
+}
+
+bool FolderWindow::RefuseUnsupportedScheduledRename(Pane pane, UINT commandLabelId)
+{
+    if (CanScheduleRename(pane))
+        return false;
+
+    ShowPaneAlertOverlay(pane,
+                         FolderView::ErrorOverlayKind::Operation,
+                         FolderView::OverlaySeverity::Warning,
+                         LoadStringResource(nullptr, commandLabelId),
+                         LoadStringResource(nullptr, IDS_FILEOPS_DIAG_OPERATION_UNSUPPORTED),
+                         HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
+                         true,
+                         false);
+    return true;
+}
+
 void FolderWindow::CommandBatchRename(Pane pane, std::optional<std::filesystem::path> rootOverride, std::vector<std::filesystem::path> initialPathsOverride)
 {
     SetActivePane(pane);
-    if (! _settings || RefuseFileOperationForPendingExit(pane, FILESYSTEM_RENAME))
+    if (! _settings || RefuseFileOperationForPendingExit(pane, FILESYSTEM_RENAME) || RefuseUnsupportedScheduledRename(pane, IDS_CMD_BATCH_RENAME))
     {
         return;
     }

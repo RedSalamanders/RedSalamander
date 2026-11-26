@@ -1,0 +1,1 @@
+- Disable Batch Rename and Change Case on providers without scheduled Rename support and explain direct shortcut refusals in the pane.

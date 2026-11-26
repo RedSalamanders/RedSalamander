@@ -11546,7 +11546,7 @@ constexpr auto kCommandSurfaceCoverage = std::to_array<CommandSurfaceCoverageEnt
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestMainMenuInformationArchitecture(CaseState& state) noexcept
+[[nodiscard]] bool TestMainMenuInformationArchitecture(HWND mainWindow, CaseState& state) noexcept
 {
     const HMENU mainMenu = DebugGetMainMenuModelHandle();
     state.Require(mainMenu != nullptr, L"Main menu handle not available.");
@@ -11602,6 +11602,45 @@ constexpr auto kCommandSurfaceCoverage = std::to_array<CommandSurfaceCoverageEnt
         IDM_EXIT,
     }};
     requireDirectOrder(filesMenu, kFilesOrder, L"Files menu");
+    constexpr auto pane     = FolderWindow::Pane::Left;
+    const auto originalPane = g_folderWindow.GetActivePane();
+    const auto originalPath = g_folderWindow.GetCurrentPath(pane);
+    const std::wstring originalPlugin(g_folderWindow.GetFileSystemPluginId(pane));
+    const auto restorePane               = wil::scope_exit([&]() noexcept
+    {
+        g_folderWindow.DismissPaneAlertOverlay(pane);
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(pane, originalPlugin));
+        if (originalPath.has_value())
+            g_folderWindow.SetFolderPath(pane, originalPath.value());
+        g_folderWindow.SetActivePane(originalPane);
+        SendMessageW(mainWindow, WM_INITMENUPOPUP, reinterpret_cast<WPARAM>(filesMenu), 0);
+    });
+    const auto verifyScheduledRenameMenu = [&](std::wstring_view plugin, bool enabled) noexcept
+    {
+        state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(pane, plugin)), L"Set the provider for the scheduled Rename menu witness.");
+        g_folderWindow.SetActivePane(pane);
+        const auto started = std::chrono::steady_clock::now();
+        SendMessageW(mainWindow, WM_INITMENUPOPUP, reinterpret_cast<WPARAM>(filesMenu), 0);
+        constexpr std::array<UINT, 2> kScheduledRenameCommands{IDM_PANE_BATCH_RENAME, IDM_PANE_CHANGE_CASE};
+        bool expectedAvailability = true;
+        for (const UINT command : kScheduledRenameCommands)
+        {
+            const UINT flags     = GetMenuState(filesMenu, command, MF_BYCOMMAND);
+            expectedAvailability = expectedAvailability && flags != std::numeric_limits<UINT>::max() && ((flags & MF_GRAYED) == 0u) == enabled;
+        }
+        Debug::Perf::Emit(L"fileops.rename.files_menu_availability_us", plugin, Debug::Perf::ElapsedUs(started), 2u, 0u, expectedAvailability ? S_OK : E_FAIL);
+        state.Require(expectedAvailability, L"Scheduled Rename menu availability should follow the active provider's interfaces.");
+    };
+    verifyScheduledRenameMenu(L"builtin/file-system-dummy", false);
+    if (state.failure.empty())
+    {
+        g_folderWindow.CommandBatchRename(pane);
+        FolderView::AlertOverlayDebugSnapshot refusal{};
+        state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(pane, refusal) && refusal.visible && ! refusal.blocksInput &&
+                          refusal.hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
+                      L"Direct Batch Rename on the unsupported provider should report a non-blocking pane refusal.");
+    }
+    verifyScheduledRenameMenu(L"builtin/file-system", true);
     const auto fileMenuText = [&](UINT commandId) noexcept { return GetMenuItemTextByPosition(filesMenu, FindMenuItemPosById(filesMenu, commandId)); };
     const std::wstring routineCopyText = fileMenuText(IDM_PANE_COPY_TO_OTHER);
     const std::wstring optionsCopyText = fileMenuText(IDM_PANE_COPY_TO_OTHER_WITH_OPTIONS);
@@ -19406,8 +19445,9 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"registry_integrity", [](CaseState& state) noexcept { return TestRegistryIntegrity(state); });
     SelfTest::RunCase(
         options, suite, L"command_surface_coverage_contract", [=](CaseState& state) noexcept { return TestCommandSurfaceCoverageContract(mainWindow, state); });
-    SelfTest::RunCase(
-        options, suite, L"main_menu_information_architecture", [](CaseState& state) noexcept { return TestMainMenuInformationArchitecture(state); });
+    SelfTest::RunCase(options, suite, L"main_menu_information_architecture", [mainWindow](CaseState& state) noexcept {
+        return TestMainMenuInformationArchitecture(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"shortcut_defaults_mapping", [](CaseState& state) noexcept { return TestShortcutDefaultsMapping(state); });
     SelfTest::RunCase(options, suite, L"terminal_shortcut_defaults_and_physical_positions", [](CaseState& state) noexcept {
         return TestTerminalShortcutDefaultsAndPhysicalPositions(state);

@@ -511,6 +511,7 @@ public:
     [[nodiscard]] bool GetShowSystemFiles() const noexcept;
 
     void CommandRename(Pane pane);
+    [[nodiscard]] bool CanScheduleRename(Pane pane) const noexcept;
     // `rootOverride` roots a folder-scope launch; `initialPathsOverride` seeds explicit targets when
     // no root override is given (empty = use the pane's current selection or focused item).
     void CommandBatchRename(Pane pane,
@@ -2024,6 +2025,7 @@ private:
     // vanishing; a cancel (S_FALSE, ERROR_CANCELLED) or shutdown stays silent.
     void ReportFileOperationAdmissionFailure(Pane pane, FileSystemOperation operation, HRESULT hr);
     bool RefuseFileOperationForPendingExit(Pane pane, UINT operationLabelId) noexcept;
+    bool RefuseUnsupportedScheduledRename(Pane pane, UINT commandLabelId);
     void ShowFileOperationRefusedForPendingExit(Pane pane, FileSystemOperation operation) noexcept;
     void ShowFileOperationRefusedForPendingExit(Pane pane, UINT operationLabelId) noexcept;
     // A resolved-path admission (Find Files, Compare Directories) refused while the exit is pending
