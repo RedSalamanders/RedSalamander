@@ -1208,7 +1208,7 @@ the same synchronous reporter and counter path as the pointer overload.
   `FileOps_PopupIdleCadence`, `FileOps_IdentityInterlockWaiting`,
   `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`,
   `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, `FileOps_SmbExactRenameProvider`,
-  `FileOps_SmbCorroboratedRenameProvider`, `FileOps_SmbRecycleRefusal`, `C0_CurlCommittedMutationResponseLost`, `FileOps_ProviderCapabilityMatrix`,
+  `FileOps_SmbCorroboratedRenameProvider`, `FileOps_SmbRecycleRefusal`, `FileOps_SmbMixedMove`, `C0_CurlCommittedMutationResponseLost`, `FileOps_ProviderCapabilityMatrix`,
   `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage`,
   `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof`, `R0fGraph_FakeGraphReadWriteCreateRenameRecycle`,
   `Phase16_RemoteOneDrivePersonalInlineRename`, `Phase16_RemoteSftpInlineRename`, or
@@ -1235,6 +1235,9 @@ the same synchronous reporter and counter path as the pointer overload.
   probed exact or by-name route and retains the same bytes
   after Skip. Cleanup verifies the file contents and removes only that file and its empty parent. A missing or
   unreachable registration is an environment skip.
+  `FileOps_SmbMixedMove` uses one fresh child of `path.smb.primary` and the marked Local sandbox.
+  It skips before mutation when exact SMB identity is unavailable. It uses direct task controls to
+  check the two typed Move results, both destination payloads, source removal and nonrecursive SMB fixture cleanup.
   The provider capability matrix uses private providers, owned data and direct task controls.
   its managed cleanup witness checks Retry for sharing, access and disk-full failures and verifies that a path-length failure offers Skip and Cancel;
   the exact cadence case uses a private nonactivating popup and preserves its existing

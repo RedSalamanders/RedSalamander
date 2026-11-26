@@ -97,6 +97,8 @@
     FileOps_SmbExactRenameProvider or FileOps_SmbCorroboratedRenameProvider for the relevant binding route.
     FileOps_SmbRecycleRefusal supports -NonInteractive. It checks that the guarded Shell route retains
     the file and asks for exact-item consent on a registered SMB share.
+    FileOps_SmbMixedMove supports -NonInteractive. It checks one Local Native plus one SMB Managed
+    source in a single Move to a marked Local sandbox, using a registered exact-identity SMB share.
     FileOps_ClearCompletedScope also supports -NonInteractive through a private popup and test-owned data.
     C0_CurlCommittedMutationResponseLost supports -NonInteractive and uses only loopback FTP fixtures.
     FileOps_ProviderCapabilityMatrix supports -NonInteractive through private providers and task controls.
