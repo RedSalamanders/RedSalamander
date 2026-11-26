@@ -71,10 +71,12 @@ Export-ModuleMember -Function @(
     'Set-RSTestRunSummaryFinalExitCode',
     'New-RSTestRunSummary',
     'New-RSValidationRunSummaryV2',
+    'Write-RSScopedSuiteReports',
     'Convert-RSTestRunSummaryToCaseHistoryRows',
     'Convert-RSTestCaseHistoryRowsToJsonl',
     'Convert-RSTestCaseHistoryRowsToDashboardMarkdown',
     'Convert-RSTestRunSummaryToGitHubStepSummary',
     'Get-RSCommandsSelfTestFamilies',
-    'Get-RSTestRunPlan'
+    'Get-RSTestRunPlan',
+    'Select-RSScopedTestRunEntries'
 )

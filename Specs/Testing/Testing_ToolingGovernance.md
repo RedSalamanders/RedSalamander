@@ -379,6 +379,11 @@ artifact mutator cannot share a trusted epoch with evidence that assumed the pri
 artifact set. `Affected`, `Resume`, Commands-family, baseline, and explanation surfaces
 must retain complete help, stable exit categories, output-root contracts, and focused tests.
 
+The shared scoped-suite projections under `.build/reports` are compatibility metadata for completed selected
+runs. Their archive reference and evidence digests are governed by
+[Testing_ValidationEvidence.md](Testing_ValidationEvidence.md). The runner keeps native outputs and Startrail
+evidence in their existing authority locations.
+
 The Full runner's initial test-enabled build and post-writer full-profile re-attestation
 use embedded compiler debug information while retaining final linker PDB output. This
 avoids MSVC's process-global compiler-PDB service, so disjoint worktrees remain

@@ -509,6 +509,9 @@ invalidate both ABI assumptions and receipt truthfulness.
 #### Distributable test surface
 
 A test-enabled (`ENABLE_TESTS`) build MUST never be distributed, whatever its configuration.
+Use `build.ps1 -EnableTests` to request the test surface explicitly, including in Release. The shared scoped
+build calls this switch. It refuses an explicit contradictory `RSBuildEnableTests` setting or `-ProductionOnly`.
+
 Test-enabled Release remains valid for validation (Full keeps `RSBuildEnableTests=true`), but
 its outputs are never package inputs. Every distributable path builds with
 `RSBuildEnableTests=false` and fails closed rather than packaging a test surface:

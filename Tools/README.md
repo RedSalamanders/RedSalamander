@@ -23,7 +23,7 @@ matching props text does not establish evaluated build output ownership.
 Filtered Ghostty Commands qualification verifies archived native case bytes and
 selection, current source/artifact receipt, both aggregate summaries and invocation
 identity before accepting directed exit 2. Repository coverage remains NOT_EVALUATED.
-ScopedTesting retains planning/delegation only; canonical Startrail owns receipts.
+The shared scope manifest selects exact unattended entry IDs. The canonical runner owns their execution and evidence. The selected-suite adapter projects the completed archive into the shared report format under `.build/reports`.
 
 Native startup diagnostics print the start and elapsed time of File Operations
 profile/volume setup, the existing interactive lease wait, and contained process
@@ -351,7 +351,7 @@ contents, tooling, scripts and build/test policy inputs. Changing a delegated te
 invalidates coverage even when `ci.yml` is unchanged. Recompute the reviewed manifest digest
 after execution-policy changes; missing or unresolved local dependencies retain local work.
 
-`Test-Changes.ps1 -Mode Full -Interactive -AllowAlternateVolumeTestRoot` passes the explicit cross-volume opt-in to
+`test.ps1 -Full -Interactive -AllowAlternateVolumeTestRoot` passes the explicit cross-volume opt-in to
 the canonical runner, including focused FileOps runs. The default stays disabled. The primary sandbox's enabled
 `path.local.alternate` resource restricts selection to its exact marked root; new drive-root initialization still
 requires separate authorization.
