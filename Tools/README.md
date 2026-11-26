@@ -667,7 +667,7 @@ and focused tests.
 | `Modules/Testing/GitMetadataCapture.psm1` | Internal engine-free Git line/stdin capture shared by archive and fingerprint metadata; explicit UTF-8 stdout, inherited stdin and diagnostic decoding, no imports or artifact authority. |
 | `Modules/Testing/HostedTestDesktop.psm1` | Hosted desktop/access diagnostics, display restoration, pure input-fixture selection and a leased owned input desktop with verified restoration. |
 | `Modules/Testing/HostedDiagnosticEvidence.psm1` | Validates the fixed filtered hosted diagnostic selections and their source-bound evidence. |
-| `Modules/Testing/R0ePairedValidation.psm1` | Validates the reviewed R0e source projections, closed raw sample archives and fixed same-machine paired comparison. |
+| `Modules/Testing/R0ePairedValidation.psm1` | Validates the reviewed R0e source projections including untimed fixtures, closed raw sample archives and fixed same-machine paired comparison. |
 | `Modules/Testing/TestInventory.psm1` | Source-derived test registration plus stable-ID/policy/resource run-plan inventory. |
 | `Modules/Testing/ScopedTesting.psm1` | Native test naming, reviewed candidate PR coverage, and latest-attempt scheduled source-monitor decisions. |
 | `Modules/Testing/TestInvocation.psm1` | Self-test, Pester, and build invocation parameters, bounded Pester failure/skip case normalization, and result classification. |

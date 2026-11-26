@@ -137,10 +137,10 @@ Describe 'R0e sample profile and timing boundaries' {
 }
 
 Describe 'Reviewed R0e source identity' {
-    It 'accepts the current exact case and rejects workload, ceiling, and diagnostic mutations' {
+    It 'accepts the current exact case and rejects fixture, workload, ceiling, and diagnostic mutations' {
         $root=Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
         $source=[IO.File]::ReadAllText((Join-Path $root 'RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Phases05_06.cpp'))
-        (Get-RSR0eCaseIdentity $source).full | Should Be '2E5558B523D99D73528B2664EA56CE2E1A7733952CB572CF62FF00E2636FA329'
+        (Get-RSR0eCaseIdentity -Candidate -SourceText $source).full | Should Be 'AC19290438FF0A6C57A810263AD6C371DC34C4531FF45FBD12147A6EB394227F'
         $mutated=$source.Replace("kR0ePerfIterations = 4'096u", "kR0ePerfIterations = 4'095u")
         $mutated | Should Not Be $source
         Assert-R0eThrows { Get-RSR0eCaseIdentity $mutated } 'R0e'
@@ -151,6 +151,9 @@ Describe 'Reviewed R0e source identity' {
         $mutated | Should Not Be $source
         Assert-R0eThrows { Get-RSR0eCaseIdentity $mutated } 'R0e'
         $mutated=$source.Replace('could not establish its no-activation guard', 'could not start the activation guard')
+        $mutated | Should Not Be $source
+        Assert-R0eThrows { Get-RSR0eCaseIdentity $mutated } 'R0e'
+        $mutated=$source.Replace('duplicateObjectRename.schedule.layers = {{.operationIndices = {0u, 1u}}};', '')
         $mutated | Should Not Be $source
         Assert-R0eThrows { Get-RSR0eCaseIdentity $mutated } 'R0e'
     }
