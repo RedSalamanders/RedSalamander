@@ -6657,10 +6657,9 @@ Describe 'Captured DxUi metadata process source contracts' {
 }
 
 Describe 'Background Git metadata launch closure' {
-    It 'keeps the finite engine-free transport exceptions no-window before either pipe or raw query starts' {
+    It 'keeps the reviewed engine-free Git transports no-window before process start' {
         $helpers=@(
             @('Tools/Modules/Testing/ScopedTesting.psm1','Invoke-ScopedGit'),
-            @('Tools/Modules/Testing/ScopedTesting.psm1','Invoke-ScopedWorkflowMetadata'),
             @('Tools/Modules/Tooling/ToolInventory.psm1','Invoke-RSToolInventoryGitCapture'),
             @('Tools/Modules/Tooling/SpecInformationArchitecture.psm1','Get-RSGitOutput'),
             @('Tools/Modules/Testing/GitMetadataCapture.psm1','Invoke-RSTestGitMetadataCapture')

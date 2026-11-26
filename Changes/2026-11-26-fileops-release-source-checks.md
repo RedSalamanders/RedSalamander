@@ -1,1 +1,1 @@
-- Reconcile Release source checks with Monitor retirement, typed Graph upload validation, Preferences focus coverage and the hidden live Rename fixture.
+- Reconcile Release source checks with Monitor retirement, typed Graph upload validation, Preferences focus coverage, the hidden live Rename fixture and the retired PR workflow query.
