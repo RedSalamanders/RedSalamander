@@ -16429,11 +16429,10 @@ template <size_t TaskCount>
             // The focus repaint can clip a disclosure that was visible before it. The pointer
             // route needs the exact action in the painted viewport while retaining B's focus.
             if (route == 3u &&
-                ! state.Require(
-                    FindExactFileOperationsActionForSelfTest(
-                        fixture.popup, PopupHitTest::Kind::TaskToggleCollapse, secondTask.taskId, 0u, IDS_FILEOPS_TOGGLE_TASK_DETAILS, provider) &&
-                        provider && SUCCEEDED(provider.query_to(fragment.put())) && fragment,
-                    L"Reveal the focused B disclosure in the painted viewport for the pointer route."))
+                ! state.Require(FindExactFileOperationsActionForSelfTest(
+                                    fixture.popup, PopupHitTest::Kind::TaskToggleCollapse, secondTask.taskId, 0u, IDS_FILEOPS_TOGGLE_TASK_DETAILS, provider) &&
+                                    provider && SUCCEEDED(provider.query_to(fragment.put())) && fragment,
+                                L"Reveal the focused B disclosure in the painted viewport for the pointer route."))
                 return false;
             PopupLayoutDebugSnapshot before{};
             before.taskId = secondTask.taskId;
