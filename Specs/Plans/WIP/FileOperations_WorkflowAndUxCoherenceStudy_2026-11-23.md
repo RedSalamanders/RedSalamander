@@ -6,6 +6,8 @@
 
 ## Implementation checklist
 
+- [x] Align the User Guide and archive contract with the two verified Pack formats, ZIP-only Unpack and background scheduling.
+
 - [x] Restore the Change Case documentation gallery and recheck Files-menu admission on x64 Release. Both exact cases passed without activation. The gallery recorded all 45 scenarios and captured the production Change Case prompt. The old failure and remaining native gates are recorded alongside the passes. [Gallery and admission evidence](../../TestRuns/4cb089111a23/Commands/2026-11-26_150252_change_case_gallery/README.md)
 
 **Delivery checkpoint (2026-11-26).** The worker, Files-menu, SMB, archive and progress deliveries below are merged. [PR #320](https://github.com/RedSalamanders/RedSalamander/pull/320) merged the shared R0e admission repair at `02b212062`. The plan stays open for native x64 and ARM64 Release qualification, the remaining live providers, the full walkthrough, actual credential waits and the remaining Stopping measurement.

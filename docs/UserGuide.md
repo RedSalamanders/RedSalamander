@@ -221,7 +221,9 @@ Use **Files** and **Edit** menu commands, the context menu, or the function keys
 - **Change Attributes** (`Ctrl+F8`): changes read-only, hidden, system, and archive attributes for the selection and can remove alternate data streams, then reports what changed.
 - **Go to Shortcut or Link Target**: follows a focused `.lnk`, local `file:` `.url`, junction, mount point, or directory symlink. File targets open their parent folder and focus the target file; folder targets open directly. Web URLs stay in place and report that they are unsupported for pane navigation.
 - **List of Opened Files** (`Alt+F11`): shows files currently open through RedSalamander viewers, external viewer/editor launches, and the Preview pane. The list shows the source, opener, and file path; double-click or **Focus Item** returns the owning pane to that item when it is still reachable.
-- **Pack** (`Alt+F5`) and **Unpack** (`Alt+F6`): create or extract local ZIP archives from the active pane. Pack preserves selected empty folders and sorted entries; Unpack validates ZIP paths before writing and can preserve existing files when overwrite is disabled.
+- **Pack** (`Alt+F5`) creates a local ZIP or 7z archive from the selected files and folders. It preserves empty folders.
+- **Unpack** (`Alt+F6`) extracts local ZIP archives to a destination folder. It validates entry paths before writing and can keep existing files.
+- Both commands run in File Operations after you confirm the options. You can keep using the panes while they run. [Archive options and source cleanup](FileOperations.md)
 
 ![File properties dialog](res/file-properties.png)
 
