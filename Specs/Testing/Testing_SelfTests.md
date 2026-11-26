@@ -191,7 +191,10 @@ settings draft with invented profiles, fixed demonstration paths, the existing
 no-activation blocker and process-owned foreground observer. It MUST NOT start
 searches, connect to real endpoints, execute shell commands or write global input. Only that
 case-sensitive exact selection without proof injections may omit the desktop
-lease; broader Commands selections keep their existing activation contract. In a broad
+lease; broader Commands selections keep their existing activation contract.
+The Change Case capture opens the product prompt through the guarded presentation entry point.
+It uses display-only inputs and closes the prompt after capture. The separate scheduled Rename
+cases exercise the Files-menu and provider admission contracts. In a broad
 Commands run, the gallery hides only the already-leased owned main window and
 installs a local activation blocker for its captures. Other cases retain their
 normal warning, isolation and foreground assertions.

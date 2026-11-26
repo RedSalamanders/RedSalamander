@@ -34648,8 +34648,8 @@ template <typename Body> [[nodiscard]] bool RunFolderViewActivationPressCase(HWN
                 return false;
         }
 
-        // All command-backed utilities keep the real in-memory provider identity.
-        // Local-only option forms use the explicit presentation entry point below.
+        // Selection utilities use the in-memory provider. Capability-gated option
+        // forms use the test-only presentation entry point.
         workspace.ApplyTheme(theme);
         workspace.SetPaneSelectionByDisplayNamePredicate(
             FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"project-plan.txt"; }, true);
@@ -34702,7 +34702,7 @@ template <typename Body> [[nodiscard]] bool RunFolderViewActivationPressCase(HWN
         };
         modal(L"change-case", []() noexcept { return GetFolderViewChangeCasePromptHandle(); }, []() noexcept {
             static_cast<void>(DebugSetFolderViewChangeCasePromptSelections(1u, 1u, false));
-        }, [&]() noexcept { workspace.CommandChangeCase(FolderWindow::Pane::Left); });
+        }, [&]() noexcept { static_cast<void>(DebugShowDocumentationUtilityOptions(host.get(), theme, DocumentationUtilityOptions::ChangeCase)); });
         modal(L"change-attributes", []() noexcept { return GetChangeAttributesOptionsPromptHandle(); }, []() noexcept {}, [&]() noexcept {
             workspace.CommandChangeAttributes(FolderWindow::Pane::Left);
         });
