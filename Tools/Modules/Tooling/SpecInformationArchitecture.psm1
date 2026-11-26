@@ -414,19 +414,29 @@ function Get-RSWipIndexEntries {
     $section = $IndexText.Substring($start + $startMarker.Length, $end - ($start + $startMarker.Length))
     $entries = [System.Collections.Generic.List[object]]::new()
     foreach ($line in [regex]::Split($section, '\r?\n')) {
-        if ($line -notmatch '^\s*\|') { continue }
-        $cells = @($line.Trim().Trim('|').Split('|') | ForEach-Object { $_.Trim() })
-        if ($cells.Count -lt 3) { continue }
-        $status = $cells[0].ToUpperInvariant()
+        $bullet = [regex]::Match($line,
+            '^\s*-\s+\*\*(?<status>ACTIVE|HOLD|DECISION|RETIRED)\*\*:\s+\[(?<rank>[^\s\]]+)\s+.+?\]\((?<path>[^)]+\.md)\)\s+—\s+')
+        if ($bullet.Success) {
+            $status = $bullet.Groups['status'].Value
+            $rank = $bullet.Groups['rank'].Value
+            $fileMatch = $bullet
+        } elseif ($line -match '^\s*\|') {
+            $cells = @($line.Trim().Trim('|').Split('|') | ForEach-Object { $_.Trim() })
+            if ($cells.Count -lt 3) { continue }
+            $status = $cells[0].ToUpperInvariant()
+            $rank = $cells[1]
+            $fileMatch = [regex]::Match($line, '(?:\]\(|`)(?<path>[^)`]+\.md)')
+        } else {
+            continue
+        }
         if ($status -notin @('ACTIVE', 'HOLD', 'DECISION', 'RETIRED')) { continue }
-        $fileMatch = [regex]::Match($line, '(?:\]\(|`)(?<path>[^)`]+\.md)')
         if (-not $fileMatch.Success) { continue }
         $path = ConvertTo-RSForwardSlashPath -Path $fileMatch.Groups['path'].Value
         if ($path.StartsWith('./')) { $path = $path.Substring(2) }
         if (-not $path.StartsWith('Specs/')) { $path = "Specs/Plans/WIP/$path" }
         $entries.Add([pscustomobject]@{
             Status = $status
-            Rank = $cells[1]
+            Rank = $rank
             Path = $path
             Line = $line
         })
@@ -1294,7 +1304,9 @@ function Test-RSProtectedDoneHistory {
             'Specs/Plans/Done/AdvisorSurvey_004-refresh-stale-active-owners_2026-08-25.md',
             'Specs/Plans/Done/AdvisorSurvey_005-decision-hold-scratch-routing_2026-08-25.md',
             # Exact I63 File Operations UX closeout record (closed 2026-11-11); I64 owns the unfinished work.
-            'Specs/Plans/Done/FileOperations_UxFidelityAndPaneActivation_2026-11-10.md'
+            'Specs/Plans/Done/FileOperations_UxFidelityAndPaneActivation_2026-11-10.md',
+            # The Done index every repository keeps (CV-6-03, B-03). It routes only; the records it lists stay frozen.
+            'Specs/Plans/Done/README.md'
         )
     )
 

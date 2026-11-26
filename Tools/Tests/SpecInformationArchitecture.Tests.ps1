@@ -143,6 +143,20 @@ Describe 'Specification information architecture' {
         ($inventory.Files | Where-Object Path -eq 'Specs/Plans/WIP/Notes_Scratch.md').AuthorityClass | Should Be 'HumanManagedNote'
     }
 
+    It 'keeps status, rank and path when reading a status-prefixed WIP entry' {
+        $root = New-RSSpecFixtureRepository
+        $indexPath = Join-Path $root 'Specs/Plans/WIP/README.md'
+        $index = Get-Content -LiteralPath $indexPath -Raw
+        $index = $index.Replace('| ACTIVE | I0 | [Plan](Plan.md) |', '- **ACTIVE**: [I0 Plan](Plan.md) — Execute the fixture.')
+        Set-Content -LiteralPath $indexPath -Value $index -Encoding utf8
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'WIP_UNINDEXED') | Should Be 0
+        @($inventory.WipIndexEntries).Count | Should Be 1
+        $inventory.WipIndexEntries[0].Status | Should Be 'ACTIVE'
+        $inventory.WipIndexEntries[0].Rank | Should Be 'I0'
+        $inventory.WipIndexEntries[0].Path | Should Be 'Specs/Plans/WIP/Plan.md'
+    }
+
     It 'accepts a compact retired tombstone with the required retrieval fields' {
         $root = New-RSSpecFixtureRepository
         Set-RSFixtureFile -Root $root -RelativePath 'Specs/Plans/WIP/Retired.md' -Content @'
@@ -717,6 +731,21 @@ $sample = ']('
         (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
         @($inventory.ProtectedDone.Unexpected).Count | Should Be ($unreviewedPaths.Count + 1)
         (@($inventory.ProtectedDone.Unexpected) -contains $companionPath) | Should Be $true
+    }
+
+    It 'admits only the reviewed Done index and rejects its siblings and companions' {
+        $root = New-RSSpecFixtureRepository
+        $relativePath = 'Specs/Plans/Done/README.md'
+        Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# Completed work`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
+        (@($inventory.ProtectedDone.AllowedAdditional) -contains $relativePath) | Should Be $true
+        foreach ($path in @('Specs/Plans/Done/README_2026-11-19.md', 'Specs/Plans/Done/README/unreviewed.md')) {
+            Set-RSFixtureFile -Root $root -RelativePath $path -Content "# Unreviewed companion`n"
+        }
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be 2
     }
 
     It 'admits only the reviewed PowerShell tooling closeout record' {
