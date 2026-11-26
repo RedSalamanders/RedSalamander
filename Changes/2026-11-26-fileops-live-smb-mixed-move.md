@@ -1,0 +1,1 @@
+- Add a live Windows SMB mixed Move check that verifies a Local Native item, an SMB Managed item, both destination payloads and fixture cleanup in one task.

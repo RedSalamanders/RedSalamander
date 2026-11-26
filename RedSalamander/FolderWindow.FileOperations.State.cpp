@@ -1152,10 +1152,9 @@ void MaybePauseBeforeBridgeDirectoryRestoreForSelfTest(const std::wstring& desti
     }
 }
 
-// Held immediately after a selected regular leaf has published its exact byte total and closed its
-// discovery scope, and before any writer, stage or payload work. It is the only point at which a
-// test can observe the live task and the real popup projection for a known leaf whose transfer has
-// not started. Time spent held here is deliberate and is never a latency measurement.
+// Hold the test after selected regular-file discovery closes and before writer, stage or payload work.
+// The multi-file prepass uses this boundary after it closes every selected leaf. Record its timing
+// before entering the hold.
 void MaybePauseAfterSelectedLeafDiscoveryPublishedForSelfTest() noexcept
 {
     g_fileOpsSelectedLeafDiscoveryPublishedPausePoint.Pause(30'000ull);
@@ -26686,6 +26685,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                               countedFiles,
                               _sourcePaths.size(),
                               S_OK);
+#ifdef ENABLE_TESTS
+            if (countedFiles > 1u && countedFiles == _sourcePaths.size())
+                MaybePauseAfterSelectedLeafDiscoveryPublishedForSelfTest();
+#endif
         }
 
         const std::wstring destinationFolderText = destinationFolder.native();
