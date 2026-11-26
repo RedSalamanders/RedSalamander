@@ -147,6 +147,11 @@ Describe 'Product documentation capture fixtures' {
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"'
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"folderView_drop_integrity_guards"'
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation"'
+        $startupAdmission.Value | Should Match 'selectedCaptureCase == L"main_menu_information_architecture"'
+        $menuCase = [regex]::Match($settingsCommands, '(?ms)\[\[nodiscard\]\] bool TestMainMenuInformationArchitecture\(.*?^}')
+        $menuCase.Success | Should Be $true
+        $menuCase.Value | Should Match 'SendMessageW\(mainWindow,\s*WM_INITMENUPOPUP'
+        $menuCase.Value | Should Not Match '\b(?:SendInput|SetCursorPos|SetFocus|SetForegroundWindow|RequestForegroundWindow|AttachThreadInput|TryActivateOwnedWindow|PrepareMainWindowForIsolatedUiCase|DirectedSelfTestInputWarning|UIAutomation)\s*(?:\(|\b)'
         foreach ($flag in @('--selftest', '--compare-selftest', '--fileops-selftest')) {
             $startupAdmission.Value | Should Match ([regex]::Escape('! hasArg(L"' + $flag + '")'))
         }
@@ -155,7 +160,7 @@ Describe 'Product documentation capture fixtures' {
         }
         $startupAdmission.Value | Should Not Match '_wcsicmp|starts_with|SelfTestCaseNameEquals'
         $runner = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp'
-        $runner | Should Match 'const bool noActivationDirectCase\s*=\s*\(\s*options\.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"\s*\|\|\s*options\.caseFilter == L"folderView_drop_integrity_guards"\s*\|\|\s*options\.caseFilter == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation"\s*\)\s*&&\s*options\.flakyProofCaseName\.empty\(\)\s*&&\s*options\.orderProofCaseName\.empty\(\)'
+        $runner | Should Match 'const bool noActivationDirectCase\s*=\s*\(\s*options\.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"\s*\|\|\s*options\.caseFilter == L"folderView_drop_integrity_guards"\s*\|\|\s*options\.caseFilter == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation"\s*\|\|\s*options\.caseFilter == L"main_menu_information_architecture"\s*\)\s*&&\s*options\.flakyProofCaseName\.empty\(\)\s*&&\s*options\.orderProofCaseName\.empty\(\)'
         $bypass = [regex]::Match($runner, '(?s)if \(! options\.listCasesOnly && noActivationDirectCase &&\s*RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread\(\)\)\s*\{\s*runRegisteredCases\(options\);\s*\}')
         $bypass.Success | Should Be $true
         $warningIndex = $runner.IndexOf('const DirectedSelfTestInputWarning inputWarning', [StringComparison]::Ordinal)
