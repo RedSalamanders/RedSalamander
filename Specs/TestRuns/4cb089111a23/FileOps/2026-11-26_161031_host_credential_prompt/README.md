@@ -4,4 +4,4 @@ The test-enabled x64 Release head `33ca84f736ece55c697d53ba764654fc38c91a82` bui
 
 Two real Local Copy workers stayed at their publication barriers. The host password prompt opened for an invented in-memory profile under the activation blocker. The popup observed the exact first task in Awaiting Credentials and the second in Running. An owned timer canceled the dialog. The case required a canceled prompt, no returned secret, a cleared wait and unchanged foreground.
 
-`FileOps.PopupCadence.HostCredentialPrompt` recorded 829,006 µs, two observer transitions, seven peer popup ticks and `S_OK` for the verification. At the end of the wait the popup was sampling at 100 ms. This fixture verifies the host dialog and wait projection. Live protocol authentication and Windows Hello remain open.
+`FileOps.PopupCadence.HostCredentialPrompt` recorded 829,006 µs, two observer transitions, seven popup ticks while the peer stayed Running and `S_OK` for the verification. At the end of the wait the popup was sampling at 100 ms. This fixture verifies the host dialog and wait projection. Live protocol authentication and Windows Hello remain open.

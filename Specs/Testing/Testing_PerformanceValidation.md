@@ -1323,7 +1323,7 @@ profile under the activation blocker. While the prompt waits, the exact held
 Copy shows Awaiting Credentials and its peer continues to receive popup ticks.
 The owned timer requests Cancel and verifies the wait clears without a secret.
 `FileOps.PopupCadence.HostCredentialPrompt` records elapsed time, observer
-transitions and peer sampling ticks for this controlled host interaction.
+transitions and popup timer ticks while the peer is running.
 
 The no-activation `FileOps_ReviewRemediationContracts` selection compares explicit per-item
 Recycle and normal Find and Viewer admission on equivalent same-parent Local batches. It verifies
