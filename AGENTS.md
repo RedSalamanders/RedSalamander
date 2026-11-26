@@ -196,7 +196,7 @@ Use `build.ps1` for command-line builds. The [build toolchain contract](Specs/Bu
 .\build.ps1 -ProjectName RedSalamander   # Build specific project
 ```
 
-Use `Test-Changes.ps1 -Explain` and affected execution while editing, and `-Mode PrePush` to account for applicable local and exact matching PR obligations under the scoped testing contract below. Use `.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Fresh` when Full is explicitly requested or required for the changed behavior's qualification; `-SkipBuild` requires a byte-verified compatible receipt. Exact Full continuation uses `-ValidationMode Resume -ResumeFrom <run-id>`. An affected/family pass or pending CI never establishes complete repository qualification. See `Specs/Testing/Testing_ValidationEvidence.md` and `Tests/README.md` for the current acceptance and reuse boundaries.
+Use `test.ps1 -Explain` and affected execution while editing. Use `test.ps1 -Mode PrePush` for the full local obligation. Use `.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Fresh` when Full is explicitly requested or required for the changed behavior's qualification; `-SkipBuild` requires a byte-verified compatible receipt. Exact Full continuation uses `-ValidationMode Resume -ResumeFrom <run-id>`. An affected/family pass or pending CI never establishes complete repository qualification. See `Specs/Testing/Testing_ValidationEvidence.md` and `Tests/README.md` for the current acceptance and reuse boundaries.
 
 ## Dependencies
 
@@ -227,8 +227,8 @@ When working with this codebase:
 
 ## Scoped testing policy (2026-10-05)
 
-Use `Test-Changes.ps1 -Explain` and the affected default while editing. Use `-Mode PrePush` for the full local
-obligation and explicit Full to request canonical Full acceptance. Pull request checks are compiler-free. Active native
+Use `test.ps1 -Explain` and the affected default while editing. Use `-Mode PrePush` for the full local
+obligation and `-Full` to request canonical Full acceptance. Pull request checks are compiler-free. Active native
 test files use `Scope.Tests.Something.h/.cpp` and the native file inventory. Reuse exact prior evidence only under
 [the validation contract](Specs/Testing/Testing_ValidationEvidence.md) and follow [the test guide](Tests/README.md).
 

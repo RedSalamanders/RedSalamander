@@ -1,1 +1,0 @@
-- Remove the unused schema reader left by the Monitor Preferences test retirement so test-enabled Release builds meet the zero-warning requirement.

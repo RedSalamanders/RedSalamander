@@ -23,6 +23,9 @@
     Includes their project-reference and runtime deployment closure. Publishes a
     selected-projects receipt, which cannot satisfy a full-solution test/package gate.
     Cannot be combined with ProjectName, ProductionOnly or release/package actions.
+.PARAMETER EnableTests
+    Explicitly builds the native test surface, including in Release. The shared
+    scoped runner uses this mode. Packaging and official release reject it.
 .PARAMETER ProductionOnly
     Build production projects without Tests or PoC (Release only); cannot be combined with Zip.
     Resolve every selected project through its full MSBuild solution-folder target name.
@@ -113,7 +116,9 @@ param(
     [Parameter(HelpMessage = "Deprecated; use the runtime --etw flag instead")]
     [switch]$MonitorDiagnostics,
 
-    [string]$DxUiSdkInputDescriptor = ''
+    [string]$DxUiSdkInputDescriptor = '',
+
+    [switch]$EnableTests
 )
 
 $ErrorActionPreference = "Stop"
@@ -282,10 +287,17 @@ if ($GenerateWingetManifest -and $Configuration -ne "Release") {
 # A test-enabled (ENABLE_TESTS) build is never distributable, so nothing that packages or stamps
 # an official release may build test-enabled: neither by override nor by the non-Release default
 # that the effective tests setting below applies.
-$requestedDistributableTests = [Environment]::GetEnvironmentVariable('RSBuildEnableTests', 'Process')
+$requestedTestsEnabled = [Environment]::GetEnvironmentVariable('RSBuildEnableTests', 'Process')
+if ($EnableTests) {
+    if (-not [string]::IsNullOrWhiteSpace($requestedTestsEnabled) -and $requestedTestsEnabled -ine 'true') {
+        throw '-EnableTests requires RSBuildEnableTests to be unset or true.'
+    }
+    if ($ProductionOnly) { throw '-EnableTests cannot be combined with -ProductionOnly.' }
+    $requestedTestsEnabled = 'true'
+}
 if (($Zip -or $GenerateWingetManifest -or $OfficialRelease) -and
-    ($requestedDistributableTests -ieq 'true' -or
-     ([string]::IsNullOrWhiteSpace($requestedDistributableTests) -and $Configuration -ne 'Release'))) {
+    ($requestedTestsEnabled -ieq 'true' -or
+     ([string]::IsNullOrWhiteSpace($requestedTestsEnabled) -and $Configuration -ne 'Release'))) {
     Write-Error "Packaging and -OfficialRelease require a test-disabled build (Release, RSBuildEnableTests not 'true'); a test-enabled build is never distributable."
     exit 1
 }
@@ -733,7 +745,6 @@ if ([string]::IsNullOrWhiteSpace($requestedCompilerDebugInformation)) {
     throw "RSBuildCompilerDebugInformation must be 'Embedded' or 'ProgramDatabase' when specified."
 }
 $receiptBuildArguments += "compiler-debug-information=$($effectiveCompilerDebugInformation.ToLowerInvariant())"
-$requestedTestsEnabled = [Environment]::GetEnvironmentVariable('RSBuildEnableTests', 'Process')
 if ([string]::IsNullOrWhiteSpace($requestedTestsEnabled)) {
     $effectiveTestsEnabled = ($Configuration -ne 'Release')
 } elseif ($requestedTestsEnabled -ieq 'true') {

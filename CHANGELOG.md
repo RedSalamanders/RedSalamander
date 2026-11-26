@@ -4,6 +4,20 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Add the root `test.ps1` command for affected and full local testing. Preserve `Test-Changes.ps1` as a compatibility command and pin the shared engine with ordered scope fallbacks. Use the shared scope manifest for unattended Full and PrePush, with cross-build-only profiles and archive-bound suite reports. Preserve canonical artifact re-attestation and compatibility commands.
+- Remove the unused schema reader left by the Monitor Preferences test retirement so test-enabled Release builds meet the zero-warning requirement.
+- Fix OneDrive Personal Copy when Graph returns an upload session on its Microsoft consumer content origin. Keep the existing transport and credential controls.
+- Enable scheduled same-folder SFTP Rename with a fresh destination check and verify file, case-only and folder Rename in the approved live test sandbox.
+- Reconcile Release source checks with Monitor retirement, typed Graph upload validation, Preferences focus coverage, the hidden live Rename fixture and the retired PR workflow query.
+- Record the passing I66 non-interactive x64 Release PrePush and the remaining desktop, live-provider, archive and hosted native gates in the shared checklist.
+- Exercise the guarded Recycle refusal and exact-item Skip against a configured SMB test fixture.
+- Align the User Guide and Main Window shortcut summary with the current Move, Rename, New Folder and Delete workflows.
+- Adopt the pinned shared build console and compiler-free tooling for RedSalamander.
+  - Validate guidance and inventories from the same entry point as pull request CI.
+  - Verify the pinned RedMonitor SDK commands before checking or updating the vendored client.
+  - Keep the native PrePush obligation local and retire the old PR delegation code.
+  - Reuse default MSVC toolset discovery and atomically publish pinned vcpkg overlay files through the shared engine.
+  - Align agent guidance and editor discovery and add the product capability record.
 - Measure active popup sampling with a Local Copy held in Stopping and record the matched Release heap comparison.
 - Describe Change Case discovery and the shared scheduled Rename execution and results in the guides.
 - Verify the actual host credential prompt and continued popup sampling with a running Copy peer.

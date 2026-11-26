@@ -457,6 +457,89 @@ function New-RSValidationRunSummaryV2 {
     }
 }
 
+function Get-RSScopedSuiteReports {
+    param(
+        [Parameter(Mandatory)][object]$Summary,
+        [Parameter(Mandatory)][object]$LegacySummary,
+        [Parameter(Mandatory)][object[]]$Entry,
+        [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{64}$')][string]$SummarySha256,
+        [Parameter(Mandatory)][int]$RunExitCode
+    )
+
+    if ($Summary.schema -cne 'red-salamander.run-all-tests.v2' -or $Summary.validation_mode -cne 'Fresh' -or
+        $Summary.requested_gate -cne 'Full' -or $Summary.coverage_scope -cne 'filtered' -or
+        $Summary.run_id -cne $LegacySummary.run_id -or
+        @($Summary.entries).Count -ne $Entry.Count) {
+        throw 'Shared suite reports require a matching Fresh selected run.'
+    }
+
+    foreach ($planEntry in $Entry) {
+        Assert-RSValidationIdentifier -Id $planEntry.Id
+        $row = @($Summary.entries | Where-Object id -CEQ $planEntry.Id)
+        $result = @($LegacySummary.suites | Where-Object suite -CEQ $planEntry.Name)
+        if ($row.Count -ne 1 -or $result.Count -gt 1 -or $planEntry.RequiresInteractiveDesktop) {
+            throw "Ambiguous or unsupported shared suite report for '$($planEntry.Id)'."
+        }
+
+        $verified = $RunExitCode -eq 2 -and $Summary.repository_verdict -ceq 'NOT_EVALUATED' -and
+            $Summary.change_verdict -ceq 'PASSED' -and $row[0].execution -ceq 'executed' -and
+            $row[0].promotion_state -ceq 'promoted' -and $row[0].origin_run_id -ceq $Summary.run_id -and
+            $result.Count -eq 1 -and $result[0].exit_code -eq 0 -and $result[0].failed -eq 0
+        $skips = @(
+            if ($result.Count -eq 1 -and $result[0].skipped -gt 0) {
+                "Canonical runner recorded $($result[0].skipped) skipped cases."
+            }
+        )
+        [ordered]@{
+            schema = 'red-salamander.scoped-suite-report.v1'
+            scope = $planEntry.Id
+            runId = $Summary.run_id
+            platform = $LegacySummary.platform
+            configuration = $LegacySummary.configuration
+            summarySha256 = $SummarySha256
+            evidenceDigest = $row[0].evidence_digest
+            exitCode = if ($verified) { 0 } else { 1 }
+            skips = $skips
+        }
+    }
+}
+
+function Write-RSScopedSuiteReports {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][string]$SummaryPath,
+        [Parameter(Mandatory)][object]$Summary,
+        [Parameter(Mandatory)][object]$LegacySummary,
+        [Parameter(Mandatory)][object[]]$Entry,
+        [Parameter(Mandatory)][int]$RunExitCode
+    )
+
+    # The canonical runner calls here after archiving and while it owns the profile lock.
+    # Shared reports are disposable projections and never become a second evidence archive.
+    $source = Assert-RSTestSandboxContainedPath -TestRoot $LegacySummary.test_root `
+        -Path $SummaryPath -RequireDescendant
+    $bytes = [IO.File]::ReadAllBytes($source)
+    $utf8 = [Text.UTF8Encoding]::new($false, $true)
+    if ($utf8.GetString($bytes) -cne ((ConvertTo-RSCanonicalJson -InputObject $Summary) + "`n")) {
+        throw 'Archived scoped summary differs from the canonical run result.'
+    }
+    $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+    $reports = @(Get-RSScopedSuiteReports -Summary $Summary -LegacySummary $LegacySummary `
+            -Entry $Entry -SummarySha256 $digest -RunExitCode $RunExitCode)
+    Import-Module (Join-Path $RepoRoot '.ci-engine/Tools/Modules/Ci.Policy.psm1') -Scope Local -ErrorAction Stop
+    $reportRoot = Assert-CiContainedPath -Root $RepoRoot -Path (Join-Path $RepoRoot '.build/reports')
+    [void][IO.Directory]::CreateDirectory($reportRoot)
+    $schema = Join-Path $RepoRoot 'Specs/Testing/ScopedSuiteReport.schema.json'
+    foreach ($report in $reports) {
+        $name = "$($report.scope)-$($report.platform)-$($report.configuration).json"
+        $destination = Assert-CiContainedPath -Root $RepoRoot -Path (Join-Path $reportRoot $name)
+        Write-RSAtomicCanonicalJsonFile -LiteralPath $destination -InputObject $report `
+            -SchemaPath $schema -AllowedRoot $reportRoot
+    }
+    return @($reports | Where-Object { $_.exitCode -ne 0 }).Count -eq 0
+}
+
 function Convert-RSTestRunSummaryToCaseHistoryRows {
     param(
         [Parameter(Mandatory = $true)]
@@ -755,6 +838,7 @@ Export-ModuleMember -Function @(
     'Convert-RSTestQuarantineRepairAttemptForRunSummary',
     'New-RSTestRunSummary',
     'New-RSValidationRunSummaryV2',
+    'Write-RSScopedSuiteReports',
     'Convert-RSTestRunSummaryToCaseHistoryRows',
     'Convert-RSTestCaseHistoryRowsToJsonl',
     'Convert-RSTestCaseHistoryRowsToDashboardMarkdown',

@@ -1,1 +1,0 @@
-- Enable scheduled same-folder SFTP Rename with a fresh destination check and verify file, case-only and folder Rename in the approved live test sandbox.
