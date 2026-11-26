@@ -10,9 +10,10 @@
 
 - [x] Run the broad non-interactive x64 Release PrePush after the R0e repair. The frozen `2d41ebc55` run reported 1,801 passed, zero failed and 29 environment skips. The runner marked the change `PASSED` and the repository `NOT_EVALUATED`. [Release validation record](../../TestRuns/4cb089111a23/FileOps/2026-11-26_163210_release_prepush/README.md)
 - [x] Verify the repaired OneDrive Personal upload route through live Copy, same-drive Move and Recycle. The scoped x64 Release case passed all stages and cleaned its fresh fixture. [Live evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-26_172940_onedrive_personal_upload/README.md)
+- [x] Verify guarded Recycle on the approved Samba and Windows SMB fixtures. Both exact x64 Release runs passed 3/0/0 without activation. Samba offered by-name consent and Windows SMB offered exact-identity consent. Skip kept the original bytes and each run removed its fresh fixture. [Live SMB Recycle evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-26_182743_smb_recycle_refusal/README.md)
 - [ ] Complete the remaining desktop walkthrough. Verify the pending-decision pointer route and Start now with a scoped time agreement. The pointer change is in [draft PR #328](https://github.com/RedSalamanders/RedSalamander/pull/328), and the [manual x64 Full run](https://github.com/RedSalamanders/RedSalamander/actions/runs/45841032537) started native execution. Both exact cases passed in an older hosted x64 run. The pointer candidate still needs its own result. Local PrePush excluded Commands, FileOperations, ViewerPETests.Interactive and ViewerSqliteTests.Interactive.
 - [ ] Obtain hosted native x64 and ARM64 Release qualification on the integrated main revision. The earlier ARM64 D10 child receipts prove natural shutdown and unchanged fixture bytes. The parent foreground check failed and recovery refused restoration over a foreign console. In the subsequent [native run](https://github.com/RedSalamanders/RedSalamander/actions/runs/45811712240), x64 finished with one Change Case gallery failure on source that predates the merged repair in PR #325. ARM64 failed the gallery and a separate UIA-route foreground assertion during the original Commands run. The isolated pointer-case retry passed its assertions and its outer desktop restoration refused a foreign console.
-- [ ] Complete the live provider gates. Finish SFTP create, Rename and cleanup, FTP and SCP sign-in and Rename, and the live Google Drive, OneDrive Business and SharePoint checks. Retain the earlier OneDrive Upload directory until a recovery run can verify its contents. Finish live NAS Recycle and the remaining mixed Move endpoint cases.
+- [ ] Complete the live provider gates. Finish SFTP create, Rename and cleanup, FTP and SCP sign-in and Rename, and the live Google Drive, OneDrive Business and SharePoint checks. Retain the earlier OneDrive Upload directory until a recovery run can verify its contents. Finish the remaining mixed Move endpoint cases.
 - [ ] Finish archive cleanup qualification and the closeout inventory. Both Pack formats keep originals when the selection contains a directory. Exact cleanup of directory descendants still needs its own authority and evidence.
 
 - [x] Reconcile the user and developer guides with the scheduled Batch Rename and Change Case execution and task cards.
@@ -175,8 +176,11 @@ its build to correct the witness. The corrected live Windows SMB case passed on 
   - [x] Repeat the Local Recycle measurements on x64 Release. Integrated run `20261126T103711Z-74284-0866d2274311474d880dd92b847a9f54` passed 3/0/0. On the twelve-file fixture, per-item settled in 246.715 ms, Find in 67.288 ms, Viewer Cancel in 2.350 ms and Viewer in 96.560 ms. Find and Viewer each used one Shell batch. Cancel used zero batches and preserved the selection.
   - [ ] Exercise the context-menu surface in the walkthrough.
   - [x] Implement typed per-item Recycle availability and direct permanent consent for known-unavailable routes.
-  - [ ] Qualify that admission on a live NAS and record the Release measurements.
-    Prove mixed-group routing, consent scope and unchanged handling after an unknown result.
+  - [x] Qualify the guarded unknown Recycle result on the registered Samba and Windows SMB routes in x64 Release.
+    The independent identity probe selected the by-name and exact-identity prompts respectively. Both live runs
+    kept the original bytes through Skip and independently confirmed removal of their own fixtures after cleanup.
+  - [ ] Complete the remaining mixed-selection Recycle walkthrough. The controlled Local mixed-group case covers
+    direct permanent consent and Cancel without changing either group.
 - [ ] **S1.** Qualify Rename by route.
   - [x] Release each exact Batch Rename handle after preflight and validate captured identity on every mutation
     rebind. The local exact-result test passed with a no-DELETE-sharing witness at the preflight boundary.
