@@ -81,6 +81,8 @@ RedSalamander checks the exact spelling for case-only changes. A result it canno
 ### Informational task cards
 
 Some background work is displayed as read-only **informational** cards in the same popup (for example **Compare Directories** and **Change Case**).
+
+The Files menu makes **Batch Rename** and **Change Case** available on providers that can identify each item for scheduled Rename. If your provider lacks this support, the corresponding shortcuts show a warning in the pane.
 To avoid clutter, informational cards are created only if the operation takes longer than ~`700ms`.
 They show the current path and basic progress counters, and can be dismissed when complete.
 

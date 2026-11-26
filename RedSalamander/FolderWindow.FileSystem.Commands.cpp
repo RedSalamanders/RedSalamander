@@ -14322,7 +14322,7 @@ void FolderWindow::CommandChangeCase(Pane pane)
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
 
-    if (! state.fileSystem || RefuseFileOperationForPendingExit(pane, FILESYSTEM_RENAME))
+    if (RefuseFileOperationForPendingExit(pane, FILESYSTEM_RENAME) || RefuseUnsupportedScheduledRename(pane, IDS_CMD_CHANGE_CASE))
     {
         return;
     }

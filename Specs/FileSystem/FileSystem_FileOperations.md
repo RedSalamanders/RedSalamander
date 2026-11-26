@@ -2699,6 +2699,11 @@ focus only when the pane still shows the captured folder; every terminal central
 origin pane. Change Case introduces no recovery journal, Resume/Roll back surface, command-local
 name policy, implicit Keep Both choice, or alternate success definition.
 
+The Files menu enables Batch Rename and Change Case when the active provider exposes route capabilities
+and object binding. The same route check refuses direct invocation before opening either dialog.
+Interface discovery performs no provider path I/O. The worker still qualifies the specific endpoint,
+parent and source authority. A single-item inline Rename uses its own route eligibility.
+
 Every Batch Rename row is path-qualified by the worker after ordinary task publication and before any
 mutation, and all rows in one plan must share one endpoint/root/profile. Worker admission stores
 comparison-only ingress identity for each changed source and atomically publishes an immutable
