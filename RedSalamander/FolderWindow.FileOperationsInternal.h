@@ -423,6 +423,7 @@ struct ArchiveOperationResult final
     bool sourceSelectionComplete = true;
     bool published               = false;
     bool outputInsideSource      = false;
+    bool sourceChanged           = false;
 #ifdef ENABLE_TESTS
     bool stageRemovedByHandle = false;
 #endif
@@ -434,10 +435,20 @@ struct ArchiveOperationResult final
     std::vector<std::wstring> entries;
 };
 
-struct PackArchiveRequest final
+// Host-only task kinds. Provider methods receive their existing Copy and Delete operations.
+inline constexpr FileSystemOperation kPackArchiveOperation   = static_cast<FileSystemOperation>(0x100u);
+inline constexpr FileSystemOperation kUnpackArchiveOperation = static_cast<FileSystemOperation>(0x101u);
+[[nodiscard]] constexpr bool IsArchiveTaskOperation(FileSystemOperation operation) noexcept
 {
-    std::filesystem::path archivePath;
+    return operation == kPackArchiveOperation || operation == kUnpackArchiveOperation;
+}
+
+struct ArchiveTaskRequest final
+{
+    FileSystemOperation operation = kPackArchiveOperation;
+    std::filesystem::path targetPath;
     std::wstring format;
+    std::wstring mask;
     GUID classId{};
     bool storedZip         = false;
     bool overwrite         = false;
@@ -446,22 +457,19 @@ struct PackArchiveRequest final
     std::shared_ptr<const ArchiveCleanupReceipt> cleanup;
 };
 
-struct PackArchiveState final
+struct ArchiveTaskState final
 {
-    PackArchiveState() noexcept                          = default;
-    PackArchiveState(const PackArchiveState&)            = delete;
-    PackArchiveState& operator=(const PackArchiveState&) = delete;
-    PackArchiveState(PackArchiveState&&)                 = delete;
-    PackArchiveState& operator=(PackArchiveState&&)      = delete;
+    ArchiveTaskState() noexcept                          = default;
+    ArchiveTaskState(const ArchiveTaskState&)            = delete;
+    ArchiveTaskState& operator=(const ArchiveTaskState&) = delete;
+    ArchiveTaskState(ArchiveTaskState&&)                 = delete;
+    ArchiveTaskState& operator=(ArchiveTaskState&&)      = delete;
 
-    PackArchiveRequest request;
+    ArchiveTaskRequest request;
     ArchiveOperationResult result;
     wil::unique_hfile publishedArchive;
     std::atomic<bool> resultReady{false};
 };
-
-// Host-only task kind. Provider methods receive their existing Copy and Delete operations.
-inline constexpr FileSystemOperation kPackArchiveOperation = static_cast<FileSystemOperation>(0x100u);
 
 struct QualifiedDestination
 {
@@ -556,17 +564,18 @@ struct CreateDirectoryAdmission
     bool allowLocalNativeFallback = false;
 };
 
-struct PackArchiveSource final
+struct ArchiveTaskSource final
 {
     QualifiedEndpoint endpoint;
     std::wstring providerPath;
 };
 
-struct PackArchiveAdmission final
+struct ArchiveTaskAdmission final
 {
+    FileSystemOperation operation = kPackArchiveOperation;
     QualifiedEndpoint endpoint;
-    std::filesystem::path archivePath;
-    std::vector<PackArchiveSource> selectedItems;
+    std::filesystem::path targetPath;
+    std::vector<ArchiveTaskSource> selectedItems;
     OperationOptions options;
 };
 
@@ -577,7 +586,7 @@ struct PackArchiveAdmission final
                                                          std::wstring_view pluginId,
                                                          unsigned int firstSuffix,
                                                          unsigned int& suggestedSuffix) noexcept;
-using FileOperationPlan = std::variant<TransferPlan, RenamePlan, DeletePlan, CreateDirectoryAdmission, PackArchiveAdmission>;
+using FileOperationPlan = std::variant<TransferPlan, RenamePlan, DeletePlan, CreateDirectoryAdmission, ArchiveTaskAdmission>;
 // One user admission may contain several executable child plans when a selection spans provider
 // roots. Every child remains qualified by exactly one source endpoint; the admission owns the
 // single confirmation and clipboard-consumption barrier for the whole group.
@@ -2210,8 +2219,9 @@ struct FolderWindow::FileOperationState
         HRESULT PrepareCreateDirectoryAdmission() noexcept;
         HRESULT RevalidateMoveConfirmationEndpoints(const FileOperations::FileOperationPlanGroup& plans) noexcept;
         HRESULT ExecuteCreateDirectory(const FileOperations::CreateDirectoryAdmission& plan) noexcept;
-        HRESULT PreparePackArchiveAdmission() noexcept;
-        HRESULT ExecutePackArchive(const FileOperations::PackArchiveAdmission& plan) noexcept;
+        HRESULT PrepareArchiveTaskAdmission() noexcept;
+        HRESULT ExecutePackArchive(const FileOperations::ArchiveTaskAdmission& plan) noexcept;
+        HRESULT ExecuteUnpackArchive(const FileOperations::ArchiveTaskAdmission& plan) noexcept;
         HRESULT PrepareBatchRenameArtifactGuard() noexcept;
         HRESULT PrepareArtifactTouchGuard(const FileOperations::FileOperationPlanGroup& plans,
                                           IFileSystem* sourceFileSystem,
@@ -2349,7 +2359,7 @@ struct FolderWindow::FileOperationState
         std::atomic<ULONGLONG> _preparationStartTick{GetTickCount64()};
         std::optional<BatchRenameAdmissionInput> _pendingBatchRenameAdmission;
         std::optional<CreateDirectoryRequest> _createDirectoryRequest;
-        std::shared_ptr<FileOperations::PackArchiveState> _packArchive;
+        std::shared_ptr<FileOperations::ArchiveTaskState> _archiveTask;
         std::shared_ptr<const wil::unique_hfile> _archiveOutputLease;
         std::filesystem::path _createdDirectory;
         FileSystemOperation _operation = FILESYSTEM_COPY;
@@ -2919,13 +2929,13 @@ struct FolderWindow::FileOperationState
                                    std::wstring_view leafName,
                                    FileOperations::CreateDirectoryAdmission& admissionOut) noexcept;
 
-    HRESULT AdmitPackArchive(FolderWindow::Pane sourcePane,
+    HRESULT AdmitArchiveTask(FolderWindow::Pane sourcePane,
                              const wil::com_ptr<IFileSystem>& fileSystem,
                              std::wstring pluginId,
                              std::wstring pluginShortId,
                              std::wstring instanceContext,
                              std::vector<std::filesystem::path> sources,
-                             std::shared_ptr<FileOperations::PackArchiveState> pack,
+                             std::shared_ptr<FileOperations::ArchiveTaskState> archive,
                              uint64_t& taskId);
     HRESULT StartOperation(OperationAdmission admission, uint64_t* taskIdOut = nullptr);
     HRESULT PublishPreparingTask(std::unique_ptr<Task> task, std::wstring_view operation);

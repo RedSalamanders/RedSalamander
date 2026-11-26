@@ -893,8 +893,8 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
                 return FILESYSTEM_DELETE;
             else if constexpr (std::is_same_v<Plan, FileOperations::CreateDirectoryAdmission>)
                 return FILESYSTEM_CREATE_DIRECTORY;
-            else if constexpr (std::is_same_v<Plan, FileOperations::PackArchiveAdmission>)
-                return FileOperations::kPackArchiveOperation;
+            else if constexpr (std::is_same_v<Plan, FileOperations::ArchiveTaskAdmission>)
+                return typedPlan.operation;
             else
                 return FILESYSTEM_RENAME;
         },
@@ -966,8 +966,8 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     const FileOperations::FileOperationPlan& firstPlan = plans.front();
     FileOperations::OperationOptions options           = planOptions(firstPlan);
     const FileSystemOperation operation                = planOperation(firstPlan);
-    if (operation == FileOperations::kPackArchiveOperation)
-        return E_INVALIDARG; // Pack owns its dedicated pane ingress and worker request.
+    if (FileOperations::IsArchiveTaskOperation(operation))
+        return E_INVALIDARG; // Archive tasks own their dedicated pane ingress and worker requests.
     const bool archiveDeleteConsentCaptured = admission.capturedConsentKind == FileOperations::ConsentKind::ArchiveDeleteAfter;
     const bool hasArchiveArtifactTouch      = admission.capturedArchiveArtifactTouch.has_value();
     if (admission.archiveOutputLease && ! archiveDeleteConsentCaptured)

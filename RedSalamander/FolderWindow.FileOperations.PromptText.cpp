@@ -287,6 +287,8 @@ UINT ConflictPromptTitleStringId(FileSystemOperation operation) noexcept
 {
     if (operation == FileOperations::kPackArchiveOperation)
         return static_cast<UINT>(IDS_CMD_PACK);
+    if (operation == FileOperations::kUnpackArchiveOperation)
+        return static_cast<UINT>(IDS_CMD_UNPACK);
     switch (operation)
     {
         case FILESYSTEM_COPY: return static_cast<UINT>(IDS_FILEOP_OPERATION_COPY);

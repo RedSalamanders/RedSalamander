@@ -2156,6 +2156,14 @@ When an exact regular-file Pack or Unpack selection contains a possible leftover
 confirmation includes the leftover disclosure. Confirming accepts the exact artifact touch receipt.
 Admission compares the receipt before publishing the cleanup task and the worker checks it again after waiting.
 Cancel leaves the sources and output untouched.
+Unpack uses the same scheduler and captures the Local source archives, destination folder, mask and
+existing-file choice. The worker qualifies read scopes for the archives and one publication scope for
+the destination. It checks cancellation during inventory, decoding and just before each entry commits.
+Cancel keeps previously published entries, retires the incomplete staged file by its handle and keeps
+every selected archive. The pane refreshes matching visible Local destination folders after publication.
+A changed source provider in the originating pane cannot redirect cleanup. `archive.unpack_us` measures worker
+execution, and `archive.unpack.admission.ui_thread_us` measures pane capture, options, consent and admission.
+
 If Unpack skips a requested entry because of a destination conflict or reports
 incomplete extraction, it keeps the selected archive set and reports that in
 the pane. Before asking to delete the selected archives, Unpack captures each

@@ -8828,7 +8828,7 @@ void AutomateChangeCasePrompt(
         std::this_thread::sleep_for(20ms);
     }
 
-    const std::optional<FolderWindow::ArchiveCommandDebugResult> unpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    const auto unpackResult = WaitForArchiveDialogCommandResult();
     state.Require(unpackResult.has_value(), L"Unpack prompt should record an unpack debug result.");
     if (unpackResult.has_value())
     {
@@ -8880,7 +8880,7 @@ void AutomateChangeCasePrompt(
         std::this_thread::sleep_for(20ms);
     }
 
-    const std::optional<FolderWindow::ArchiveCommandDebugResult> compressedUnpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    const auto compressedUnpackResult = WaitForArchiveDialogCommandResult();
     state.Require(compressedUnpackResult.has_value(), L"Compressed ZIP unpack should record an unpack debug result.");
     if (compressedUnpackResult.has_value())
     {

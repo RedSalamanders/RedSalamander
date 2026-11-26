@@ -14192,7 +14192,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         });
     };
 
-    const auto waitForPackResult = [&]() noexcept
+    const auto waitForArchiveResult = [&]() noexcept
     {
         std::optional<FolderWindow::ArchiveCommandDebugResult> result;
         const auto completed = RedSalamander::TestSupport::PumpMessagesUntil(
@@ -14201,8 +14201,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
             result = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
             return result.has_value();
         },
-            {.timeout = SelfTest::Scale(5000ms), .operationName = L"Pack worker completion"});
-        state.Require(completed.conditionMet, L"Pack must report its result after worker completion.");
+            {.timeout = SelfTest::Scale(5000ms), .operationName = L"Archive worker completion"});
+        state.Require(completed.conditionMet, L"The archive command must report its result after worker completion.");
         return result;
     };
 
@@ -14214,7 +14214,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     const auto packStarted = std::chrono::steady_clock::now();
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack"), L"cmd/pane/pack should dispatch through the shortcut path.");
-    const auto packResult = waitForPackResult();
+    const auto packResult = waitForArchiveResult();
     const auto packUs     = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - packStarted);
     state.Require(packResult.has_value(), L"Pack command should record a debug result.");
     if (packResult.has_value())
@@ -14240,7 +14240,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         const auto promptCount           = HostGetTestPromptRequestCount();
         g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(folderCleanupOptions);
         const bool dispatched = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack");
-        const auto retained   = waitForPackResult();
+        const auto retained   = waitForArchiveResult();
         state.Require(
             dispatched && HostGetTestPromptRequestCount() == promptCount && retained.has_value() && retained->hr == S_FALSE && packResult.has_value() &&
                 retained->entries == packResult->entries && cleanupIdle() && SelfTest::PathExists(retainedArchive) && SelfTest::PathExists(emptyRoot) &&
@@ -14268,7 +14268,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack") && HostGetTestPromptRequestCount() == promptCount,
                       L"Pack with an unproved source tree should dispatch without asking to delete it.");
         PumpPendingMessages();
-        const auto partialPack = waitForPackResult();
+        const auto partialPack = waitForArchiveResult();
         state.Require(partialPack.has_value() && partialPack->hr == S_FALSE && containsEntry(partialPack->entries, L"nested/beta.txt") &&
                           ! containsEntry(partialPack->entries, L"nested/omitted-link.txt"),
                       L"Pack should publish the included files and report that it omitted the source link.");
@@ -14288,7 +14288,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(noOverwritePackOptions);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack"), L"cmd/pane/pack overwrite validation should dispatch.");
     PumpPendingMessages();
-    const auto noOverwritePackResult = waitForPackResult();
+    const auto noOverwritePackResult = waitForArchiveResult();
     state.Require(noOverwritePackResult.has_value(), L"Pack overwrite validation should record a debug result.");
     if (noOverwritePackResult.has_value())
     {
@@ -14316,7 +14316,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         Common::Files::Testing::FailNextLocalFileTransactionPublish(failedPublish);
         g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(replaceOptions);
         const bool dispatched   = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack");
-        const auto failedResult = waitForPackResult();
+        const auto failedResult = waitForArchiveResult();
         static_cast<void>(Common::Files::Testing::TakeNextLocalFileTransactionPublishFailure());
         std::error_code listingError;
         const auto previousArchiveIntact = [&]()
@@ -14355,7 +14355,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                                 L"Pack must return control to the pane with a cancelable task before publishing."))
                 return false;
             packTask->RequestCancel();
-            const auto canceled = waitForPackResult();
+            const auto canceled = waitForArchiveResult();
             if (! state.Require(canceled.has_value() && canceled->hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) && canceled->stageRemovedByHandle &&
                                     previousArchiveIntact() && ! publicationGate.HasTimedOut(),
                                 L"Cancel must keep the previous archive and retire the unpublished stage by handle."))
@@ -14364,7 +14364,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
         g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(replaceOptions);
         const bool retried     = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack");
-        const auto retryResult = waitForPackResult();
+        const auto retryResult = waitForArchiveResult();
         const auto packedSize  = std::filesystem::file_size(target, listingError);
         state.Require(retried && retryResult.has_value() && retryResult->hr == S_OK && packResult.has_value() && retryResult->entries == packResult->entries &&
                           ! listingError && packedSize > sizeof("previous archive bytes") - 1u,
@@ -14406,10 +14406,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     const auto unpackStarted = std::chrono::steady_clock::now();
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"), L"cmd/pane/unpack should dispatch through the shortcut path.");
-    PumpPendingMessages();
-    const auto unpackUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - unpackStarted);
-
-    const std::optional<FolderWindow::ArchiveCommandDebugResult> unpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    const auto unpackResult = waitForArchiveResult();
+    const auto unpackUs     = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - unpackStarted);
     state.Require(unpackResult.has_value(), L"Unpack command should record a debug result.");
     if (unpackResult.has_value())
     {
@@ -14432,7 +14430,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(noOverwriteUnpackOptions);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"), L"cmd/pane/unpack overwrite validation should dispatch.");
     PumpPendingMessages();
-    const std::optional<FolderWindow::ArchiveCommandDebugResult> noOverwriteUnpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    const std::optional<FolderWindow::ArchiveCommandDebugResult> noOverwriteUnpackResult = waitForArchiveResult();
     state.Require(noOverwriteUnpackResult.has_value(), L"Unpack skip-existing validation should record a debug result.");
     if (noOverwriteUnpackResult.has_value())
     {
@@ -14448,7 +14446,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(dispatchApprovedCleanup(L"cmd/pane/unpack", L"The test must have approved the Unpack cleanup request."),
                   L"Unpack with Skip existing and Delete after should dispatch.");
     PumpPendingMessages();
-    const auto cleanupResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    const auto cleanupResult = waitForArchiveResult();
     state.Require(cleanupResult.has_value() && cleanupResult->hr == S_FALSE && cleanupResult->skippedConflictCount >= 1u,
                   L"Unpack should report that skipped entries kept the selected archive.");
     state.Require(cleanupIdle(), L"Unpack should not queue a cleanup Delete after skipping an entry.");
@@ -14462,7 +14460,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(replaceUnpackOptions);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"), L"cmd/pane/unpack replace-existing validation should dispatch.");
     PumpPendingMessages();
-    const std::optional<FolderWindow::ArchiveCommandDebugResult> replaceUnpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    const std::optional<FolderWindow::ArchiveCommandDebugResult> replaceUnpackResult = waitForArchiveResult();
     state.Require(replaceUnpackResult.has_value(), L"Unpack replace-existing validation should record a debug result.");
     if (replaceUnpackResult.has_value())
     {
@@ -14479,6 +14477,59 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return HostGetTestLastPromptDebugSnapshot(prompt) && prompt.presentation == HOST_PROMPT_PRESENTATION_DELETE &&
                prompt.defaultResult == HOST_PROMPT_RESULT_CANCEL && prompt.message.find(warning) != std::wstring::npos;
     };
+
+    for (const bool deflated : {false, true})
+    {
+        const std::wstring name = deflated ? L"cancel-deflated.zip" : L"cancel-stored.zip";
+        const auto source       = outputRoot / name;
+        const auto destination  = root / source.stem();
+        const auto existing     = destination / L"alpha.txt";
+        const bool created =
+            deflated ? WriteDeflatedZipFixtureForUnpackSelfTest(source) : WriteStoredZipFixtureForCommandSelfTest(source, "alpha.txt", 0x0800u, "replacement");
+        if (! state.Require(created && SelfTest::EnsureDirectory(destination) && SelfTest::WriteTextFile(existing, "previous output") &&
+                                ForceRefreshPaneForCommandSelfTest(mainWindow, FolderWindow::Pane::Left, SelfTest::Scale(3000ms)) &&
+                                WaitForPaneItems(FolderWindow::Pane::Left, {name}, SelfTest::Scale(3000ms)),
+                            L"Prepare an owned ZIP and a prior extracted file for cancellation."))
+            return false;
+
+        g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [&](std::wstring_view item) noexcept { return item == name; });
+        using FolderWindowFileOperationsStateInternal::g_fileOpsUnpackBeforePublishPausePoint;
+        auto& publicationGate = g_fileOpsUnpackBeforePublishPausePoint;
+        if (! state.Require(publicationGate.ArmForSource(source.native()), L"Arm the owned Unpack publication gate."))
+            return false;
+        const auto releaseGate = wil::scope_exit([&]() noexcept { publicationGate.Release(); });
+
+        auto cancelOptions            = replaceUnpackOptions;
+        cancelOptions.destinationPath = destination;
+        cancelOptions.deleteAfter     = true;
+        g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(cancelOptions);
+        if (! state.Require(dispatchApprovedCleanup(L"cmd/pane/unpack", L"Unpack must ask once for exact cleanup."), L"Dispatch the cancelable Unpack."))
+            return false;
+        const auto entered     = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+            return publicationGate.HasEntered();
+        }, {.timeout = SelfTest::Scale(3000ms), .operationName = L"Unpack worker waiting to publish"});
+        auto* const operations = g_folderWindow.DebugGetFileOperationState(false);
+        auto* const unpackTask = operations ? operations->FindTask(publicationGate.targetTask.load(std::memory_order_acquire)) : nullptr;
+        if (! state.Require(entered.conditionMet && unpackTask && operations->HasActiveOperations() &&
+                                publicationGate.activeWaiters.load(std::memory_order_acquire) != 0u &&
+                                ! g_folderWindow.DebugGetLastArchiveCommandResultForTest().has_value() &&
+                                ReadUtf8TextFileForCommandSelfTest(existing) == L"previous output",
+                            L"Unpack must return control to the pane while its task is waiting before publication."))
+            return false;
+        unpackTask->RequestCancel();
+        const auto canceled = waitForArchiveResult();
+        std::filesystem::directory_iterator child(destination, ec);
+        const std::filesystem::directory_iterator end;
+        const bool foundPrior = ! ec && child != end && child->path().filename() == existing.filename();
+        if (foundPrior)
+            child.increment(ec);
+        if (! state.Require(canceled.has_value() && canceled->hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) && canceled->stageRemovedByHandle &&
+                                canceled->entryCount == 0u && canceled->bytesProcessed == 0u && SelfTest::PathExists(source) &&
+                                ReadUtf8TextFileForCommandSelfTest(existing) == L"previous output" && foundPrior && child == end && ! ec && cleanupIdle() &&
+                                ! publicationGate.HasTimedOut(),
+                            L"Cancel must keep the ZIP and previous destination without a published entry, retained stage or cleanup task."))
+            return false;
+    }
 
     enum class ArchiveCleanupFixture
     {
@@ -14530,7 +14581,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         if (unchanged && ! state.Require(combinedCleanupPrompt(), L"The exact Unpack confirmation must disclose the possible leftover and default to Cancel."))
             return false;
 
-        const auto unpacked                      = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+        const auto unpacked                      = waitForArchiveResult();
         const auto extracted                     = cleanupDestination / (unchanged ? L"alpha.txt" : L"approved.txt");
         const std::wstring_view approvedContents = unchanged ? L"alpha from a compressed zip fixture" : L"approved contents";
         if (! state.Require(unpacked.has_value() && unpacked->hr == S_OK && unpacked->archivePath == cleanupArchive &&
@@ -14654,7 +14705,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         if (! state.Require(combinedCleanupPrompt(), L"The one Pack confirmation must disclose the possible leftover and default to Cancel."))
             return false;
 
-        const auto packed = waitForPackResult();
+        const auto packed = waitForArchiveResult();
         if (! state.Require(packed.has_value() && packed->hr == S_OK && packed->archivePath == packedPath && packed->entryCount == 1u &&
                                 packed->bytesProcessed == originalContent.size() && SelfTest::PathExists(packedPath),
                             L"Pack must publish the approved source under the requested format before cleanup."))
@@ -14722,7 +14773,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(cp437UnpackOptions);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"), L"cmd/pane/unpack should dispatch for CP437 ZIP fixture.");
     PumpPendingMessages();
-    const std::optional<FolderWindow::ArchiveCommandDebugResult> cp437UnpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    const std::optional<FolderWindow::ArchiveCommandDebugResult> cp437UnpackResult = waitForArchiveResult();
     state.Require(cp437UnpackResult.has_value(), L"CP437 ZIP unpack should record a debug result.");
     if (cp437UnpackResult.has_value())
     {
@@ -14751,7 +14802,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(cp437ARingUnpackOptions);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"), L"cmd/pane/unpack should dispatch for CP437 A-ring ZIP fixture.");
     PumpPendingMessages();
-    const std::optional<FolderWindow::ArchiveCommandDebugResult> cp437ARingUnpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    const std::optional<FolderWindow::ArchiveCommandDebugResult> cp437ARingUnpackResult = waitForArchiveResult();
     state.Require(cp437ARingUnpackResult.has_value(), L"CP437 A-ring ZIP unpack should record a debug result.");
     if (cp437ARingUnpackResult.has_value())
     {
@@ -14775,7 +14826,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(reservedUnpackOptions);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"), L"cmd/pane/unpack should dispatch for reserved-name ZIP fixture.");
     PumpPendingMessages();
-    const std::optional<FolderWindow::ArchiveCommandDebugResult> reservedUnpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    const std::optional<FolderWindow::ArchiveCommandDebugResult> reservedUnpackResult = waitForArchiveResult();
     state.Require(reservedUnpackResult.has_value(), L"Reserved-name ZIP unpack should record a debug result.");
     if (reservedUnpackResult.has_value())
     {
@@ -14802,7 +14853,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(bombUnpackOptions);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"), L"cmd/pane/unpack should dispatch for declared-size ZIP bomb fixture.");
     PumpPendingMessages();
-    const std::optional<FolderWindow::ArchiveCommandDebugResult> bombUnpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    const std::optional<FolderWindow::ArchiveCommandDebugResult> bombUnpackResult = waitForArchiveResult();
     state.Require(bombUnpackResult.has_value(), L"Declared-size ZIP bomb unpack should record a debug result.");
     if (bombUnpackResult.has_value())
     {
@@ -14817,7 +14868,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(invalidDestinationOptions);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"), L"cmd/pane/unpack invalid destination validation should dispatch.");
     PumpPendingMessages();
-    const std::optional<FolderWindow::ArchiveCommandDebugResult> invalidDestinationResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    const std::optional<FolderWindow::ArchiveCommandDebugResult> invalidDestinationResult = waitForArchiveResult();
     state.Require(invalidDestinationResult.has_value(), L"Unpack invalid destination validation should record a debug result.");
     if (invalidDestinationResult.has_value())
     {

@@ -219,6 +219,7 @@ SelfTestPausePoint g_fileOpsSelectedLeafDiscoveryPublishedPausePoint;
 SelfTestPausePoint g_fileOpsBridgeOpenListingPausePoint;
 SelfTestPausePoint g_fileOpsPreparingBeforePublishPausePoint;
 SelfTestPausePoint g_fileOpsPackBeforePublishPausePoint;
+SelfTestPausePoint g_fileOpsUnpackBeforePublishPausePoint;
 SelfTestProgressIoGate g_fileOpsProgressIoGateForSelfTest;
 SelfTestPausePoint g_fileOpsConflictConvergenceItemPausePoint;
 
@@ -3263,6 +3264,8 @@ void SetPopupCompactDensityInSettings(Common::Settings::Settings& settings, bool
 {
     if (operation == FileOperations::kPackArchiveOperation)
         return L"pack";
+    if (operation == FileOperations::kUnpackArchiveOperation)
+        return L"unpack";
     switch (operation)
     {
         case FILESYSTEM_COPY: return L"copy";
@@ -12039,7 +12042,7 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareMutationInterlockScopes()
                                               selectedAdmission->destination->fileSystem ? selectedAdmission->destination->fileSystem.get()
                                                                                          : _fileSystem.get());
             }
-            else if constexpr (std::is_same_v<Plan, FileOperations::PackArchiveAdmission>)
+            else if constexpr (std::is_same_v<Plan, FileOperations::ArchiveTaskAdmission>)
             {
                 for (const auto& source : typedPlan.selectedItems)
                 {
@@ -12050,7 +12053,7 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareMutationInterlockScopes()
                 }
                 return builder.Add(_fileSystem.get(),
                                    typedPlan.endpoint,
-                                   typedPlan.archivePath.native(),
+                                   typedPlan.targetPath.native(),
                                    FileOperations::MutationInterlockAccess::PublishDestination,
                                    false,
                                    false);
@@ -12381,7 +12384,7 @@ HRESULT FolderWindow::FileOperationState::BuildPreparationFacts(uint64_t taskId,
                     addCount(snapshot.copyOnlyCount, typedPlan.selectedItems.size());
                 }
             }
-            else if constexpr (std::is_same_v<Plan, FileOperations::DeletePlan> || std::is_same_v<Plan, FileOperations::PackArchiveAdmission>)
+            else if constexpr (std::is_same_v<Plan, FileOperations::DeletePlan> || std::is_same_v<Plan, FileOperations::ArchiveTaskAdmission>)
             {
                 addCount(snapshot.selectedRootCount, typedPlan.selectedItems.size());
             }
@@ -13405,9 +13408,9 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareForExecution() noexcept
     {
         RETURN_IF_FAILED(PrepareCreateDirectoryAdmission());
     }
-    if (_operation == FileOperations::kPackArchiveOperation)
+    if (FileOperations::IsArchiveTaskOperation(_operation))
     {
-        RETURN_IF_FAILED(PreparePackArchiveAdmission());
+        RETURN_IF_FAILED(PrepareArchiveTaskAdmission());
     }
 
     if (_pendingBatchRenameAdmission.has_value())
@@ -13597,7 +13600,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     const Common::SynchronousIoCancelWatch::Scope cancelWatch(&Task::ShouldCancelSynchronousIo, this);
     const auto retireArchiveState = wil::scope_exit([this]() noexcept
     {
-        _packArchive.reset();
+        _archiveTask.reset();
         _archiveOutputLease.reset();
     });
     const ScopedHostCredentialWaitObserver credentialObserver({this, &Task::OnCredentialWait});
@@ -15309,7 +15312,7 @@ HRESULT FolderWindow::FileOperationState::Task::FinalizeTypedItemResults(HRESULT
                       0u,
                       operationStatus);
 
-    if (_operation == FileOperations::kPackArchiveOperation)
+    if (FileOperations::IsArchiveTaskOperation(_operation))
         return operationStatus;
     if (IsTraversalResourceLimitStatus(operationStatus))
     {
@@ -24448,10 +24451,12 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
     _started.store(true, std::memory_order_release);
     _operationStartTick.store(GetTickCount64(), std::memory_order_release);
 
-    if (_operation == FileOperations::kPackArchiveOperation)
+    if (FileOperations::IsArchiveTaskOperation(_operation))
     {
-        const auto* pack = plans && plans->size() == 1u ? std::get_if<FileOperations::PackArchiveAdmission>(&plans->front()) : nullptr;
-        return pack ? ExecutePackArchive(*pack) : E_UNEXPECTED;
+        const auto* archive = plans && plans->size() == 1u ? std::get_if<FileOperations::ArchiveTaskAdmission>(&plans->front()) : nullptr;
+        if (! archive || archive->operation != _operation)
+            return E_UNEXPECTED;
+        return _operation == FileOperations::kPackArchiveOperation ? ExecutePackArchive(*archive) : ExecuteUnpackArchive(*archive);
     }
 
 #ifdef ENABLE_TESTS

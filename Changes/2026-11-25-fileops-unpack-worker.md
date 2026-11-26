@@ -1,0 +1,1 @@
+- Run Unpack in File Operations so the panes stay usable during extraction. Cancel keeps entries already published and leaves the selected archives in place.
