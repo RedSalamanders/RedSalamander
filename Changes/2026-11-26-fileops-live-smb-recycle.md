@@ -1,1 +1,0 @@
-- Exercise the guarded Recycle refusal and exact-item Skip against a configured SMB test fixture.
