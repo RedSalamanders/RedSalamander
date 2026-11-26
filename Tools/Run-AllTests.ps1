@@ -184,7 +184,7 @@
     Run ID or run-directory path beneath X:\RedSalamander.Perf\evidence\runs used by Resume.
 
 .PARAMETER DeferPrGate
-    Retired. Use the local Test-Changes.ps1 -Mode PrePush entry point.
+    Retired. Use the local test.ps1 -Mode PrePush entry point.
 
 .PARAMETER NonInteractive
     Omits entries that require the person's desktop; omitted acceptance remains pending.
@@ -293,7 +293,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 if ($DeferPrGate) {
-    throw 'DeferPrGate is retired. Use Test-Changes.ps1 -Mode PrePush for the full local obligation.'
+    throw 'DeferPrGate is retired. Use test.ps1 -Mode PrePush for the full local obligation.'
 }
 if ($NonInteractive -and $ValidationMode -eq 'Resume') { throw 'NonInteractive cannot alter the coverage of an exact Full Resume.' }
 

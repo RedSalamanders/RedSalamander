@@ -1,10 +1,8 @@
 <#
 .SYNOPSIS
-Runs the governed affected plan or full local validation.
+Compatibility entry point for RedSalamander scoped tests.
 .DESCRIPTION
-Reuses Run-AllTests impact, receipts and explicit exact Resume. Default iteration is
-Affected. PrePush keeps all native obligations local because the PR gate runs
-compiler-free checks.
+Forwards the existing parameters to the root test.ps1 and returns its exit code.
 .PARAMETER Mode
 Affected (default), Full, or PrePush.
 .PARAMETER BaseRef
@@ -69,27 +67,5 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-# Pending fragments are folded on the default branch after merge. The pinned validator checks the exact fold or generated release transition.
-# BaseRef defaults to origin/HEAD for the impact comparison; the changelog is compared with origin/main unless a BaseRef is supplied.
-if (-not $Explain) {
-    $changelogArguments = @{}
-    if ($Mode -eq 'PrePush') {
-        $changelogArguments.Base = if ($PSBoundParameters.ContainsKey('BaseRef') -and $BaseRef) { $BaseRef } else { 'origin/main' }
-    }
-    & (Join-Path $PSScriptRoot 'Tools/Test-Changelog.ps1') @changelogArguments
-}
-Import-Module (Join-Path $PSScriptRoot 'Tools/Modules/Testing/ScopedTesting.psm1') -Force
-Write-Host "Native test naming: $(Assert-ScopedTestNames $PSScriptRoot) files checked."
-if ($Suite -and $Mode -ne 'Affected') {throw 'Focused Suite is valid only for Affected iteration.'}
-if ($ResumeFrom -and ($Mode -ne 'Full' -or -not $Interactive)) {throw 'Exact Full Resume requires Mode Full and the same interactive coverage as its origin.'}
-$arguments=@{Suite='Full';Configuration=$Configuration;Platform=$Platform;ImpactBase=$BaseRef;SkipBuild=$SkipBuild;NonInteractive=(-not $Interactive);ValidationMode='Fresh';TestRoot=$TestRoot;AllowAlternateVolumeTestRoot=$AllowAlternateVolumeTestRoot}
-if ($Mode -eq 'Affected') {$arguments.ValidationMode='Affected'}
-if ($Suite) {$arguments.Suite=$Suite;$arguments.ValidationMode='Fresh';$arguments.CaseFilter=$CaseFilter;$arguments.CommandsFamily=$CommandsFamily}
-elseif ($CaseFilter -or $CommandsFamily) {throw 'CaseFilter and CommandsFamily require a focused Suite.'}
-if ($ResumeFrom) {$arguments.ValidationMode='Resume';$arguments.ResumeFrom=$ResumeFrom}
-if ($Mode -eq 'PrePush') {
-    Write-Host 'PrePush selects the full local obligation. GitHub PR checks are compiler-free.'
-}
-if ($Explain) {$arguments.ExplainPlan=$true}
-& (Join-Path $PSScriptRoot 'Tools/Run-AllTests.ps1') @arguments
+& (Join-Path $PSScriptRoot 'test.ps1') @PSBoundParameters
 exit $LASTEXITCODE

@@ -953,7 +953,7 @@ Describe 'Pinned build-tool and CI identity' {
         $nightly | Should Match '(?m)^        default: Full\s*$'
         $nightly | Should Match '(?m)^      scope: \$\{\{ inputs\.scope \}\}\s*$'
         $nightly | Should Not Match 'schedule:|pull_request:|push:'
-        $scopedEntry = Get-Content -LiteralPath (Join-Path $repoRoot 'Test-Changes.ps1') -Raw
+        $scopedEntry = Get-Content -LiteralPath (Join-Path $repoRoot 'test.ps1') -Raw
         $scopedEntry | Should Not Match 'Get-ScopedPrCoverage|DeferPrGate'
     }
 

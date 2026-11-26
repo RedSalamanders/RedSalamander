@@ -422,7 +422,7 @@
       "path": "Tools/Test-Changelog.ps1",
       "usedBy": [
         "Manual developer use",
-        "Test-Changes.ps1",
+        "test.ps1",
         ".github/workflows/ci.yml",
         "Tools/Submit-ChangelogFold.ps1",
         "Tools/Tests/Changelog.Tests.ps1"
@@ -545,7 +545,7 @@
       "purpose": "Validate contextual native test naming and inventory membership. The Git query preserves repository-relative paths.",
       "usage": "Import from Test-Changes and its focused policy tests; canonical Startrail owns execution and evidence.",
       "usedBy": [
-        "Test-Changes.ps1",
+        "test.ps1",
         "Tools/Tests/ScopedTesting.Tests.ps1"
       ],
       "prerequisites": [

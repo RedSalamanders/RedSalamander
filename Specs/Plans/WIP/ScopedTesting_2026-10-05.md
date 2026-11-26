@@ -11,9 +11,10 @@ Owner: [current validation contract](../../Testing/Testing_ValidationEvidence.md
 The 26 November tooling batch keeps native PrePush coverage local, retires the old delegation machinery and version 1 scope manifest, and introduces the pinned validators.
 The next part implements the RedSalamander adapter in the [shared scoped-testing design](https://github.com/RedSalamanders/.github/blob/74673c5ef71e880ece602709949d3b614c903d57/Specs/Plans/WIP/SharedProjectTooling_2026-11-18.md#t4-design-one-planner-one-runner-per-repository-data-for-the-owners-review).
 
-1. Add the canonical root `test.ps1` adapter around `Tools/Run-AllTests.ps1`. Use the same profile and build number
-   as the shared runner's test-enabled build. Preserve VS and vcpkg selection, the marked external evidence root and
-   native architecture checks.
+1. The root `test.ps1` now exposes affected, Full, PrePush and focused selection through `Tools/Run-AllTests.ps1`.
+   It forwards an explicit profile and build number and preserves the external evidence root, native architecture
+   checks and exact Resume. `Test-Changes.ps1` forwards its existing parameters to this entry point. The shared
+   runner's native suite list and report adapter follow the scope migration below.
 2. Translate `Tools/validation-impact.json` to version 2 scope data. Map every current standalone and in-product
    obligation, and route full selection through the current canonical Full plan. Compare new selections against the
    current plan for source edits, staged and unstaged edits, additions, deletions, renames across scope boundaries,

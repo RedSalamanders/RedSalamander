@@ -1,0 +1,1 @@
+- Add the root `test.ps1` command for affected and full local testing. Preserve `Test-Changes.ps1` as a compatibility command.

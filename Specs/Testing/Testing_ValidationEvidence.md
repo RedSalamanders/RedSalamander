@@ -130,7 +130,7 @@ and normative consistency maps have explicit dependent build/test surfaces. An u
 Markdown documentation may use the documentation-only/no-validation mapping.
 
 Changelog Markdown directly under `Changes/` has a reviewed no-native-build mapping.
-`Test-Changes.ps1` validates fragments before every non-explanation execution, including
+`test.ps1` validates fragments before every non-explanation execution, including
 Affected and Full; PrePush additionally checks the base-bound exact-fold contract.
 Malformed fragments fail validation even when no native entry is affected. Executable,
 unknown-format and nested inputs in `Changes/` retain conservative fallback.
@@ -549,7 +549,7 @@ runner owns control are not remapped.
 
 Active native test sources, helpers, fixtures and seams MUST use `Scope.Tests.Something.h/.cpp`. `Tests/native-test-files.json` owns active membership. Historical archived harnesses and sealed reproduction inputs keep their original identity; they do not define new source naming. Rename project entries, includes, current inventories and callers together. DxUi historical source/test origins retain their original identities and map to current paths separately.
 
-`Test-Changes.ps1` is the ordinary iteration entrypoint. Its default is affected coverage, including committed changes since a local merge base and independent staged, unstaged, deletion, rename-side and untracked discovery. No ref is fetched. Unknown executable inputs widen coverage; prose alone does not require native tests. Explanations name paths, consumers and fallback reasons. Explicit selectors reject unknown scopes. Affected, filtered and environment-reduced coverage MUST NOT be reported as a full repository pass.
+`test.ps1` is the ordinary iteration entry point. `-Full` selects the canonical Full plan and `-BuildNumber` forwards an explicit build number. `Test-Changes.ps1` preserves the previous command and parameter names. The default is affected coverage, including committed changes since a local merge base and independent staged, unstaged, deletion, rename-side and untracked discovery. No ref is fetched. Unknown executable inputs widen coverage; prose alone does not require native tests. Explanations name paths, consumers and fallback reasons. Explicit selectors reject unknown scopes. Affected, filtered and environment-reduced coverage MUST NOT be reported as a full repository pass.
 The entrypoint forwards explicit `-AllowAlternateVolumeTestRoot` unchanged to the canonical runner in Full and focused
 FileOps work. Its default remains disabled. An enabled `path.local.alternate` resource restricts the selected root;
 neither that resource nor the forwarding switch supplies authorization to initialize a new drive-root workspace.
