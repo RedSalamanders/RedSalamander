@@ -23,7 +23,7 @@ matching props text does not establish evaluated build output ownership.
 Filtered Ghostty Commands qualification verifies archived native case bytes and
 selection, current source/artifact receipt, both aggregate summaries and invocation
 identity before accepting directed exit 2. Repository coverage remains NOT_EVALUATED.
-ScopedTesting retains planning/delegation only; canonical Startrail owns receipts.
+The shared scope manifest selects exact unattended entry IDs. The canonical runner owns their execution and evidence. The selected-suite adapter projects the completed archive into the shared report format under `.build/reports`.
 
 Native startup diagnostics print the start and elapsed time of File Operations
 profile/volume setup, the existing interactive lease wait, and contained process

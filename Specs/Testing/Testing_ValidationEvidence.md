@@ -550,6 +550,24 @@ runner owns control are not remapped.
 Active native test sources, helpers, fixtures and seams MUST use `Scope.Tests.Something.h/.cpp`. `Tests/native-test-files.json` owns active membership. Historical archived harnesses and sealed reproduction inputs keep their original identity; they do not define new source naming. Rename project entries, includes, current inventories and callers together. DxUi historical source/test origins retain their original identities and map to current paths separately.
 
 `test.ps1` is the ordinary iteration entry point. `-Full` selects the canonical Full plan and `-BuildNumber` forwards an explicit build number. `Test-Changes.ps1` preserves the previous command and parameter names. The default is affected coverage, including committed changes since a local merge base and independent staged, unstaged, deletion, rename-side and untracked discovery. No ref is fetched. Unknown executable inputs widen coverage; prose alone does not require native tests. Explanations name paths, consumers and fallback reasons. Explicit selectors reject unknown scopes. Affected, filtered and environment-reduced coverage MUST NOT be reported as a full repository pass.
+The shared [scope manifest](../../Tests/test-scopes.json) maps changed paths to the canonical Full entry IDs.
+Specific source rules retain their selections and ordered fallbacks cover unclassified inputs.
+Interactive entries remain separately declared and require the canonical desktop admission path.
+The human-managed planning note and archived test evidence do not participate in shared scope discovery.
+
+The shared runner calls `test.ps1 -Suites <entry IDs>` with exact noninteractive scopes. The adapter preserves the
+canonical Full order, including the toolchain artifact writer and re-attestation before any artifact readers.
+It refuses empty, unknown, duplicate, desktop-required and non-native selections before any run-directory or
+build work. `-SkipBuild` still requires the canonical test-enabled artifact receipt. Normal Full, PrePush and
+exact Resume continue through their existing entry points.
+
+Once the canonical runner seals the archived summary, the adapter compares its bytes with the just-completed result
+and writes [shared suite report metadata](ScopedSuiteReport.schema.json) to the owning profile's
+`.build/reports/<entry>-<platform>-<configuration>.json` names. Each report binds the run ID and both summary and
+entry evidence digests. Failures, incomplete promotions and skips remain visible. The shared command's exit 0 proves
+verified selected execution and the archive retains its filtered repository verdict. Startrail remains the source
+of evidence and shared scope reuse stays disabled.
+
 The entrypoint forwards explicit `-AllowAlternateVolumeTestRoot` unchanged to the canonical runner in Full and focused
 FileOps work. Its default remains disabled. An enabled `path.local.alternate` resource restricts the selected root;
 neither that resource nor the forwarding switch supplies authorization to initialize a new drive-root workspace.

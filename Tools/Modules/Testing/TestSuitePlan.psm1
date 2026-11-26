@@ -371,7 +371,27 @@ function Get-RSTestRunPlan {
     return $plan
 }
 
+function Select-RSScopedTestRunEntries {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object[]]$Entries,
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$EntryId
+    )
+
+    $selected = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($id in $EntryId) {
+        $entry = @($Entries | Where-Object Id -CEQ $id)
+        if ($entry.Count -ne 1 -or $entry[0].RequiresInteractiveDesktop) {
+            throw "Unknown or desktop-required scoped test entry '$id'."
+        }
+        if (-not $selected.Add($id)) { throw "Duplicate scoped test entry '$id'." }
+    }
+    # The Full plan owns execution order, including artifact writers before their readers.
+    $Entries | Where-Object { $selected.Contains([string]$_.Id) }
+}
+
 Export-ModuleMember -Function @(
+    'Select-RSScopedTestRunEntries',
     'Get-RSCommandsSelfTestFamilies',
     'Get-RSDxUiTestSuites',
     'Get-RSViewerTestGroups',

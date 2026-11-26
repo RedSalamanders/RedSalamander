@@ -99,6 +99,100 @@ $global:LASTEXITCODE=2
     It 'accounts for all active native sources with contextual test names' {(Assert-ScopedTestNames $repoRoot) | Should BeGreaterThan 0}
 }
 
+Describe 'Shared scope data and report contract' {
+    It 'matches canonical noninteractive entries in all six profiles and keeps declared desktop obligations' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSuitePlan.psm1') -Scope Local
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationImpact.psm1') -Scope Local
+        Import-Module (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.ScopedTesting.psm1') -Scope Local -Prefix CI
+        $shared = Read-CIScopedTestManifest -Root $repoRoot
+        $impact = Read-RSValidationImpactManifest -RepoRoot $repoRoot `
+            -Path (Join-Path $repoRoot 'Tools/validation-impact.json') `
+            -SchemaPath (Join-Path $repoRoot 'Specs/Testing/ValidationImpact.schema.json')
+        $changed = @(
+            @{ paths=@('RedSalamander/SelfTest/CompareDirectories/new.cpp') },
+            @{ paths=@('RedSalamander/SelfTest/Commands/new.cpp') },
+            @{ paths=@('Tests/SettingsSchemaTests/renamed.cpp','Tests/LocalizationTests/original.cpp') },
+            @{ paths=@('Tests/Unregistered/new.cpp') },
+            @{ paths=@('Plugins/ViewerSqlite/new.cpp') },
+            @{ paths=@('Tools/Tests/deleted.ps1','Specs/Testing/foo.md') },
+            @{ paths=@('Specs/Testing/new.json5') },
+            @{ paths=@('Dependencies/RedMonitor.lock.json') },
+            @{ paths=@('docs/usage.md','Changes/2026-11-26-fixture.md') },
+            @{ paths=@('unclassified/new-input') }
+        )
+        $desktop = @((Get-CIScopedInteractiveObligations -Manifest $shared -Full).suite | Sort-Object)
+        foreach ($platform in 'x64','ARM64') {
+            foreach ($configuration in 'Debug','Release','ASan Debug') {
+                $executable = Join-Path $repoRoot ".build/$platform/$configuration/RedSalamander.exe"
+                $plan = @(Get-RSTestRunPlan -Suite Full -RepoRoot $repoRoot -Platform $platform `
+                        -Configuration $configuration -RedSalamanderExePath $executable)
+                $portable = @($plan | Where-Object { -not $_.RequiresInteractiveDesktop })
+                ($desktop -join ',') | Should Be (@($plan | Where-Object RequiresInteractiveDesktop | ForEach-Object Id | Sort-Object) -join ',')
+                ((@($shared.scopes | Where-Object native | ForEach-Object name) -join ',')) | Should Be ($portable.Id -join ',')
+                @($shared.scopes | Where-Object reuse).Count | Should Be 0
+                foreach ($case in $changed) {
+                    $tags = @(foreach ($path in $case.paths) {
+                        Get-RSValidationImpactRulesForPath -Manifest $impact -Path $path | ForEach-Object impact_tags
+                    })
+                    $expected = @($portable | Where-Object { @($_.ImpactTags | Where-Object { $_ -cin $tags }).Count } | ForEach-Object Id)
+                    $actual = @( (Get-CIScopedTestPlan -Manifest $shared -ChangedPaths $case.paths -Configuration $configuration).scopes |
+                        Where-Object { $_ -cne 'CompilerFreeValidation' } )
+                    ($actual -join ',') | Should Be ($expected -join ',')
+                }
+                $selection = @(Select-RSScopedTestRunEntries -Entries $plan -EntryId @('standalone.settings-schema','tooling.pester-build-toolchain'))
+                ($selection.Id -join ',') | Should Be 'tooling.pester-build-toolchain,standalone.settings-schema'
+                @($selection[0].ArtifactWriteIds).Count | Should BeGreaterThan 0
+                { Select-RSScopedTestRunEntries -Entries $plan -EntryId @('selftest.commands') } | Should Throw
+                { Select-RSScopedTestRunEntries -Entries $plan -EntryId @('missing.entry') } | Should Throw
+                { Select-RSScopedTestRunEntries -Entries $plan -EntryId @('selftest.compare-directories','selftest.compare-directories') } | Should Throw
+            }
+        }
+    }
+
+    It 'projects only fresh promotions and retains scoped skips and failure' {
+        $module = Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestRunSummary.psm1') -Scope Local -PassThru
+        $schema = Join-Path $repoRoot 'Specs/Testing/ScopedSuiteReport.schema.json'
+        & $module {
+            param($SchemaPath)
+            $runId = '20261126T120000Z-1-' + ('3' * 32)
+            $entry = [pscustomobject]@{ Id='standalone.settings-schema'; Name='SettingsSchemaTests'; RequiresInteractiveDesktop=$false }
+            $summary = [pscustomobject]@{
+                schema='red-salamander.run-all-tests.v2'; validation_mode='Fresh'; requested_gate='Full'; coverage_scope='filtered'
+                run_id=$runId; repository_verdict='NOT_EVALUATED'; change_verdict='PASSED'
+                entries=@([pscustomobject]@{ id=$entry.Id; execution='executed'; promotion_state='promoted'; origin_run_id=$runId; evidence_digest=('a'*64) })
+            }
+            $legacy = [pscustomobject]@{
+                run_id=$runId; platform='ARM64'; configuration='ASan Debug'
+                suites=@([pscustomobject]@{ suite=$entry.Name; exit_code=0; failed=0; skipped=2 })
+            }
+            $arguments = @{ Summary=$summary; LegacySummary=$legacy; Entry=@($entry); SummarySha256=('b'*64); RunExitCode=2 }
+            $report = Get-RSScopedSuiteReports @arguments
+            $report.exitCode | Should Be 0
+            $report.skips.Count | Should Be 1
+            $report.platform | Should Be 'ARM64'
+            $report.configuration | Should Be 'ASan Debug'
+            $report.summarySha256 | Should Be ('b'*64)
+            $report.evidenceDigest | Should Be ('a'*64)
+            (Test-Json -Json (ConvertTo-Json -InputObject $report -Depth 6) -SchemaFile $SchemaPath) | Should Be $true
+            $legacy.suites[0].skipped = 0
+            (Get-RSScopedSuiteReports @arguments).skips.Count | Should Be 0
+            $summary.entries[0].execution = 'reused'
+            (Get-RSScopedSuiteReports @arguments).exitCode | Should Be 1
+            $summary.entries[0].execution = 'executed'
+            $summary.entries[0].promotion_state = 'incomplete'
+            (Get-RSScopedSuiteReports @arguments).exitCode | Should Be 1
+            $summary.entries[0].promotion_state = 'promoted'
+            $legacy.suites[0].failed = 1
+            (Get-RSScopedSuiteReports @arguments).exitCode | Should Be 1
+            $legacy.suites[0].failed = 0
+            $arguments.RunExitCode = 5
+            (Get-RSScopedSuiteReports @arguments).exitCode | Should Be 1
+            $legacy.run_id = 'another-run'
+            { Get-RSScopedSuiteReports @arguments } | Should Throw
+        } $schema
+    }
+}
+
 Describe 'Canonical scoped evidence authority' {
     It 'keeps obsolete receipt and source identity exports absent' {
         $exports = @((Get-Module ScopedTesting).ExportedCommands.Keys)

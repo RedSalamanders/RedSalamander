@@ -166,6 +166,11 @@
     Optional output path for -ExplainPlan. It must remain beneath
     X:\RedSalamander.Perf\evidence.
 
+.PARAMETER ScopedEntryId
+    Shared suite-report mode. Requires Fresh Full with NonInteractive. Selects
+    exact canonical entry IDs and retains the Full plan's artifact ordering.
+    The shared command sees exit 0 only for verified selected execution. The
+    archive keeps its filtered verdict and its ordinary failure or incomplete exit.
 .PARAMETER ResultReferencePath
     Create-only exact summary reference beneath the marked sandbox, for an unfiltered
     Fresh CI or Full run. Parent must exist. Existing destinations are refused before
@@ -196,7 +201,9 @@
     No supported pipeline objects. Writes a color summary and runner-owned JSON, JSONL,
     Markdown, trace, and self-test artifacts beneath REDSALAMANDER_TEST_ROOT. Exit codes:
     0 PASSED, 1 FAILED, 2 NOT_EVALUATED, 3 invalid CLI/plan,
-    4 blocked/missing attestation, and 5 corrupt evidence.
+    4 blocked/missing attestation, and 5 corrupt evidence. ScopedEntryId also
+    projects suite report metadata under .build/reports and maps successful filtered
+    execution to exit 0 for the shared runner.
 
 .NOTES
     Prerequisites: PowerShell 7, the repository build toolchain unless -SkipBuild is used, and an interactive desktop for UI-driven suites. Side effects: acquires the selected platform/configuration artifact lock, holds the Windows-session mutex only around marked interactive entries, may build the solution, launches contained child test processes, and replaces runner-owned directories beneath the selected marked sandbox. Alternate-volume roots require an explicit switch. It does not terminate unrelated processes or block other profiles/worktrees. Primary consumers: local closeout, GitHub CI, and nightly test workflows.
@@ -286,7 +293,9 @@ param(
 
     [switch]$DeferPrGate,
 
-    [switch]$NonInteractive
+    [switch]$NonInteractive,
+
+    [ValidateNotNullOrEmpty()][string[]]$ScopedEntryId = @()
 )
 
 Set-StrictMode -Version Latest
@@ -301,6 +310,11 @@ function Exit-RSInvalidRunnerInvocation {
     param([Parameter(Mandatory = $true)][string]$Message)
     Write-Host "INVALID CLI/PLAN: $Message" -ForegroundColor Red
     exit 3
+}
+
+if ($ScopedEntryId.Count -and ($Suite -cne 'Full' -or $ValidationMode -cne 'Fresh' -or
+        -not $NonInteractive -or $CaseFilter -or $CommandsFamily -or $ExplainPlan -or $ResultReferencePath)) {
+    Exit-RSInvalidRunnerInvocation 'ScopedEntryId requires Fresh Full with NonInteractive and exact entry selection.'
 }
 
 if ($ValidationMode -eq 'Resume') {
@@ -336,6 +350,25 @@ if (-not [string]::IsNullOrWhiteSpace($CommandsFamily)) {
     $knownCommandsFamilies = @(Get-RSCommandsSelfTestFamilies | ForEach-Object { $_.name })
     if ($Suite -ne 'Commands' -or $CommandsFamily -notin $knownCommandsFamilies) {
         Exit-RSInvalidRunnerInvocation "-CommandsFamily requires -Suite Commands and one of: $($knownCommandsFamilies -join ', ')."
+    }
+}
+
+$expectedExeFullPath = [IO.Path]::GetFullPath(
+    (Join-Path $repoRoot ".build\$Platform\$Configuration\RedSalamander.exe"))
+$scopedExecutionEntries = @()
+if ($ScopedEntryId.Count) {
+    if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ine $Platform) {
+        Exit-RSInvalidRunnerInvocation "Shared scoped execution requires a native $Platform host."
+    }
+    try {
+        $fullEntries = @(Get-RSTestRunPlan -Suite Full -RepoRoot $repoRoot -Platform $Platform `
+                -Configuration $Configuration -RedSalamanderExePath $expectedExeFullPath `
+                -TimeoutMultiplier $TimeoutMultiplier -FailFast:$FailFast -RepeatCount $SelfTestRepeat `
+                -ShuffleSeed $SelfTestShuffleSeed -PerfBudgetPath $PerfBudgetPath -RequirePerfBudgets:$RequirePerfBudgets `
+                -SelfTestFlakyProofCase $SelfTestFlakyProofCase -SelfTestOrderProofCase $SelfTestOrderProofCase)
+        $scopedExecutionEntries = @(Select-RSScopedTestRunEntries -Entries $fullEntries -EntryId $ScopedEntryId)
+    } catch {
+        Exit-RSInvalidRunnerInvocation $_.Exception.Message
     }
 }
 
@@ -1429,8 +1462,6 @@ function Format-RSCoverageReason {
     return ($parts -join '; ')
 }
 
-$expectedExeFullPath = [IO.Path]::GetFullPath(
-    (Join-Path $repoRoot ".build\$Platform\$Configuration\RedSalamander.exe"))
 if ($ExplainPlan) {
     if (-not [string]::IsNullOrWhiteSpace($ExePath)) {
         Exit-RSInvalidRunnerInvocation '-ExplainPlan does not accept -ExePath because it does not launch an executable.'
@@ -1776,6 +1807,10 @@ if ($null -eq $receipt) {
     Write-Host "BLOCKED ATTESTATION: validation requires a schema-valid build receipt for $Configuration|$Platform." -ForegroundColor Red
     exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
 }
+if ($ScopedEntryId.Count -and -not $receipt.tests_enabled) {
+    Write-Host 'BLOCKED ATTESTATION: shared scoped execution requires a test-enabled build receipt.' -ForegroundColor Red
+    exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
+}
 
 Import-RSRunnerValidationModules
 
@@ -1788,7 +1823,8 @@ if ((-not $useAffectedSelectedBuild -or @($prebuildAffectedEntries | Where-Objec
 
 # --- Determine test plan ---
 
-$testPlan = @(Get-RSRunnerRequestedTestPlan)
+$testPlan = if ($ScopedEntryId.Count) { $scopedExecutionEntries } else { @(Get-RSRunnerRequestedTestPlan) }
+$testPlan = @($testPlan)
 if ($useAffectedSelectedBuild) {
     $afterBuildWorkspace = Get-RSWorkspaceSnapshot -RepoRoot $repoRoot -ImpactBase $ImpactBase
     if ($afterBuildWorkspace.snapshot_id -cne $prebuildWorkspaceSnapshot.snapshot_id) {
@@ -2952,6 +2988,12 @@ if ($terminalState -in @('FAILED', 'CORRUPT_EVIDENCE')) {
     Write-Host ""
 }
 
+    if ($ScopedEntryId.Count) {
+        $reportedAll = Write-RSScopedSuiteReports -RepoRoot $repoRoot -SummaryPath $runSummaryPath `
+            -Summary $summaryForConsumers -LegacySummary $runSummary -Entry $testPlan -RunExitCode $overallExitCode
+        if ($reportedAll) { exit 0 }
+        if ($overallExitCode -eq 2) { exit 1 }
+    }
     exit $overallExitCode
 }
 finally {

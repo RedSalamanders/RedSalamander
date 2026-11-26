@@ -14,7 +14,7 @@ checks use the exact clean external pin through the shared resolver, never a rem
 
 The default uses local merge-base changes plus staged, unstaged and untracked work. `Test-Changes.ps1` still accepts the existing parameters. Read the explanation before a large run. Unknown code/build inputs widen coverage. Selected work is partial evidence. PrePush keeps the full native obligation local. GitHub PR checks are compiler-free.
 
-Native test files use `Scope.Tests.Something.h/.cpp`; register new active files in `native-test-files.json`. `Tools/validation-impact.json` owns affected selection through the canonical run plan. Shared-library or runtime byte changes conservatively invalidate local standalone reuse. No consumer dependency pin changes are part of this workflow.
+Native test files use `Scope.Tests.Something.h/.cpp`; register new active files in `native-test-files.json`. `Tools/validation-impact.json` owns affected selection through the canonical run plan. The version 2 `Tests/test-scopes.json` maps the shared planner to those same entry IDs. Explicit shared selections produce archive-bound suite report metadata while native evidence stays in the marked sandbox. Shared-library or runtime byte changes conservatively invalidate local standalone reuse. No consumer dependency pin changes are part of this workflow.
 
 For independent resource investigations, force fresh execution and retain paired fixture/build provenance. Timing, native ARM64, real devices, IME/assistive technology and foreground input remain separate qualification requirements. These commands do not manufacture those claims.
 
@@ -33,7 +33,7 @@ fingerprint command-surface setup; an isolated Describe requires the same import
 ./test.ps1 -Full -Interactive -ResumeFrom $completedRunId
 ```
 
-Execution and evidence remain owned by Tools/Run-AllTests.ps1. Exit 2 means incomplete repository coverage even when selected assertions pass. Focus-taking work is pending unless Interactive is requested after agreement to the time; a selection made only of pending work executes nothing, lists it as PENDING_INTERACTIVE and exits 2. Test paths remain beneath the existing marked X:\RedSalamander.Perf root. The wrapper does not authorize root initialization. Tools/Get-TestInventory.ps1 is the live coverage inventory.
+Execution and evidence remain owned by Tools/Run-AllTests.ps1. For the ordinary commands, exit 2 means incomplete repository coverage even when selected assertions pass. Focus-taking work is pending unless Interactive is requested after agreement to the time; a selection made only of pending work executes nothing, lists it as PENDING_INTERACTIVE and exits 2. Test paths remain beneath the existing marked X:\RedSalamander.Perf root. The wrapper does not authorize root initialization. Tools/Get-TestInventory.ps1 is the live coverage inventory.
 
 # RedSalamander Test Infrastructure
 

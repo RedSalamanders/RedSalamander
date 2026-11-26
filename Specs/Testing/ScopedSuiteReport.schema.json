@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RedSalamander shared scoped suite report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "scope",
+    "runId",
+    "platform",
+    "configuration",
+    "summarySha256",
+    "evidenceDigest",
+    "exitCode",
+    "skips"
+  ],
+  "properties": {
+    "schema": {
+      "const": "red-salamander.scoped-suite-report.v1"
+    },
+    "scope": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9.-]*$"
+    },
+    "runId": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{32}$"
+    },
+    "platform": {
+      "enum": [
+        "x64",
+        "ARM64"
+      ]
+    },
+    "configuration": {
+      "enum": [
+        "Debug",
+        "Release",
+        "ASan Debug"
+      ]
+    },
+    "summarySha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "evidenceDigest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "exitCode": {
+      "enum": [
+        0,
+        1
+      ]
+    },
+    "skips": {
+      "type": "array",
+      "maxItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100
+      }
+    }
+  }
+}

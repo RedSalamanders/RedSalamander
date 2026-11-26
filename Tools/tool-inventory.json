@@ -1580,7 +1580,7 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Build, verify the selected executable/plugin receipt closure, project non-secret machine resources, and execute canonical validation with fail-closed normalized results and typed 0..5 exits. Each contained FileOperations launch isolates its LOCALAPPDATA in governed scratch without changing the parent environment. After artifact re-attestation, cached receipt bindings and downstream entry fingerprints describe the same verified receipt. Noninteractive planning and execution report empty or nonempty desktop-pending selections without blocking admitted entries. Standalone scheduling retains later entries when the cheap selection is empty, including PR-deferred Full. Early-exit case inventory does not acquire the desktop lease; actual tests retain declared desktop admission. Rejected validation contracts append their reason codes and unallowed skipped case names without losing earlier diagnostics or changing executed case statuses. Re-attestation preserves the independently verified dependency recipe, key, manifest and original SDK descriptor before native execution. Alternate-volume opt-in uses only existing explicitly initialized marked roots and never creates or marks a physical drive-root sandbox. Optional RequireCleanQuarantine rejects invalid or blocking parsed state before native work and forbids every repair dispatch; default-false callers retain the ordinary blocking repair lane. All three tracked build-graph enumerations use contained no-window metadata capture and refuse nonzero discovery before governance admission.",
+      "purpose": "Build, verify the selected executable/plugin receipt closure, project non-secret machine resources, and execute canonical validation with fail-closed normalized results and typed 0..5 exits. Each contained FileOperations launch isolates its LOCALAPPDATA in governed scratch without changing the parent environment. After artifact re-attestation, cached receipt bindings and downstream entry fingerprints describe the same verified receipt. Noninteractive planning and execution report empty or nonempty desktop-pending selections without blocking admitted entries. Standalone scheduling retains later entries when the cheap selection is empty, including PR-deferred Full. Early-exit case inventory does not acquire the desktop lease; actual tests retain declared desktop admission. Rejected validation contracts append their reason codes and unallowed skipped case names without losing earlier diagnostics or changing executed case statuses. Re-attestation preserves the independently verified dependency recipe, key, manifest and original SDK descriptor before native execution. Alternate-volume opt-in uses only existing explicitly initialized marked roots and never creates or marks a physical drive-root sandbox. Optional RequireCleanQuarantine rejects invalid or blocking parsed state before native work and forbids every repair dispatch; default-false callers retain the ordinary blocking repair lane. All three tracked build-graph enumerations use contained no-window metadata capture and refuse nonzero discovery before governance admission. Shared scoped execution selects canonical unattended entry IDs and projects the completed archive to compatible suite reports.",
       "usage": "Use -Suite PR (the pull-request/push gate), CI (the nightly suite), or Full with -ValidationMode Fresh for authoritative gates, Full Resume/Affected for their documented narrower roles, or a focused suite/family for iteration. Exact SMB Rename case filters select one of the two guarded binding routes without activation. FileOps_SmbRecycleRefusal checks the live guarded Shell refusal and Skip on one owned SMB file without activating the desktop. The exact FileOps_ClearCompletedScope case uses a private popup and also runs without desktop admission. The exact C0_CurlCommittedMutationResponseLost case uses a loopback provider fixture without desktop admission. The exact FileOps_ProviderCapabilityMatrix case exercises private providers and task decisions without desktop admission. The exact repeated non-clipboard Copy and Move cases use owned tasks without desktop admission. The exact FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof case uses an owned provider and synthetic task decisions without desktop admission. The exact R0fGraph_FakeGraphReadWriteCreateRenameRecycle case uses the owned Graph loopback. The exact Phase16_RemoteOneDrivePersonalInlineRename and Phase16_RemoteSftpInlineRename cases use saved sign-in and configured live fixtures without desktop admission. Test-generated local data and validation evidence stay beneath exact X:/RedSalamander.Perf; select X with -TestRoot or REDSALAMANDER_TEST_ROOT and use -AllowExternalTestRoot only for first initialization. All six x64/ARM64 Debug/Release/ASan Debug profiles are admitted; Full artifact writers and native inventory use that exact profile.",
       "usedBy": [
         "Developers",
@@ -1613,7 +1613,8 @@
         "Markdown dashboard",
         "Case history",
         "Whole-run evidence trees and create-only SHA-256 relocation receipts",
-        "Optional create-only exact summary reference under the marked sandbox"
+        "Optional create-only exact summary reference under the marked sandbox",
+        "Verified shared suite report projections under .build/reports for explicit scoped calls"
       ],
       "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
       "tests": [
@@ -2898,7 +2899,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Build canonical aggregate-v2 summaries from semantically verified promotion evidence, including exact local Resume references to individually promoted entries in closed failed/interrupted origins; retain v1 sidecars with the final typed runner exit code, map terminal states to the documented 0..5 exit taxonomy, and render case history, dashboards, JSONL, and GitHub step summaries. Publish final archived artifact navigation while preserving native provenance. Publish and validate create-only exact CI summary references without timestamp discovery.",
+      "purpose": "Build canonical aggregate-v2 summaries from semantically verified promotion evidence, including exact local Resume references to individually promoted entries in closed failed/interrupted origins; retain v1 sidecars with the final typed runner exit code, map terminal states to the documented 0..5 exit taxonomy, and render case history, dashboards, JSONL, and GitHub step summaries. Publish final archived artifact navigation while preserving native provenance. Publish and validate create-only exact CI summary references without timestamp discovery. Project explicitly selected suite reports from matching, verified canonical archive bytes.",
       "usage": "Loaded through the TestRunPlan facade; summary consumers must prefer v2, treat BLOCKED as corrupt evidence, and retain explicit v1 compatibility handling during migration.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
@@ -2911,16 +2912,19 @@
         "Specs/Testing/RunAllTestsSummary.schema.json",
         "Tools/Modules/Testing/ValidationEvidence.psm1",
         "Specs/Testing/RunResultReference.schema.json",
+        "Specs/Testing/ScopedSuiteReport.schema.json",
         "Tools/Modules/Testing/TestSandbox.psm1"
       ],
       "sideEffects": [
-        "Create-only result reference publication beneath the marked sandbox."
+        "Create-only result reference publication beneath the marked sandbox.",
+        "Atomic shared suite report publication beneath the repository .build/reports directory."
       ],
       "outputs": [
         "Aggregate-v2 and compatibility-v1 run-summary objects",
         "Typed validation exit codes",
         "Case-history rows, JSONL text, dashboard Markdown, and GitHub step-summary Markdown",
-        "Exact run-result reference JSON"
+        "Exact run-result reference JSON",
+        "Shared suite reports with canonical run, archive hash and entry evidence digest"
       ],
       "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
       "tests": [
@@ -2929,7 +2933,8 @@
         "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
         "Tools/Tests/MtpLiveCloseout.Tests.ps1",
         "Tools/Tests/TestRunEvidenceArchive.Tests.ps1",
-        "Tools/Tests/RunResultReference.Tests.ps1"
+        "Tools/Tests/RunResultReference.Tests.ps1",
+        "Tools/Tests/ScopedTesting.Tests.ps1"
       ],
       "replacement": null
     },
@@ -3016,7 +3021,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Construct declarative stable-ID validation entries with FileOps desktop serialization independent of no-activation, exact no-activation Commands cases for static documentation, cache cancellation, synthetic FolderView drops, the owned archive roundtrip and main-menu architecture, plus eleven exact case-sensitive FileOps-only owned progress/callback/storage lease exceptions including identity-less Delete and identity-interlock waiting, fresh selection convergence and real SMB Copy/Move shape parity, its exact documentation interaction opt-in, other explicit GUI activation groups, the fourteen Commands family contracts, and isolated selected-profile artifact-mutating Pester coverage for each Run-AllTests suite. The closed case-sensitive FileOps no-desktop list additionally admits the exact FileOps_PopupIdleCadence, FileOps_AlertOverlayUxAccessibility, FileOps_DeferredExitRefusesNewWork, FileOps_ClearCompletedScope, C0_CurlCommittedMutationResponseLost, FileOps_ProviderCapabilityMatrix, FileOps_RepeatedNonClipboardCopyStorage, FileOps_RepeatedNonClipboardMoveStorage, FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof, R0fGraph_FakeGraphReadWriteCreateRenameRecycle, Phase16_RemoteOneDrivePersonalInlineRename, and Phase16_RemoteSftpInlineRename cases. FileOps_SmbRecycleRefusal uses one fresh file under a registered SMB fixture and submits Skip directly. The exact Batch Rename admission and identity-less Pack/Delete interlock witnesses also run without the lease using guarded owned-window and task controls. Broad, family, prefix, multi-case and proof-injected selections retain the lease.",
+      "purpose": "Construct declarative stable-ID validation entries with FileOps desktop serialization independent of no-activation, exact no-activation Commands cases for static documentation, cache cancellation, synthetic FolderView drops, the owned archive roundtrip and main-menu architecture, plus eleven exact case-sensitive FileOps-only owned progress/callback/storage lease exceptions including identity-less Delete and identity-interlock waiting, fresh selection convergence and real SMB Copy/Move shape parity, its exact documentation interaction opt-in, other explicit GUI activation groups, the fourteen Commands family contracts, and isolated selected-profile artifact-mutating Pester coverage for each Run-AllTests suite. The closed case-sensitive FileOps no-desktop list additionally admits the exact FileOps_PopupIdleCadence, FileOps_AlertOverlayUxAccessibility, FileOps_DeferredExitRefusesNewWork, FileOps_ClearCompletedScope, C0_CurlCommittedMutationResponseLost, FileOps_ProviderCapabilityMatrix, FileOps_RepeatedNonClipboardCopyStorage, FileOps_RepeatedNonClipboardMoveStorage, FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof, R0fGraph_FakeGraphReadWriteCreateRenameRecycle, Phase16_RemoteOneDrivePersonalInlineRename, and Phase16_RemoteSftpInlineRename cases. FileOps_SmbRecycleRefusal uses one fresh file under a registered SMB fixture and submits Skip directly. The exact Batch Rename admission and identity-less Pack/Delete interlock witnesses also run without the lease using guarded owned-window and task controls. Broad, family, prefix, multi-case and proof-injected selections retain the lease. Shared entry selection rejects desktop obligations and keeps the canonical Full order.",
       "usage": "Loaded through the TestRunPlan facade; current commands and inventory tooling consume Get-RSTestRunPlan through that facade, Full's first writer inherits the caller-selected platform/configuration, and Commands family selection is limited to -Suite Commands iteration.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
@@ -3030,7 +3035,8 @@
         "Ordered metadata-complete test-run plan entries for All, Compare, Commands, FileOps, PR, CI, and Full suites",
         "Product-owned pinned DxUi regression entry and Commands family catalogs",
         "Split ViewerPE and ViewerSqlite desktop-interaction groups",
-        "Selected-profile Full artifact-writer contract"
+        "Selected-profile Full artifact-writer contract",
+        "Ordered exact shared scoped entry selection"
       ],
       "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
       "tests": [

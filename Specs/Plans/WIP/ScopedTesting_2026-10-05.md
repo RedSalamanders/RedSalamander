@@ -13,21 +13,18 @@ The next part implements the RedSalamander adapter in the [shared scoped-testing
 
 1. The root `test.ps1` now exposes affected, Full, PrePush and focused selection through `Tools/Run-AllTests.ps1`.
    It forwards an explicit profile and build number and preserves the external evidence root, native architecture
-   checks and exact Resume. `Test-Changes.ps1` forwards its existing parameters to this entry point. The shared
-   runner's native suite list and report adapter follow the scope migration below.
-2. Translate `Tools/validation-impact.json` to version 2 scope data. Map every current standalone and in-product
-   obligation, and route full selection through the current canonical Full plan. Compare new selections against the
-   current plan for source edits, staged and unstaged edits, additions, deletions, renames across scope boundaries,
-   dependency changes, prose and unclassified inputs. A wider selection requires a documented reason.
-   [Engine #124](https://github.com/RedSalamanders/.github/pull/124) supplies the ordered fallbacks.
-   The in-memory preview matched the canonical noninteractive native entry selection for 23 path sets in
-   each of six profiles. Complete the version 2 data and verify its selection on real Git changes.
-3. Project a named scope result to the shared report shape only after the canonical runner proves the selected work.
+   checks and exact Resume. `Test-Changes.ps1` forwards its existing parameters to this entry point.
+2. `Tests/test-scopes.json` maps version 2 shared scopes to canonical unattended Full plan entries and
+   declares the desktop obligations. [Engine #124](https://github.com/RedSalamanders/.github/pull/124) supplies
+   ordered fallbacks. The committed checks compare focused, renamed, deleted, prose and unclassified paths
+   across all six profiles. An isolated Git preview also matched both sides of a staged rename, an unstaged
+   deletion and an untracked test file.
+3. The selected-suite adapter projects shared reports after the canonical runner verifies and archives the requested work.
    Keep the external archive authoritative for failure details, build attestations and exact Full Resume. Keep shared
    native reuse disabled until the receipt review verifies source, binary, profile and environment parity.
-   The canonical Full plan contains an artifact-writing toolchain fixture before all artifact readers. Preserve
-   that order and re-attestation through the runtime adapter. Treat its build work as part of the governed
-   native obligation when selected.
+   The selected path preserves the canonical Full order and re-attestation around the toolchain writer.
+   The shared runner's default dispatch still needs the native handoff for an artifact-mutating selection
+   before the product switches ordinary Full or PrePush to that runner.
 4. Switch normal affected, full and pre-push calls to the engine shim. Keep the existing focused suite, case filter,
    Commands family, interactive, alternate-volume, explicit evidence root and exact Resume paths available through
    the compatibility adapter. Preserve incomplete-coverage and failure exit categories in the compatibility path.

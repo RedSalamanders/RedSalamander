@@ -22,6 +22,12 @@ Requires the canonical runner's byte-verified solution receipt or its exact gove
 Affected/focused project union. No-build/zero-entry changes need no native receipt.
 .PARAMETER BuildNumber
 Build number forwarded to the canonical runner for its build.
+.PARAMETER Suites
+Canonical test entry IDs selected by the shared scope planner. Runs only those
+entries without desktop admission and projects the completed archive to suite reports.
+.PARAMETER SkipTooling
+Compatibility switch for the shared runner. The Suites adapter runs only the
+explicit list, including any named tooling entries in their canonical order.
 .PARAMETER ResumeFrom
 Explicit exact promoted Full origin; valid only with Mode Full. No automatic widening.
 .PARAMETER Interactive
@@ -40,9 +46,11 @@ Optional case/prefix within a focused suite. Never qualifies the complete reposi
 .PARAMETER CommandsFamily
 Optional governed Commands family; valid with Suite Commands.
 .OUTPUTS
-Canonical evidence under the marked sandbox. Exit 2 is successful selected work with
-incomplete repository coverage; failures and invalid/blocked/corrupt evidence retain
-the canonical runner's other exit categories.
+Canonical evidence stays under the marked sandbox. The Suites adapter also writes
+shared suite report metadata under .build/reports. Exit 0 on this path means verified
+selected execution. The archived repository verdict remains NOT_EVALUATED.
+Ordinary commands keep the canonical runner's exit categories, including exit 2 for
+incomplete repository coverage.
 .NOTES
 Requires PowerShell 7, Git, the native toolchain and a marked sandbox. Builds and tests
 through the canonical runner; no second evidence cache or desktop lease is introduced.
@@ -59,19 +67,21 @@ through the canonical runner; no second evidence cache or desktop lease is intro
 param(
     [Parameter(ParameterSetName='Full',Mandatory)][switch]$Full,
     [Parameter(ParameterSetName='Mode')][ValidateSet('Affected','Full','PrePush')][string]$Mode='Affected',
-    [string]$BaseRef='origin/HEAD',
+    [Parameter(ParameterSetName='Selected',Mandatory)][ValidateNotNullOrEmpty()][string[]]$Suites,
+    [Parameter(ParameterSetName='Selected')][switch]$SkipTooling,
+    [Parameter(ParameterSetName='Mode')][Parameter(ParameterSetName='Full')][string]$BaseRef='origin/HEAD',
     [ValidateSet('Debug','Release','ASan Debug')][string]$Configuration='Debug',
     [ValidateSet('x64','ARM64')][string]$Platform='x64',
-    [switch]$Explain,
+    [Parameter(ParameterSetName='Mode')][Parameter(ParameterSetName='Full')][switch]$Explain,
     [switch]$SkipBuild,
     [ValidateRange(0, [int]::MaxValue)][int]$BuildNumber = 0,
-    [string]$ResumeFrom='',
-    [switch]$Interactive,
+    [Parameter(ParameterSetName='Mode')][Parameter(ParameterSetName='Full')][string]$ResumeFrom='',
+    [Parameter(ParameterSetName='Mode')][Parameter(ParameterSetName='Full')][switch]$Interactive,
     [string]$TestRoot=$env:REDSALAMANDER_TEST_ROOT,
-    [switch]$AllowAlternateVolumeTestRoot,
-    [ValidateSet('','Commands','Compare','FileOps')][string]$Suite='',
-    [string]$CaseFilter='',
-    [string]$CommandsFamily=''
+    [Parameter(ParameterSetName='Mode')][Parameter(ParameterSetName='Full')][switch]$AllowAlternateVolumeTestRoot,
+    [Parameter(ParameterSetName='Mode')][ValidateSet('','Commands','Compare','FileOps')][string]$Suite='',
+    [Parameter(ParameterSetName='Mode')][string]$CaseFilter='',
+    [Parameter(ParameterSetName='Mode')][string]$CommandsFamily=''
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
@@ -101,7 +111,11 @@ $arguments = @{
     AllowAlternateVolumeTestRoot = $AllowAlternateVolumeTestRoot
 }
 if ($PSBoundParameters.ContainsKey('BuildNumber')) { $arguments.BuildNumber = $BuildNumber }
-if ($Mode -eq 'Affected') { $arguments.ValidationMode = 'Affected' }
+if ($PSCmdlet.ParameterSetName -eq 'Selected') {
+    $arguments.ScopedEntryId = $Suites
+} elseif ($Mode -eq 'Affected') {
+    $arguments.ValidationMode = 'Affected'
+}
 if ($Suite) {
     $arguments.Suite = $Suite
     $arguments.ValidationMode = 'Fresh'
