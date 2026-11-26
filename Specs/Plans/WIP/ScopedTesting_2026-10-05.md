@@ -19,9 +19,15 @@ The next part implements the RedSalamander adapter in the [shared scoped-testing
    obligation, and route full selection through the current canonical Full plan. Compare new selections against the
    current plan for source edits, staged and unstaged edits, additions, deletions, renames across scope boundaries,
    dependency changes, prose and unclassified inputs. A wider selection requires a documented reason.
+   [Engine #124](https://github.com/RedSalamanders/.github/pull/124) supplies the ordered fallbacks.
+   The in-memory preview matched the canonical noninteractive native entry selection for 23 path sets in
+   each of six profiles. Complete the version 2 data and verify its selection on real Git changes.
 3. Project a named scope result to the shared report shape only after the canonical runner proves the selected work.
    Keep the external archive authoritative for failure details, build attestations and exact Full Resume. Keep shared
    native reuse disabled until the receipt review verifies source, binary, profile and environment parity.
+   The canonical Full plan contains an artifact-writing toolchain fixture before all artifact readers. Preserve
+   that order and re-attestation through the runtime adapter. Treat its build work as part of the governed
+   native obligation when selected.
 4. Switch normal affected, full and pre-push calls to the engine shim. Keep the existing focused suite, case filter,
    Commands family, interactive, alternate-volume, explicit evidence root and exact Resume paths available through
    the compatibility adapter. Preserve incomplete-coverage and failure exit categories in the compatibility path.

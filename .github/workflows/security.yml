@@ -13,6 +13,6 @@ permissions:
   actions: read
 jobs:
   security:
-    uses: RedSalamanders/.github/.github/workflows/security.yml@74673c5ef71e880ece602709949d3b614c903d57
+    uses: RedSalamanders/.github/.github/workflows/security.yml@4e98500a119b525fd26045bb1f3077dcf965068d
     with:
-      engine_ref: 74673c5ef71e880ece602709949d3b614c903d57
+      engine_ref: 4e98500a119b525fd26045bb1f3077dcf965068d
