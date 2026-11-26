@@ -4,6 +4,14 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Organize the RedSalamander specification catalog under the common authority, workflow, domain, and validation headings. Keep the plan-history and pinned-path rules in the catalog.
+- Share the vcpkg manifest arguments with the pinned CI engine while keeping the existing storage, ARM64 port overlay, custom triplets and explicit registry option.
+  Focused parity and installer safety fixtures pass. The native qualification operator owns clean restore.
+- Share hosted MSVC setup and ordinary Affected planning while retaining the contained installer, timeout, canonical build scope and archived evidence.
+- Add a live Windows SMB mixed Move check that verifies a Local Native item, an SMB Managed item, both destination payloads and fixture cleanup in one task.
+- Index all completed plans and adopt the shared WIP bullet format while preserving plan ranks and ownership.
+  The protected-history guard admits the new Done index and continues to require exact admission of new plan files.
+- Route RedSalamander performance and resource requirements through a Core contract with links to the existing budget and test owners.
 - Make cancellation deterministic during the large Local selection counting selftest.
 - Resolve the exact focused pending-decision disclosure after repaint in the File Operations pointer test.
 - Match the shared Copilot pointer and document explicit desktop agreement, owned windows and the existing focus-restoration policy.

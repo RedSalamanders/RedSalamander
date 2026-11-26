@@ -1,1 +1,0 @@
-- Organize the RedSalamander specification catalog under the common authority, workflow, domain, and validation headings. Keep the plan-history and pinned-path rules in the catalog.
