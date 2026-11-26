@@ -221,10 +221,6 @@ input and answers the archive cleanup question within the test. The case verifie
 Unpack collision skip preserves the selected archive and its existing destination, and that
 Pack keeps the originals when a link is omitted from the archive.
 
-The `FileOps_PopupIdleCadence` witness also submits two independent Local Copies and holds them after
-publication. It projects an owned credential wait on one Copy and verifies that the other remains
-active, the popup returns to its 100 ms cadence after bounded card motion, and both workers retire after release.
-
 Before opening any fixture, bind `LOCALAPPDATA`, `TEMP` and `TMP` to marked
 capture scratch through the canonical `ScopedEnvironmentVariable` helper. Refuse
 capture if that isolation fails, and restore all original environment states.
@@ -1216,7 +1212,9 @@ the same synchronous reporter and counter path as the pointer overload.
   the provider capability matrix uses private providers, owned data and direct task controls;
   its managed cleanup witness checks Retry for sharing, access and disk-full failures and verifies that a path-length failure offers Skip and Cancel;
   the exact cadence case uses a private nonactivating popup and preserves its existing
-  foreground-preservation observations without acquiring foreground;
+  foreground-preservation observations without acquiring foreground. It submits two independent Local Copies,
+  holds them after publication and projects an owned credential wait on one. It checks that the other Copy remains
+  active, the popup returns to its 100 ms cadence after bounded card motion, and both workers retire after release;
   the deferred-exit case uses the activation blocker, direct command dispatch and message-only close targets;
   they require no foreground ownership transfer, UIA, clipboard or pointer input. Casing
   near-misses, wildcards, multiple-case filters and unknown names fail closed to
