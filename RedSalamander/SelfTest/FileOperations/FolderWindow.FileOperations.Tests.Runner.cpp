@@ -604,6 +604,7 @@ struct CompletedTaskInfo
     uint64_t conflictWaitUs                              = 0;
     uint64_t conflictConvergenceWaitUs                   = 0;
     uint64_t conflictPromptCount                         = 0;
+    uint64_t consentPromptCount                          = 0;
     uint64_t queueWaitUs                                 = 0;
     uint64_t interlockWaitUs                             = 0;
     uint64_t interlockWaitCount                          = 0;
@@ -14231,11 +14232,12 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
         return reject(L"the Recycle task did not settle after Skip");
     const auto& completed = state.completedTasks.at(taskId);
     const auto& items     = completed.sourceItemResults;
-    if (completed.hr != S_FALSE || completed.conflictPromptCount != 1u || items.size() != 1u || ! items.front().has_value() ||
-        items.front().value().completion != FileOperations::ItemCompletion::Skipped ||
+    if (completed.hr != S_FALSE || completed.consentPromptCount != 1u || completed.conflictPromptCount != 0u || items.size() != 1u ||
+        ! items.front().has_value() || items.front().value().completion != FileOperations::ItemCompletion::Skipped ||
         items.front().value().sourceDisposition != FileOperations::SourceDisposition::Retained || ! sourceRetained())
-        return reject(std::format(L"Skip must preserve the original and report one skipped item (hr=0x{:08X}, prompts={})",
+        return reject(std::format(L"Skip must preserve the file and report one skipped item (hr=0x{:08X}, consents={}, conflicts={})",
                                   static_cast<uint32_t>(completed.hr),
+                                  completed.consentPromptCount,
                                   completed.conflictPromptCount));
 
     // Only retire this fresh file and its now-empty parent, after rechecking the
@@ -14252,7 +14254,7 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
     Debug::Perf::Emit(L"FileOps.SelfTest.SmbRecycleRefusal",
                       exact ? L"exact-identity consent and Skip" : L"by-name consent and Skip",
                       decisionUs,
-                      completed.conflictPromptCount,
+                      completed.consentPromptCount,
                       1u,
                       question.status);
     AppendLog(std::format(L"SMB Recycle: known non-commit, one exact-item question, original bytes retained on Skip, fixture removed ({} us to consent).",
@@ -19943,6 +19945,7 @@ void FileOperationsSelfTest::NotifyTaskCompleted(FolderWindow* owner, std::uint6
             info.conflictWaitUs                              = task->_perf.conflictWaitUs;
             info.conflictConvergenceWaitUs                   = task->_perf.conflictConvergenceWaitUs;
             info.conflictPromptCount                         = task->_perf.conflictPromptCount;
+            info.consentPromptCount                          = task->_perf.consentPromptCount;
             info.queueWaitUs                                 = task->_perf.queueWaitUs;
             info.interlockWaitUs                             = task->_perf.interlockWaitUs;
             info.interlockWaitCount                          = task->_perf.interlockWaitCount;
