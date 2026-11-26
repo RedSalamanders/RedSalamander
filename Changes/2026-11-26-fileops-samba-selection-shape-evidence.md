@@ -1,0 +1,1 @@
+- Verify live Samba Copy and Move for both folder and individual-file selections.
