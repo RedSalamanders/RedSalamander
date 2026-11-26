@@ -15,7 +15,7 @@ checks use the exact clean external pin through the shared resolver, never a rem
 
 The default uses local merge-base changes plus staged, unstaged and untracked work. Unknown code and build inputs widen coverage. `-Full` runs one native profile, defaulting to the host architecture. PrePush checks all six profiles, running unattended suites on the host architecture and building the other architecture. Review the matrix with `-Explain`. Use `Test-Changes.ps1` or pass `-Configuration` or `-Platform` to `test.ps1 -Mode PrePush` for the single-profile path. GitHub PR checks are compiler-free. Unattended runs retain the repository verdict `NOT_EVALUATED`.
 
-Native test files use `Scope.Tests.Something.h/.cpp`; register new active files in `native-test-files.json`. `Tools/validation-impact.json` owns affected selection through the canonical run plan. The version 2 `Tests/test-scopes.json` maps the shared planner to those same entry IDs. Explicit shared selections produce archive-bound suite report metadata while native evidence stays in the marked sandbox. Shared-library or runtime byte changes conservatively invalidate local standalone reuse. No consumer dependency pin changes are part of this workflow.
+Native test files use `Scope.Tests.Something.h/.cpp`; register new active files in `native-test-files.json`. `Tools/validation-impact.json` governs affected build scope and required native entries. The version 2 `Tests/test-scopes.json` selects shared native entries from the canonical changed paths. Explicit shared selections produce archive-bound suite report metadata while native evidence stays in the marked sandbox. Shared-library or runtime byte changes conservatively invalidate local standalone reuse. No consumer dependency pin changes are part of this workflow.
 
 For independent resource investigations, force fresh execution and retain paired fixture/build provenance. Timing, native ARM64, real devices, IME/assistive technology and foreground input remain separate qualification requirements. These commands do not manufacture those claims.
 
@@ -621,6 +621,9 @@ The supplied-review safety cases use `ProductUiTests` (directory decoding and de
 `-Suite FileOps -CaseFilter FileOps_ReviewRemediationContracts -NonInteractive` (parent pinning and typed prerequisite results),
 `-Suite FileOps -CaseFilter FileOps_ClearCompletedScope -NonInteractive` (painted clean results, retained problems and interrupted-Move recovery),
 and exact noninteractive `FileOps_SmallFileCopyCost` / `FileOps_CrossRootLocalCopy` selections.
+`-Suite FileOps -CaseFilter FileOps_SmbMixedMove -NonInteractive` uses the registered SMB fixture
+and a Local sandbox to verify one Native and one Managed source in a single Move. Exact SMB identity
+is an environment prerequisite. The check verifies both destination payloads and removes its empty SMB child.
 The exact `FileOps_DeferredExitRefusesNewWork` case verifies rejection of Create Directory and
 other ingress commands after an accepted close. It submits commands against owned windows without
 activation and uses message-only stand-ins to observe close resumption.

@@ -55,10 +55,11 @@ Export-ModuleMember -Function Assert-ScopedTestNames
 '@ | Set-Content -LiteralPath (Join-Path $moduleDirectory 'ScopedTesting.psm1')
             @'
 param($Suite,$Configuration,$Platform,$ImpactBase,[switch]$SkipBuild,[switch]$NonInteractive,$ValidationMode,$TestRoot,
-      [switch]$AllowAlternateVolumeTestRoot,$CaseFilter='',$CommandsFamily='',[int]$BuildNumber=0)
+      [switch]$AllowAlternateVolumeTestRoot,$CaseFilter='',$CommandsFamily='',[int]$BuildNumber=0,[switch]$UseSharedAffectedPlanner)
 [ordered]@{
     suite=$Suite; mode=$ValidationMode; testRoot=$TestRoot; caseFilter=$CaseFilter
     alternate=[bool]$AllowAlternateVolumeTestRoot; nonInteractive=[bool]$NonInteractive; buildNumber=$BuildNumber
+    sharedAffected=[bool]$UseSharedAffectedPlanner
 } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PSScriptRoot '../captured.json')
 $global:LASTEXITCODE=2
@@ -73,7 +74,7 @@ $global:LASTEXITCODE=2
             foreach ($case in $cases) {
                 foreach ($optIn in @($false,$true)) {
                     $arguments = @('-NoProfile','-File',(Join-Path $fixture $case.script)) + $case.arguments
-                    if ($case.name -cne 'LegacyPrePush' -or $optIn) { $arguments += @('-TestRoot',$env:REDSALAMANDER_TEST_ROOT) }
+                    if ($case.name -cnotin @('LegacyPrePush','RootAffected') -or $optIn) { $arguments += @('-TestRoot',$env:REDSALAMANDER_TEST_ROOT) }
                     if ($optIn) { $arguments += '-AllowAlternateVolumeTestRoot' }
                     Invoke-RSTestFixtureNative -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments $arguments *> (Join-Path $fixture "child-$($case.name)-$optIn.log")
                     $LASTEXITCODE | Should Be 2
@@ -81,6 +82,7 @@ $global:LASTEXITCODE=2
                     $captured.alternate | Should Be $optIn
                     $captured.suite | Should Be $case.suite
                     $captured.mode | Should Be $case.mode
+                    $captured.sharedAffected | Should Be ($case.name -ceq 'RootAffected' -and -not $optIn)
                     $captured.caseFilter | Should Be $case.filter
                     $captured.buildNumber | Should Be $case.number
                     $captured.nonInteractive | Should Be $true
@@ -162,6 +164,7 @@ Describe 'Shared scope data and report contract' {
         $desktop = @((Get-CIScopedInteractiveObligations -Manifest $shared -Full).suite | Sort-Object)
         foreach ($platform in 'x64','ARM64') {
             foreach ($configuration in 'Debug','Release','ASan Debug') {
+                $selectShared = New-RSSharedAffectedPlanner -RepoRoot $repoRoot -Configuration $configuration
                 $executable = Join-Path $repoRoot ".build/$platform/$configuration/RedSalamander.exe"
                 $plan = @(Get-RSTestRunPlan -Suite Full -RepoRoot $repoRoot -Platform $platform `
                         -Configuration $configuration -RedSalamanderExePath $executable)
@@ -174,8 +177,7 @@ Describe 'Shared scope data and report contract' {
                         Get-RSValidationImpactRulesForPath -Manifest $impact -Path $path | ForEach-Object impact_tags
                     })
                     $expected = @($portable | Where-Object { @($_.ImpactTags | Where-Object { $_ -cin $tags }).Count } | ForEach-Object Id)
-                    $actual = @( (Get-CIScopedTestPlan -Manifest $shared -ChangedPaths $case.paths -Configuration $configuration).scopes |
-                        Where-Object { $_ -cne 'CompilerFreeValidation' } )
+                    $actual = @(& $selectShared -ChangedPaths $case.paths)
                     ($actual -join ',') | Should Be ($expected -join ',')
                 }
                 $selection = @(Select-RSScopedTestRunEntries -Entries $plan -EntryId @('standalone.settings-schema','tooling.pester-build-toolchain'))
@@ -194,6 +196,30 @@ Describe 'Shared scope data and report contract' {
                 }
             }
         }
+    }
+
+    It 'keeps the affected build decision and existing native obligations when shared scopes apply' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSuitePlan.psm1') -Scope Local
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationImpact.psm1') -Scope Local
+        $manifest = Read-RSValidationImpactManifest -RepoRoot $repoRoot `
+            -Path (Join-Path $repoRoot 'Tools/validation-impact.json') `
+            -SchemaPath (Join-Path $repoRoot 'Specs/Testing/ValidationImpact.schema.json')
+        $entries = @(Get-RSTestRunPlan -Suite Full -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
+                -RedSalamanderExePath (Join-Path $repoRoot '.build/x64/Debug/RedSalamander.exe') | Where-Object { -not $_.RequiresInteractiveDesktop })
+        $plan = @{ plan_digest=('0'*64); entries=@($entries | ForEach-Object { @{ id=$_.Id; impact_tags=$_.ImpactTags } }) }
+        $snapshot = @{ snapshot_id=('1'*64); files=@(@{ path='Tests/SettingsSchemaTests/new.cpp'; old_path='' }) }
+        $options = @{ Manifest=$manifest; ValidationPlan=$plan; WorkspaceSnapshot=$snapshot; PlannerMode='enforced' }
+        $legacy = Get-RSValidationImpactDecision @options
+        $withShared = Get-RSValidationImpactDecision @options -SelectSharedAffectedEntries { param($ChangedPaths) 'standalone.localization' }
+        $withShared.advisory_build_action | Should Be $legacy.advisory_build_action
+        $affected = @($withShared.entries | Where-Object affected | ForEach-Object id)
+        ($affected -ccontains 'standalone.localization') | Should Be $true
+        foreach ($entry in @($legacy.entries | Where-Object affected)) { ($affected -ccontains $entry.id) | Should Be $true }
+        (@($legacy.entries | Where-Object affected | ForEach-Object id) -ccontains 'standalone.settings-schema') | Should Be $true
+        $snapshot.files[0].path = 'docs/UserGuide.md'
+        $prose = Get-RSValidationImpactDecision @options -SelectSharedAffectedEntries { throw 'A compiler-free change must not run native scope selection.' }
+        $prose.advisory_build_action | Should Be 'none'
+        @($prose.entries | Where-Object affected).Count | Should Be 0
     }
 
     It 'projects only fresh promotions and retains scoped skips and failure' {

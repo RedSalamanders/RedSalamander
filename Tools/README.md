@@ -700,6 +700,7 @@ Trusted validation commands:
 .\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Resume -ResumeFrom <run-id>
 .\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Affected -ImpactBase <commit-ish>
 .\Tools\Run-AllTests.ps1 -Suite Commands -CommandsFamily file-operations
+.\Tools\Run-AllTests.ps1 -Suite FileOps -CaseFilter FileOps_SmbMixedMove -NonInteractive
 ```
 
 Fresh is the default and final-closeout mode. Resume reuses exact promoted evidence only.

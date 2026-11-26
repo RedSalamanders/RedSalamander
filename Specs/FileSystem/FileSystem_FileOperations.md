@@ -902,6 +902,12 @@ only across endpoints; folder merge on one endpoint is the rename merge.
 | Managed Move | Bound source, exact conditional source delete, and either identity-owned stage/publication with destination proof or (R3-2) a destination writer that proves the published content | Destination published and proved, then the exact unchanged source removed |
 | Copy-only | The Copy operation/pair works but any destructive prerequisite or Move pair is absent | Destination published; source retained with reason; no source Delete call is reachable |
 
+The live mixed Move check uses an exact-identity SMB source and a Local source on the destination
+volume in one task. It requires one successful Native result and one successful Managed result,
+a single Managed stage, matching destination bytes and proof that both original files are absent.
+It skips an identity-less share before any mutation. The Copy-only selection and consent have
+separate controlled witnesses.
+
 Host qualification includes a non-empty same-connection Curl directory rename against
 an owned FTP fixture. Success must relocate nested files and empty directories with
 one RNFR/RNTO pair and preserve siblings. Server refusal must never trigger a relay

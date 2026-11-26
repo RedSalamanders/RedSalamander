@@ -1,1 +1,0 @@
-- Make cancellation deterministic during the large Local selection counting selftest.

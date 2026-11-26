@@ -6,6 +6,13 @@
 
 ## Implementation checklist
 
+**Live qualification checkpoint (2026-11-26).**
+
+- [x] Verify one Local Native item and one Windows SMB Managed item in the same Move. Exact x64 Release passed 3/0/0 without activation, verified both destination payloads and source removals, and retired the SMB fixture. The Samba exact-identity control skipped before creating its fixture. [PR #348](https://github.com/RedSalamanders/RedSalamander/pull/348) [Mixed Move and control evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-26_221027_live_mixed_smb/README.md)
+- [x] Recheck SFTP F2 Rename, both SMB Rename routes, and OneDrive Personal Rename and transfers. All five scoped runs passed 3/0/0 without activation. The isolated SFTP and OneDrive test profiles retired with their installed settings digests verified. [Live recheck results](../../TestRuns/4cb089111a23/FileOps/2026-11-26_221027_live_mixed_smb/README.md#existing-live-route-rechecks)
+- [ ] Finish the remaining mixed Move endpoint scopes and shared remote Rename routes. The Local Native plus SMB Managed route and the controlled Copy-only route now have separate evidence.
+- [ ] Finish x64 Full desktop and hosted native qualification. The local Full run recorded standalone S3 multipart and non-interactive ViewerSpace blocked-provider close failures. Both hosted regression jobs reached native test execution on `94516001b`. [Hosted qualification](https://github.com/RedSalamanders/RedSalamander/actions/runs/45890003061)
+
 **Release checkpoint (2026-11-26).** Live single-item SFTP Rename, OneDrive Personal transfer and guarded SMB Recycle passed in x64 Release and merged. The refreshed non-interactive PrePush on `3eed44771` found three outdated tooling checks. The corrected focused checks passed. The frozen PrePush rerun passed all 14 non-interactive entries. Desktop, live provider and hosted native platform gates remain open.
 
 - [x] Run the broad non-interactive x64 Release PrePush after the R0e repair. The frozen `2d41ebc55` run reported 1,801 passed, zero failed and 29 environment skips. The runner marked the change `PASSED` and the repository `NOT_EVALUATED`. [Release validation record](../../TestRuns/4cb089111a23/FileOps/2026-11-26_163210_release_prepush/README.md)

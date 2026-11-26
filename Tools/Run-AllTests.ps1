@@ -97,6 +97,8 @@
     FileOps_SmbExactRenameProvider or FileOps_SmbCorroboratedRenameProvider for the relevant binding route.
     FileOps_SmbRecycleRefusal supports -NonInteractive. It checks that the guarded Shell route retains
     the file and asks for exact-item consent on a registered SMB share.
+    FileOps_SmbMixedMove supports -NonInteractive. It checks one Local Native plus one SMB Managed
+    source in a single Move to a marked Local sandbox, using a registered exact-identity SMB share.
     FileOps_ClearCompletedScope also supports -NonInteractive through a private popup and test-owned data.
     C0_CurlCommittedMutationResponseLost supports -NonInteractive and uses only loopback FTP fixtures.
     FileOps_ProviderCapabilityMatrix supports -NonInteractive through private providers and task controls.
@@ -166,6 +168,9 @@
     Optional output path for -ExplainPlan. It must remain beneath
     X:\RedSalamander.Perf\evidence.
 
+.PARAMETER UseSharedAffectedPlanner
+    Use the pinned scope manifest in noninteractive Affected mode. Canonical impact still governs
+    build scope and preserves required entries. The root test.ps1 sets this for ordinary iteration.
 .PARAMETER ScopedEntryId
     Shared suite-report mode. Requires Fresh Full with NonInteractive. Selects
     exact canonical entry IDs and retains the Full plan's artifact ordering.
@@ -295,7 +300,8 @@ param(
 
     [switch]$NonInteractive,
 
-    [ValidateNotNullOrEmpty()][string[]]$ScopedEntryId = @()
+    [ValidateNotNullOrEmpty()][string[]]$ScopedEntryId = @(),
+    [switch]$UseSharedAffectedPlanner
 )
 
 Set-StrictMode -Version Latest
@@ -315,6 +321,10 @@ function Exit-RSInvalidRunnerInvocation {
 if ($ScopedEntryId.Count -and ($Suite -cne 'Full' -or $ValidationMode -cne 'Fresh' -or
         -not $NonInteractive -or $CaseFilter -or $CommandsFamily -or $ExplainPlan -or $ResultReferencePath)) {
     Exit-RSInvalidRunnerInvocation 'ScopedEntryId requires Fresh Full with NonInteractive and exact entry selection.'
+}
+
+if ($UseSharedAffectedPlanner -and ($Suite -cne 'Full' -or $ValidationMode -cne 'Affected' -or -not $NonInteractive)) {
+    Exit-RSInvalidRunnerInvocation 'UseSharedAffectedPlanner requires noninteractive Affected Full planning.'
 }
 
 if ($ValidationMode -eq 'Resume') {
@@ -445,6 +455,11 @@ Import-Module $validationImpactModule -Force -ErrorAction Stop
 $validationEvidenceModule = Join-Path $repoRoot 'Tools\Modules\Testing\ValidationEvidence.psm1'
 Import-Module $validationEvidenceModule -Force -ErrorAction Stop
 Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestRunSummary.psm1') -ErrorAction Stop
+
+$sharedAffectedArguments = @{}
+if ($UseSharedAffectedPlanner) {
+    $sharedAffectedArguments.SelectSharedAffectedEntries = New-RSSharedAffectedPlanner -RepoRoot $repoRoot -Configuration $Configuration
+}
 
 function Import-RSRunnerValidationModules {
     # build.ps1 and in-process Pester entries import modules in nested script
@@ -1504,7 +1519,7 @@ if ($ExplainPlan) {
         -EvidenceRoot $validationEvidenceRoot `
         -SchemaRoot (Join-Path $repoRoot 'Specs\Testing') `
         -EntryId @($explainValidationPlan.entries | ForEach-Object { [string]$_.id })
-    $explainDecision = Get-RSValidationImpactDecision -Manifest $impactManifest `
+    $explainDecision = Get-RSValidationImpactDecision @sharedAffectedArguments -Manifest $impactManifest `
         -WorkspaceSnapshot $explainSnapshot -ValidationPlan $explainValidationPlan `
         -EstimatedDurationMs $explainDurationEstimates -PlannerMode shadow
     $explainRoot = $validationEvidenceRoot
@@ -1695,7 +1710,7 @@ if ($ValidationMode -ceq 'Affected') {
     if (-not $prebuildGovernance.IsValid) {
         Exit-RSInvalidRunnerInvocation "Validation impact governance is incomplete before build: $(@($prebuildGovernance.UnmappedBuildInputs) -join ', ')"
     }
-    $prebuildDecision = Get-RSValidationImpactDecision -Manifest $prebuildManifest -WorkspaceSnapshot $prebuildWorkspaceSnapshot `
+    $prebuildDecision = Get-RSValidationImpactDecision @sharedAffectedArguments -Manifest $prebuildManifest -WorkspaceSnapshot $prebuildWorkspaceSnapshot `
         -ValidationPlan $prebuildPlan -PlannerMode enforced
     if ($prebuildDecision.advisory_build_action -ceq 'none' -and @($prebuildDecision.entries | Where-Object affected).Count -eq 0) {
         if (@($prebuildDecision.changed_paths).Count) { Invoke-RSRunnerCompilerFreeChecks }
@@ -2046,7 +2061,7 @@ foreach ($fingerprintRow in $entryFingerprintRows) {
         digests = $fingerprintRow.component_digests
     }
 }
-$shadowDecision = Get-RSValidationImpactDecision -Manifest $impactManifest `
+$shadowDecision = Get-RSValidationImpactDecision @sharedAffectedArguments -Manifest $impactManifest `
     -WorkspaceSnapshot $initialWorkspaceSnapshot -ValidationPlan $validationPlan `
     -EntryFingerprints $fingerprintsById -EstimatedDurationMs $durationEstimates -PlannerMode shadow
 if ($ValidationMode -eq 'Affected') {
@@ -2068,7 +2083,7 @@ if ($ValidationMode -eq 'Affected') {
             digests = $fingerprintRow.component_digests
         }
     }
-    $shadowDecision = Get-RSValidationImpactDecision -Manifest $impactManifest `
+    $shadowDecision = Get-RSValidationImpactDecision @sharedAffectedArguments -Manifest $impactManifest `
         -WorkspaceSnapshot $initialWorkspaceSnapshot -ValidationPlan $validationPlan `
         -EntryFingerprints $fingerprintsById -EstimatedDurationMs $durationEstimates -PlannerMode enforced
 }
@@ -2399,7 +2414,7 @@ foreach ($artifactMutator in $artifactMutatorConfigs) {
     $entryFingerprintRows = @($entryFingerprintRecord.entries)
     $fingerprintsById = @{}
     foreach ($fingerprintRow in $entryFingerprintRows) { $fingerprintsById[$fingerprintRow.id] = $fingerprintRow.fingerprint }
-    $shadowDecision = Get-RSValidationImpactDecision -Manifest $impactManifest `
+    $shadowDecision = Get-RSValidationImpactDecision @sharedAffectedArguments -Manifest $impactManifest `
         -WorkspaceSnapshot $initialWorkspaceSnapshot -ValidationPlan $validationPlan `
         -EntryFingerprints $fingerprintsById -EstimatedDurationMs $durationEstimates `
         -PlannerMode $(if ($ValidationMode -eq 'Affected') { 'enforced' } else { 'shadow' })

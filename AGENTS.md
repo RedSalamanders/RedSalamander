@@ -234,10 +234,10 @@ test files use `Scope.Tests.Something.h/.cpp` and the native file inventory. Reu
 
 ## Interactive desktop tests
 
-Tests that take foreground focus, the cursor or the clipboard require agreement from the person at the desktop for
-that time and the canonical interactive lease. Follow the documented desktop boundaries and restore focus only when
-the fixture still owns it. Keep the hosted and manual acceptance scenarios explicit in
-[the self-test contract](Specs/Testing/Testing_SelfTests.md).
+A test that takes real foreground focus, the cursor or the clipboard requires explicit agreement from the person at
+the desktop for that time. Use the canonical interactive lease, warn before and during execution, and drive only
+windows the fixture owns. Follow the [self-test contract](Specs/Testing/Testing_SelfTests.md) and restore focus only
+while the fixture still owns it. Keep the hosted and manual desktop acceptance scenarios explicit.
 
 ## Changes workflow
 

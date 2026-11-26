@@ -446,6 +446,8 @@ foreach ($triplet in $tripletsToInstall) {
         Write-Host "Restored $triplet inputs match: $destinationTripletPath" -ForegroundColor Green
         continue
     }
+    $vcpkgArguments = @(Get-RSVcpkgInstallArguments -ProjectRoot $repoRoot -Triplet $triplet `
+        -InstallRoot $tripletStagingRoot -OverlayTriplets $tripletOverlay.Directory -RegistryRoot $vcpkgRootPath)
     if (Test-Path -LiteralPath $identityPath -PathType Leaf) {
         [IO.File]::Delete($identityPath)
     }
@@ -459,25 +461,9 @@ foreach ($triplet in $tripletsToInstall) {
     }
     New-Item -ItemType Directory -Path $tripletStagingRoot -Force | Out-Null
 
-    $vcpkgArguments = [System.Collections.Generic.List[string]]::new()
-    foreach ($argument in @(
-            'install',
-            '--triplet', $triplet,
-            '--x-manifest-root', $manifestRoot,
-            '--x-install-root', $tripletStagingRoot,
-            "--overlay-triplets=$($tripletOverlay.Directory)")) {
-        [void]$vcpkgArguments.Add($argument)
-    }
-    if ($triplet -like 'arm64-*') {
-        [void]$vcpkgArguments.Add('--overlay-ports=' + (Join-Path $repoRoot 'Build/vcpkg-ports'))
-    }
-    if ($null -ne $vcpkgRootPath) {
-        [void]$vcpkgArguments.Add("--vcpkg-root=$vcpkgRootPath")
-    }
-
     $vcpkgExitCode = Invoke-RSStreamingProcess `
         -FilePath $vcpkgExePath `
-        -Arguments $vcpkgArguments.ToArray() `
+        -Arguments $vcpkgArguments `
         -DelegateArtifactOperation `
         -WorkingDirectory $repoRoot
 
