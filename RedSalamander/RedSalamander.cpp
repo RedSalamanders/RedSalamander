@@ -3956,6 +3956,14 @@ void OnInitMenuPopup(HWND hWnd, HMENU menu)
 
     EnsureMenuHandles(hWnd);
 
+    if (menu == g_filesMenu)
+    {
+        const UINT scheduledRenameFlags = g_folderWindow.CanScheduleRename(g_folderWindow.GetActivePane()) ? MF_ENABLED : MF_GRAYED;
+        EnableMenuItem(menu, IDM_PANE_BATCH_RENAME, MF_BYCOMMAND | scheduledRenameFlags);
+        EnableMenuItem(menu, IDM_PANE_CHANGE_CASE, MF_BYCOMMAND | scheduledRenameFlags);
+        return;
+    }
+
     if (menu == g_viewWithMenu)
     {
         RebuildFileActionMenuDynamicItems(menu, true);
