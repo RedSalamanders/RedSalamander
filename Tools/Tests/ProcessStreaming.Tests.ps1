@@ -92,7 +92,7 @@ exit 17
         (Get-Content -Path $errorLogPath) | Should Be @('stderr-line')
     }
 
-    It 'waits for the hosted MSVC GUI bootstrapper and handles its actual success reboot and failure exits' {
+    It 'returns the actual GUI installer exit through the contained setup transport' {
         Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -ErrorAction Stop
         if ([string]::IsNullOrWhiteSpace($env:REDSALAMANDER_TEST_RUN_ID)) {
             throw 'The managed bootstrapper control requires an existing governed run ID.'
@@ -108,12 +108,10 @@ exit 17
         $plannedPaths = @($source, $gui, ($gui + '.config'), $compile, (Join-Path $fixtureBase 'compile.stdout.log'), (Join-Path $fixtureBase 'compile.stderr.log'))
         foreach ($fixtureExit in @(0,3010,17)) {
             $iterationRoot = Join-Path $fixtureBase ("hosted $fixtureExit é日")
-            $plannedScratch = Join-Path $iterationRoot ('msvc-14.52-' + ('0' * 32))
             $plannedPaths += @(
-                (Join-Path $plannedScratch 'vs_BuildTools.exe'),
-                ((Join-Path $plannedScratch 'vs_BuildTools.exe') + '.config'),
-                (Join-Path $plannedScratch 'bootstrapper.stdout.log'),
-                (Join-Path $plannedScratch 'bootstrapper.stderr.log'),
+                (Join-Path $iterationRoot 'bootstrapper.stdout.log'),
+                (Join-Path $iterationRoot 'bootstrapper.stderr.log'),
+                (Join-Path $iterationRoot 'iteration.json'),
                 (Join-Path $iterationRoot 'VS-Msvc-14.52/installed.args')
             )
         }
@@ -154,102 +152,45 @@ class GuiBootstrapper {
         $peOffset = [BitConverter]::ToInt32($image, 0x3c)
         [BitConverter]::ToUInt16($image, $peOffset + 24 + 68) | Should Be 2
 
-        $tokens = $null
-        $errors = $null
-        $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot '.github/actions/setup-msvc/Setup.ps1'),[ref]$tokens,[ref]$errors)
-        $errors.Count | Should Be 0
-        $branches = @($ast.EndBlock.Statements | Where-Object {
-            $_ -is [Management.Automation.Language.IfStatementAst] -and $_.Extent.Text -match '^if\s*\(\s*-not\s+\$selected\s*\)'
-        })
-        $branches.Count | Should Be 1
-        $provision = [scriptblock]::Create($branches[0].Extent.Text)
-        $savedEnvironment = @{}
-        foreach($key in @('GITHUB_ACTIONS','RUNNER_ENVIRONMENT','RUNNER_TEMP','RS_MsvcFixtureExitCode')) {
-            $savedEnvironment[$key] = [Environment]::GetEnvironmentVariable($key,'Process')
-        }
+        $transport = (Get-Command Invoke-RSStreamingProcess -Module ProcessStreaming -ErrorAction Stop).ScriptBlock
+        $previousFixtureExit = [Environment]::GetEnvironmentVariable('RS_MsvcFixtureExitCode','Process')
         $previousExit = Get-Variable LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
-        $previousExitValue = if($previousExit){$previousExit.Value}else{$null}
+        $previousExitValue = if ($previousExit) { $previousExit.Value } else { $null }
         $fixtureHasPrimaryFailure = $false
         try {
-            $env:GITHUB_ACTIONS = 'true'
-            $env:RUNNER_ENVIRONMENT = 'github-hosted'
-            foreach($fixtureExit in @(0,3010,17)) {
-                & {
-                    param($fixtureExit,$provision,$gui,$fixtureRoot,$repoRoot,$fixturePathLimit)
-                    [void][IO.Directory]::CreateDirectory($fixtureRoot)
-                    $env:RUNNER_TEMP = $fixtureRoot
-                    $env:RS_MsvcFixtureExitCode = [string]$fixtureExit
-                    $root = $repoRoot
-                    $required = '14.52'
-                    $selected = $null
-                    $installerExitCode = $null
-                    $scratch = $null
-                    $VerifyOnly = $false
-                    $marker = Join-Path $fixtureRoot 'VS-Msvc-14.52/installed.args'
-                    function Invoke-WebRequest {
-                        param($Uri,$OutFile)
-                        foreach ($path in @($OutFile, ($OutFile + '.config'), (Join-Path (Split-Path $OutFile) 'bootstrapper.stdout.log'), (Join-Path (Split-Path $OutFile) 'bootstrapper.stderr.log'), $marker)) {
-                            if ($path.Length -ge $fixturePathLimit) { throw "Actual managed bootstrapper fixture exceeds its path budget: $($path.Length)." }
+            foreach ($fixtureExit in @(0,3010,17)) {
+                $iterationRoot = Join-Path $fixtureBase ("hosted $fixtureExit é日")
+                $installRoot = Join-Path $iterationRoot 'VS-Msvc-14.52'
+                $stdout = Join-Path $iterationRoot 'bootstrapper.stdout.log'
+                $stderr = Join-Path $iterationRoot 'bootstrapper.stderr.log'
+                $marker = Join-Path $installRoot 'installed.args'
+                $record = Join-Path $iterationRoot 'iteration.json'
+                [void][IO.Directory]::CreateDirectory($iterationRoot)
+                $env:RS_MsvcFixtureExitCode = [string]$fixtureExit
+                $global:LASTEXITCODE = 113
+                $observed = [ordered]@{
+                    fixture_exit=$fixtureExit; actual_exit=$null; marker_present=$false
+                    compiled_sha256=$fixtureRecord.compiled_sha256; arguments=@(); status='failed'
+                }
+                try {
+                    $observed.actual_exit = & $transport -FilePath $gui -WorkingDirectory $iterationRoot `
+                        -Arguments @('--quiet','--wait','--installPath',$installRoot) `
+                        -LogPath $stdout -ErrorLogPath $stderr -TimeoutMilliseconds 2700000
+                    $observed.actual_exit | Should Be $fixtureExit
+                    $observed.marker_present = [IO.File]::Exists($marker)
+                    $observed.marker_present | Should Be $true
+                    $observed.arguments = [IO.File]::ReadAllLines($marker)
+                    $observed.arguments[3] | Should Be $installRoot
+                    ($observed.arguments -contains '--wait') | Should Be $true
+                    $observed.status = 'passed'
+                } finally {
+                    $observed.logs = @(foreach ($file in @($stdout,$stderr)) {
+                        if ([IO.File]::Exists($file)) {
+                            [ordered]@{ name=(Split-Path -Leaf $file); sha256=(Get-FileHash -LiteralPath $file).Hash; bytes=(Get-Item -LiteralPath $file).Length }
                         }
-                        Copy-Item -LiteralPath $gui -Destination $OutFile
-                    }
-                    function Get-AuthenticodeSignature { param($LiteralPath); [pscustomobject]@{Status='Valid';SignerCertificate=[pscustomobject]@{Subject='CN=Fixture, O=Microsoft Corporation, C=US'}} }
-                    function Get-SelectedTools {
-                        if(-not(Test-Path -LiteralPath $marker)){throw 'Compiler verification ran before the GUI installer completed.'}
-                        return [ordered]@{version='14.52.0';platform='x64'}
-                    }
-                    Remove-Variable LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
-                    $message = ''
-                    # Evaluate in this already-isolated iteration scope so the real branch's
-                    # actual exit and selected-state locals can be retained before assertions.
-                    try { . $provision } catch { $message = $_.Exception.Message }
-                    if ($message.Length -gt 2048) { $message = $message.Substring(0,2048) }
-                    $markerPresent = Test-Path -LiteralPath $marker
-                    $installedArguments = if ($markerPresent) { [IO.File]::ReadAllLines($marker) } else { @() }
-                    $observed = [ordered]@{
-                        fixture_exit=$fixtureExit
-                        actual_exit=$installerExitCode
-                        marker_present=$markerPresent
-                        inner_message=$message
-                        selected_present=($null -ne $selected)
-                        arguments=@($installedArguments)
-                        compiled_sha256=(Get-FileHash -LiteralPath $gui).Hash
-                        scratch=$scratch
-                        status='observed-before-assertions'
-                    }
-                    if ($scratch) {
-                        $observed.installer_path_length = (Join-Path $scratch 'vs_BuildTools.exe').Length
-                        $observed.logs = @(foreach ($name in @('bootstrapper.stdout.log','bootstrapper.stderr.log')) {
-                            $path = Join-Path $scratch $name
-                            if (Test-Path -LiteralPath $path) { [ordered]@{name=$name;sha256=(Get-FileHash -LiteralPath $path).Hash;bytes=(Get-Item -LiteralPath $path).Length} }
-                        })
-                    }
-                    $record = Join-Path $fixtureRoot 'iteration.json'
+                    })
                     $observed | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $record -Encoding UTF8
-                    Write-Host ('Managed bootstrapper iteration: ' + ($observed | ConvertTo-Json -Depth 5 -Compress -EscapeHandling EscapeNonAscii))
-                    if (-not $markerPresent) {
-                        $observed.status = 'failed'
-                        $observed | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $record -Encoding UTF8
-                        throw "Managed bootstrapper fixture $fixtureExit returned '$installerExitCode' without its marker. Inner: $message Evidence: $record"
-                    }
-                    try {
-                        $markerPresent | Should Be $true
-                        $installerExitCode | Should Be $fixtureExit
-                        if($fixtureExit -eq 17) {
-                            $message | Should Match 'VS provisioning failed: 17'
-                            ($null -eq $selected) | Should Be $true
-                        } else {
-                            $message | Should Be ''
-                            ($null -ne $selected) | Should Be $true
-                        }
-                        $installedArguments[[Array]::IndexOf($installedArguments,'--installPath') + 1] | Should Be (Join-Path $fixtureRoot 'VS-Msvc-14.52')
-                        ($installedArguments -contains '--wait') | Should Be $true
-                        $observed.status = 'passed'
-                    } finally {
-                        if ($observed.status -ne 'passed') { $observed.status = 'failed' }
-                        $observed | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $record -Encoding UTF8
-                    }
-                } $fixtureExit $provision $gui (Join-Path $fixtureBase ("hosted $fixtureExit é日")) $repoRoot $fixturePathLimit
+                }
             }
             $fixtureRecord.phase = 'passed-all-three'
         } catch {
@@ -270,7 +211,7 @@ class GuiBootstrapper {
                     Write-Warning ("Managed bootstrapper secondary retention failure: $secondaryMessage") -WarningAction Continue
                 }
             } finally {
-                foreach($key in $savedEnvironment.Keys){[Environment]::SetEnvironmentVariable($key,$savedEnvironment[$key],'Process')}
+                [Environment]::SetEnvironmentVariable('RS_MsvcFixtureExitCode',$previousFixtureExit,'Process')
                 if($previousExit){$global:LASTEXITCODE=$previousExitValue}else{Remove-Variable LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue}
             }
         }

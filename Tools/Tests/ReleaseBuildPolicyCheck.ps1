@@ -136,15 +136,14 @@ $ciSetup=Join-Path $Root '.github/actions/setup-msvc/Setup.ps1'
 & pwsh -NoProfile -File $ciSetup -VerifyOnly -Platform x64
 if($LASTEXITCODE-ne 0){throw 'Read-only CI toolchain verification failed.'}
 $fixture=Join-Path $scratch 'ci-provisioning-refusal'
-$fixtureScript=Join-Path $fixture '.github/actions/setup-msvc/Setup.ps1'
-[void][IO.Directory]::CreateDirectory((Split-Path $fixtureScript))
-Copy-Item -LiteralPath $ciSetup -Destination $fixtureScript
+$fixtureScript=Join-Path $Root '.ci-engine/.github/actions/setup-msvc/Setup.ps1'
+[void][IO.Directory]::CreateDirectory($fixture)
 [IO.File]::WriteAllText((Join-Path $fixture 'Directory.Build.props'),'<Project><PropertyGroup><RequiredMsvcToolsVersion>14.99</RequiredMsvcToolsVersion></PropertyGroup></Project>')
 foreach($readOnly in @($true,$false)){
     $start=[Diagnostics.ProcessStartInfo]::new('pwsh')
     $start.UseShellExecute=$false;$start.CreateNoWindow=$true
     $start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
-    foreach($argument in @('-NoProfile','-File',$fixtureScript,'-Platform','x64')){$start.ArgumentList.Add($argument)}
+    foreach($argument in @('-NoProfile','-File',$fixtureScript,'-ProjectRoot',$fixture,'-Platform','x64')){$start.ArgumentList.Add($argument)}
     if($readOnly){$start.ArgumentList.Add('-VerifyOnly')}
     $start.Environment['GITHUB_ACTIONS']='false'
     $process=[Diagnostics.Process]::new();$process.StartInfo=$start

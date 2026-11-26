@@ -2782,7 +2782,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate the governed impact manifest and build graph, accumulate ordered mappings, widen unknown inputs, and emit deterministic decisions. Before compilation, resolve targeted native producers to their solution/runtime union; absent bindings, artifact writers and script artifact reads retain the full build. Reuses only immutable bounded pattern matchers; paths and decisions remain fresh.",
+      "purpose": "Validate the governed impact manifest and build graph, accumulate ordered mappings, widen unknown inputs, and emit deterministic decisions. Before compilation, resolve targeted native producers to their solution/runtime union; absent bindings, artifact writers and script artifact reads retain the full build. Reuses immutable bounded pattern matchers and evaluates each workspace snapshot afresh. Ordinary Affected uses shared native scope IDs while the impact manifest retains build and required-entry authority.",
       "usage": "Import from Run-AllTests.ps1 and focused Startrail impact tests; reviewed executable schemas/data select their explicit consumers, unknown Specs JSON/JSON5 widens to Full, Affected decisions always report incomplete repository coverage, and estimates never affect trust or reuse.",
       "usedBy": [
         "Tools/Run-AllTests.ps1",

@@ -147,6 +147,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Selected') {
     $arguments.ScopedEntryId = $Suites
 } elseif ($Mode -eq 'Affected') {
     $arguments.ValidationMode = 'Affected'
+    if (-not $useCanonicalRunner -and -not $Suite) { $arguments.UseSharedAffectedPlanner = $true }
 }
 if ($Suite) {
     $arguments.Suite = $Suite

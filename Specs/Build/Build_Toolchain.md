@@ -874,8 +874,13 @@ x64-/arm64- prefix mapping). A different triplet is a different package ABI hash
 change, and after a change of installation or default major.minor, rebuilds the packages; vcpkg's binary cache then
 serves any root whose triplet text is identical. The functions live in `Tools/Modules/Build/VcpkgInstallSafety.psm1` and
 keep the contract of DxUi's `Tools/VisualStudio.psm1` and `Tools/VcpkgTriplet.psm1`, a documented consumer interface of
-the pinned library. They are not imported, because this installer runs before the DxUi checkout is restored (the Ghostty
-ARM64 workflow installs first); a parity test compares both implementations whenever the pinned checkout is restored.
+the pinned library. The Ghostty ARM64 workflow installs before the DxUi checkout is restored. A parity test compares
+both implementations whenever the pinned checkout is restored.
+
+The pinned CI engine constructs the manifest install arguments. The product keeps vcpkg's default buildtrees,
+packages and downloads locations and supplies the platform's staging root and compiler-pinned triplet overlay.
+ARM64 also supplies the checked-in port overlay. The product preflight owns the explicit registry option and
+retains the selected baseline and executable identity checks before passing that option to vcpkg.
 Public build.ps1 consumes the selected platform's already prepared canonical tree. It checks
 the required include, library and runtime directories and verifies both Git pins through
 Initialize-RSVcpkgToolContext. Missing inputs report the pinned preparation command.
@@ -1109,7 +1114,9 @@ LTO is scoped to each final EXE/DLL and does not guarantee reduced size or impro
 
 ### CI toolchain preparation and audit evidence
 
-The product-specific Windows workflows use the local setup-msvc composite action. It checks out the engine at the project pin before the build and receipt checks. Its setup script reads RequiredMsvcToolsVersion, verifies the discovered default compiler, linker, ASan target libraries, SDK and x64 LLVM scanner tools, and provisions Visual Studio 2026 Insiders only on GitHub-hosted runners when necessary. The Microsoft-signed GUI bootstrapper runs under RUNNER_TEMP through the canonical contained streaming-process helper, with a 45-minute bound and retained stdout/stderr logs. The action waits for its actual exit, accepts only 0 or 3010, then re-verifies every required tool; a shell-global LASTEXITCODE is not installer-completion evidence. Existing installations are retained. A channel that no longer supplies 14.52 fails rather than accepting another compiler. Local -VerifyOnly is read-only; automatic local installation is refused. Hosted provisioning requires an actual successful CI receipt; local verification/refusal controls alone do not qualify it.
+The product-specific Windows workflows use the local `setup-msvc` compatibility action. It checks out the engine at the project pin and routes discovery, verification and hosted provisioning to the shared setup script. Shared setup reads `RequiredMsvcToolsVersion` and verifies the default compiler, linker, ASan target libraries, SDK and x64 LLVM PDB utility. Missing tools may be provisioned only on GitHub-hosted Windows runners using the Microsoft-signed Visual Studio Insiders bootstrapper.
+
+RedSalamander supplies its canonical contained streaming-process function with a 45-minute installer budget. The function waits for the verified GUI bootstrapper's exit and retains stdout and stderr under `RUNNER_TEMP`. The shared setup accepts exit 0 or 3010, then verifies every required tool again. Failed hosted provisioning retains the installer logs. Local `-VerifyOnly` checks the installed toolchain through the same pinned setup. A successful hosted provisioning receipt establishes qualification.
 
 [Full evaluated settings and differences](../../Measurements/Toolchain/2026-10-23-msvc1452/Settings.md) include both platform/configuration matrices and exact per-file metadata. [Microsoft installation guidance](https://learn.microsoft.com/en-us/cpp/overview/acquire-msvc) documents channel-specific acquisition. The published [runner image inventory](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-VS2026-Readme.md) does not establish that the required toolset is installed; runtime versions alone are also not compiler proof.
 
