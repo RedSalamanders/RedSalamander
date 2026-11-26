@@ -1,0 +1,1 @@
+- Match the shared Copilot pointer and document explicit desktop agreement, owned windows and the existing focus-restoration policy.
