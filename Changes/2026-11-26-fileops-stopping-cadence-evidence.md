@@ -1,0 +1,1 @@
+- Measure active popup sampling with a Local Copy held in Stopping and record the matched Release heap comparison.

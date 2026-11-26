@@ -6,6 +6,10 @@
 
 ## Implementation checklist
 
+- [x] Compare steady Stopping allocations on matched x64 Release builds. Both exact no-activation cadence runs passed 3/0/0. The held Local Copy kept its paths, completed bytes and Stopping status. The same rate-update shape allocated or reallocated 25 times per sample on both builds. [Stopping evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-26_154204_popup_stopping_allocations/README.md)
+
+- [x] Recheck the worker archive round-trip after the gallery repair. Exact x64 Release run `20261126T143319Z-57112-b89f3e8ff3b84af485470db353a1309c` passed 1/0/0 without activation. The User Guide and format contract merged in [PR #327](https://github.com/RedSalamanders/RedSalamander/pull/327) at `e2ae2f190`.
+
 - [x] Align the User Guide and archive contract with the two verified Pack formats, ZIP-only Unpack and background scheduling.
 
 - [x] Restore the Change Case documentation gallery and recheck Files-menu admission on x64 Release. Both exact cases passed without activation. The gallery recorded all 45 scenarios and captured the production Change Case prompt. The old failure and remaining native gates are recorded alongside the passes. [Gallery and admission evidence](../../TestRuns/4cb089111a23/Commands/2026-11-26_150252_change_case_gallery/README.md)
@@ -74,7 +78,7 @@
 - [x] Merge transactional Pack publication. Candidate `d54ad80eb` uses the shared Local transaction for ZIP and 7z output. Both x64 builds had zero warnings and errors. The exact non-activating Debug and Release cases preserved existing archive bytes on failed publication, retired only the stage and verified the overwrite retry for both formats. [PR #305](https://github.com/RedSalamanders/RedSalamander/pull/305) merged at `af0895dd7`. [Pack publication evidence](../../TestRuns/4cb089111a23/Commands/2026-11-25_211805_pack_publication/README.md)
 - [x] Qualify Pack and Unpack worker scheduling and cancellation in the focused archive cases. [PR #308](https://github.com/RedSalamanders/RedSalamander/pull/308) merged the Pack worker at `43568ebb3`. Its stored ZIP and 7z checks preserved the prior output on cancel and protected the published file while exact regular-file cleanup waited. The combined Unpack candidate passed the stored and deflated ZIP cases in x64 Debug and Release without activation. Both approved x64 Release archive dialogs passed and released their desktop leases within the single five-minute window. The Release deferred-exit guard also passed. [Pack worker evidence](../../TestRuns/4cb089111a23/Commands/2026-11-25_220215_pack_worker/README.md) [Unpack worker and dialog evidence](../../TestRuns/4cb089111a23/Commands/2026-11-25_222853_unpack_worker/README.md)
 - [ ] Obtain exact Pack directory cleanup evidence and finish wider archive worker qualification.
-- [ ] Finish progress evidence for actual credential waits and the Stopping allocation window. The exact x64 Release cadence run `20261125T163521Z-29964-306dd483faba4d0290f0d6b0776e231a` passed all three stages on `e7a6b1f61` without activation. The held Local worker exercised the credential-wait observer and rate reset. The paired Prompting, Running and Paused allocation windows are recorded above.
+- [ ] Verify actual host credential waits. The exact x64 Release cadence run `20261125T163521Z-29964-306dd483faba4d0290f0d6b0776e231a` passed all three stages on `e7a6b1f61` without activation. The held Local worker exercised the credential-wait observer and rate reset. The paired Prompting, Running, Paused and Stopping allocation windows are recorded above.
 - [ ] Complete the workflow walkthrough and closeout inventory. Move the plan to Done once every required gate has evidence or an accepting owner.
 
 **Delivery checkpoint (2026-11-24).**
