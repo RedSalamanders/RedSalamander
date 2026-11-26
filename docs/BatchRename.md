@@ -170,7 +170,7 @@ If RedSalamander is closing after you chose to cancel all operations and exit, *
 
 # Developer reference
 
-Batch Rename is split into a pure engine, a modeless DxUi window, helper-menu logic, a standalone Change Case command, and the low-level batch marshaller they all share. See [DeveloperGuide.md](DeveloperGuide.md) (section "Batch Rename, Change Case & Rename Batching") for the subsystem overview and [`Specs/UI/UI_BatchRenameWindow.md`](../Specs/UI/UI_BatchRenameWindow.md) for the authoritative contract.
+Batch Rename uses a pure planning engine, a modeless DxUi window, and helper menus. Both Batch Rename and the standalone Change Case command submit their planned mappings to File Operations. The implementation and contracts are described in the [developer guide](DeveloperGuide.md), [Batch Rename specification](../Specs/UI/UI_BatchRenameWindow.md), and [File Operations specification](../Specs/FileSystem/FileSystem_FileOperations.md).
 
 ## Components
 
@@ -178,10 +178,10 @@ Batch Rename is split into a pure engine, a modeless DxUi window, helper-menu lo
 | --- | --- |
 | `RedSalamander/BatchRenameEngine.{h,cpp}` | Pure `BatchRename::BuildPlan(targets, rules)` → `Plan`. Macros, search/replace, case, validation. No I/O, `noexcept`. |
 | `RedSalamander/BatchRenameWindow.{h,cpp}` | Modeless `BatchRenameWindow` (DxUi): scope/collection, preview grid, threading envelope, settings, undo plan, debug API. |
-| `RedSalamander/BatchRenameExecutionEngine.{h,cpp}` | Window-free provider-dispatch engine: dependency layers, temp-hop cycles, per-item outcomes, undo entries, directory-move path rewriting, and execution metrics. |
+| `RedSalamander/BatchRenameExecutionEngine.{h,cpp}` | Dependency scheduling and execution result types, including per-item outcomes, undo entries and directory-move path rewriting. |
 | `RedSalamander/BatchRenameMenus.{h,cpp}` | Template/regex/replacement helper flyouts and caret-aware insertion. |
 | `RedSalamander/MaskSyntax.{h,cpp}` | `*.*`-style include/exclude wildcard masks plus MRU history. |
-| `RedSalamander/ChangeCase.{h,cpp}` | `cmd/pane/changeCase` casing logic plus the recursive `ApplyToPaths` driver. |
+| `RedSalamander/ChangeCase.{h,cpp}` | Casing transforms and `BuildRenameOperations` discovery for `cmd/pane/changeCase`. |
 | `RedSalamander/FileSystemRenameBatch.{h,cpp}` | Arena-backed `Execute()` that calls `IFileSystem::RenameItems`, falling back to per-item `RenameItem`. |
 
 ## The engine: BuildPlan
@@ -201,27 +201,27 @@ The engine uses allocation-light stem/extension splitting on the hot macro path,
 
 ## Execution ordering
 
-Execution is the safety-critical part. `BatchRenameWindow::ExecuteRename` builds one `BatchRenameExecutionOp` per non-no-op row (`currentSource`, `originalSource`, `finalLeaf`, `depth`, `isDirectory`), then sorts deepest-first. The depth key is the count of path separators (`PathDepthKey`); ties break by longer path first. The worker `std::jthread` owns MTA COM initialization and completion posting, then calls the window-free `RunBatchRenameExecutionEngine` in `BatchRenameExecutionEngine.{h,cpp}`, which combines three ideas:
+The Batch Rename window builds one `BatchRenameExecutionOp` per changed row (`currentSource`, `originalSource`, `finalLeaf`, `depth`, `isDirectory`) and submits the mapping through `BatchRenamePaneContext::onStartRename`. The File Operations worker qualifies each path and publishes an acyclic schedule before the first mutation.
 
 1. **Deepest-first depth groups.** Ops are processed one depth group at a time, deepest first, so a child is renamed before its parent directory is renamed out from under it. Within a group, all ops share the same depth.
 
-2. **Dependency layering (chains).** Within a depth group, an op whose target leaf identifies another *pending* op's source is "blocked" until that source is vacated. Each round collects the unblocked ops into one **layer**, dispatched together as a single provider batch (which the provider may parallelize). Successive layers run sequentially. A self-rename whose target identifies only its own source (a case-only rename) is not treated as a dependency on itself. This lets chains like `a → b`, `b → c` admitted by preview validation succeed without clobbering.
+2. **Dependency layering (chains).** Within a depth group, a row waits until any other pending row occupying its destination has moved. The worker applies each layer using conditional Rename. A case-only row has no dependency on itself. This lets a validated chain such as `a → b`, `b → c` preserve both entries.
 
 3. **Cycles (swaps) are refused.** If a round finds no unblocked op, every pending op targets another pending source — a pure rename cycle. Nothing is renamed through a temporary name. Preview validation marks each exact member of the cycle with the blocking issue `name_dependency_cycle` and disables **Rename**, and `BuildBatchRenameExecutionSchedule` returns `ERROR_CIRCULAR_DEPENDENCY` with no executable layers, so the engine does not run a cyclic plan. To swap two names, rename one through a temporary intermediate name in a first pass and finish in a second, acyclic pass.
 
 Bookkeeping:
 
-- Undo entries and the success callback record each row's original→final transition. No row is renamed through a temporary name, so there is no intermediate step to record or to restore.
-- Per-item outcomes come from `BatchRenameExecutionCallback::FileSystemItemCompleted`, so a partially failed parallel batch still records undo entries, notifies `DirectoryInfoCache::NotifyPathMoved`, and counts only the rows that actually failed or never ran. A row that never ran is reported as not attempted with its source retained (`ERROR_OPERATION_ABORTED`, or canceled after a cancel); it never carries the outcome of the row that stopped the run. Providers that never report per-item completion fall back to all-or-nothing semantics for that batch.
+- Undo entries and the success callback record each committed row's original and final names.
+- File Operations reports each row's completion, publication and source disposition. The window records undo entries for proved commits and reflects skipped or failed rows in the report. Successful moves update the directory cache.
 - Successful directory renames are tracked as `ExecutedDirectoryMove`s and replayed (`ApplyExecutedDirectoryMoves`) so child paths in undo entries and the window's own target refresh move under the renamed parent. The `onSuccessfulRename` callback, by contrast, reports each row's path *as of its own rename* (parent moves not folded in); consumers replay the parallel source/target lists sequentially — see the contract in `BatchRenameWindow.h` and `FolderWindow::RefreshPanesAfterBatchRename`.
 
-The engine returns a `BatchRenameExecutionResult`; the worker wrapper posts it back to the UI thread, where the retained `BatchRenameExecutionReport` (totals, first failure, canceled flag, `undoEntries`) feeds the status strip, **Copy Execution Report**, and **Copy Undo Plan**.
+The completion callback maps typed File Operations outcomes into a `BatchRenameExecutionResult`. The window retains the report and undo entries for the status strip, **Copy Execution Report**, and **Copy Undo Plan**.
 
 > **Note:** `Specs/UI/UI_BatchRenameWindow.md` mandates routing every identity-sensitive "same path?" decision through one resolved `FileSystemPathIdentity` profile. Batch Rename now uses that profile for duplicate/case-only validation, dependency layering, provider callback pairing fallback, destination probing, cache notification, target refresh, provider-selection matching, and undo path finalization. The shared helper also owns accepted-separator-aware path equality and optional map keys; same-context Copy/Move/Delete rejects missing, malformed, unsupported, or unstable provider `pathIdentity` before task creation.
 
 ## FileSystemRenameBatch
 
-`FileSystemRenameBatch::Execute` is the shared marshaller for every multi-item leaf rename (Batch Rename and Change Case both use it). Given a span of `RenameOp` (`sourcePath`, `newLeaf`, `depth`, `isDirectory`), it:
+The direct-execution test adapter `ChangeCase::DebugApplyToPathsForTests` uses `FileSystemRenameBatch::Execute` to characterize the provider bulk API. The helper accepts a span of `RenameOp` (`sourcePath`, `newLeaf`, `depth`, `isDirectory`) and performs these steps.
 
 - Computes the total buffer size, copies each source path and new leaf into a plugin-arena (`FileSystemArenaOwner`), and builds a `FileSystemRenamePair` array obeying the arena ownership contract.
 - Rejects empty source/leaf (`E_INVALIDARG`) and new leaves containing path separators (`ERROR_INVALID_NAME`) — `RenameItems`/`RenameItem` take **leaf names only**.
@@ -246,7 +246,7 @@ The **Change Case** command (`cmd/pane/changeCase`, default shortcut `Ctrl+F7`) 
 | `OnlyName` | The stem only (extension preserved). |
 | `OnlyExtension` | The extension only (stem preserved). |
 
-`ChangeCase::ApplyToPaths` is the recursive driver behind the standalone command. With `includeSubdirs` it walks the tree non-recursively through `IFileSystem::ReadDirectoryInfo` (skipping reparse points), de-duplicates paths, then sorts deepest-first (more separators first, longer path as tiebreak) so children rename before parents. Renames are dispatched through `FileSystemRenameBatch::Execute` in 64-item batches per depth group, with cooperative cancellation via `std::stop_token` and progress through a `ProgressCallback`.
+`ChangeCase::BuildRenameOperations` discovers the full selection and validates the resulting mapping before mutation. It binds selected roots without following links and uses iterative directory discovery with cooperative cancellation and progress reporting. Once discovery succeeds, the command submits the immutable mappings as `RenamePlan(ChangeCase)`. The File Operations worker owns exact binding, execution order, conflicts, cancellation and typed outcomes.
 
 ## Cross-links
 

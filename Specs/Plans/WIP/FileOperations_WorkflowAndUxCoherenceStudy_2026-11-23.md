@@ -6,6 +6,8 @@
 
 ## Implementation checklist
 
+- [x] Reconcile the user and developer guides with the scheduled Batch Rename and Change Case execution and task cards.
+
 - [x] Compare steady Stopping allocations on matched x64 Release builds. Both exact no-activation cadence runs passed 3/0/0. The held Local Copy kept its paths, completed bytes and Stopping status. The same rate-update shape allocated or reallocated 25 times per sample on both builds. [Stopping evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-26_154204_popup_stopping_allocations/README.md)
 
 - [x] Recheck the worker archive round-trip after the gallery repair. Exact x64 Release run `20261126T143319Z-57112-b89f3e8ff3b84af485470db353a1309c` passed 1/0/0 without activation. The User Guide and format contract merged in [PR #327](https://github.com/RedSalamanders/RedSalamander/pull/327) at `e2ae2f190`.

@@ -1,0 +1,1 @@
+- Describe Change Case discovery and the shared scheduled Rename execution and results in the guides.
