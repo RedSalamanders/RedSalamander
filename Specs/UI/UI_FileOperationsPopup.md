@@ -82,8 +82,7 @@ The painted Source/Destination/Delete/Verify label column MUST fit its complete 
 without overlapping the path. The consumer retains four bounded text/format measurements and
 reuses them on unchanged paints; locale text and actual font/DPI recreation invalidate the affected
 measurements. The column retains its ordinary minimum and grows for labels such as French
-`Suppression :` and `Vérification`. The path, mini progress and destination selector use the remaining
-width and retain their full tooltip/UIA value.
+`Suppression :` and `Vérification`. The path and mini progress use the remaining width. The path retains its full tooltip and UI Automation value.
 Path rows are focusable in visual Tab order and draw the shared contrasting focus outline. Focus
 reveals the labelled value through the existing host tooltip. Left click, Enter, Space or UIA Invoke
 opens a read-only full-path workspace inside the same popup HWND. UI Automation exposes each path
