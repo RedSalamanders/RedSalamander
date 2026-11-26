@@ -2997,6 +2997,212 @@ FileSystemCurl::DeleteItem(const wchar_t* path, FileSystemFlags flags, const Fil
     return resultHr;
 }
 
+namespace
+{
+struct SftpRenameSelection final
+{
+    std::wstring profileId;
+    std::wstring remotePath;
+    std::string host;
+    std::optional<unsigned int> port;
+    std::string user;
+    std::string root;
+    std::string knownHosts;
+    FilesInformationCurl::Entry parent;
+    FilesInformationCurl::Entry source;
+
+    [[nodiscard]] bool Matches(const SftpRenameSelection& current) const noexcept
+    {
+        const auto sameEntry = [](const FilesInformationCurl::Entry& expected, const FilesInformationCurl::Entry& observed) noexcept
+        {
+            const bool directory = (expected.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
+            return expected.name == observed.name && expected.attributes == observed.attributes && expected.creationTime == observed.creationTime &&
+                   expected.lastWriteTime == observed.lastWriteTime && expected.changeTime == observed.changeTime &&
+                   (directory || (expected.sizeKnown == observed.sizeKnown && (! expected.sizeKnown || expected.sizeBytes == observed.sizeBytes)));
+        };
+        return profileId == current.profileId && remotePath == current.remotePath && host == current.host && port == current.port && user == current.user &&
+               root == current.root && knownHosts == current.knownHosts && sameEntry(parent, current.parent) && sameEntry(source, current.source);
+    }
+};
+} // namespace
+
+class FileSystemCurl::ProbedRenameSource final : public IFileSystemProbedRenameSource
+{
+public:
+    ProbedRenameSource(FileSystemCurl* owner, std::wstring path, SftpRenameSelection selection)
+        : _owner(owner),
+          _path(std::move(path)),
+          _selection(std::move(selection))
+    {
+    }
+
+    ProbedRenameSource(const ProbedRenameSource&)            = delete;
+    ProbedRenameSource(ProbedRenameSource&&)                 = delete;
+    ProbedRenameSource& operator=(const ProbedRenameSource&) = delete;
+    ProbedRenameSource& operator=(ProbedRenameSource&&)      = delete;
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** value) noexcept override
+    {
+        if (! value)
+            return E_POINTER;
+        *value = nullptr;
+        if (riid != __uuidof(IUnknown) && riid != __uuidof(IFileSystemProbedRenameSource))
+            return E_NOINTERFACE;
+        *value = static_cast<IFileSystemProbedRenameSource*>(this);
+        AddRef();
+        return S_OK;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() noexcept override
+    {
+        return _refs.fetch_add(1u, std::memory_order_relaxed) + 1u;
+    }
+
+    ULONG STDMETHODCALLTYPE Release() noexcept override
+    {
+        const ULONG remaining = _refs.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+        if (remaining == 0u)
+            delete this;
+        return remaining;
+    }
+
+    [[nodiscard]] static HRESULT ReadSelection(FileSystemCurl& owner,
+                                               std::wstring_view path,
+                                               ResolvedLocation& location,
+                                               SftpRenameSelection& selection) noexcept
+    {
+        Settings settings;
+        {
+            const std::lock_guard lock(owner._stateMutex);
+            settings = owner._settings;
+        }
+        RETURN_IF_FAILED(ResolveLocation(owner._protocol, settings, path, owner._hostConnections.get(), true, location));
+        const auto& connection = location.connection;
+        const auto remotePath  = NormalizePluginPath(location.remotePath);
+        if (! connection.fromConnectionManagerProfile || connection.connectionId.empty() || remotePath == L"/" ||
+            remotePath == NormalizePluginPath(connection.basePathWide))
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
+        FilesInformationCurl::Entry parent;
+        RETURN_IF_FAILED(GetEntryInfo(connection, ParentPath(remotePath), parent));
+        if ((parent.attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != FILE_ATTRIBUTE_DIRECTORY)
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
+        FilesInformationCurl::Entry source;
+        RETURN_IF_FAILED(GetEntryInfo(connection, remotePath, source));
+        if (source.name != LeafName(remotePath) || source.attributes == 0u || (source.attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
+        // Keep the route and listing facts across queueing. Resolve credentials
+        // again for execution so the token holds no connection secret.
+        selection = SftpRenameSelection{.profileId  = connection.connectionId,
+                                        .remotePath = remotePath,
+                                        .host       = connection.host,
+                                        .port       = connection.port,
+                                        .user       = connection.user,
+                                        .root       = connection.basePath,
+                                        .knownHosts = connection.sshKnownHosts,
+                                        .parent     = std::move(parent),
+                                        .source     = std::move(source)};
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE RenameToFreeSibling(const wchar_t* leaf,
+                                                  const FileSystemOptions* options,
+                                                  FileSystemCorroboratedRenameResult* result) noexcept override
+    {
+        if (! result)
+            return E_POINTER;
+        if (result->sizeBytes != sizeof(*result))
+            return E_INVALIDARG;
+        *result = {};
+        if (! leaf || ! FileSystemOptionsHaveValidHeader(options) || _selection.source.name == leaf)
+            return E_INVALIDARG;
+
+        const auto parent = ParentPath(_path);
+        FileSystemChildNameValidation nameCheck{};
+        nameCheck.sizeBytes = sizeof(nameCheck);
+        RETURN_IF_FAILED(_owner->ValidateChildName(parent.c_str(), leaf, FILESYSTEM_RENAME, &nameCheck));
+        if (nameCheck.status != FILESYSTEM_CHILD_NAME_VALID)
+            return nameCheck.failureStatus;
+
+        const std::lock_guard lock(_mutationMutex);
+        if (_mutationDispatched)
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        const auto started = std::chrono::steady_clock::now();
+        const CurlOperationOptionsScope operationOptionsScope(options);
+        RETURN_IF_FAILED(FileSystemCheckOperationControl(options));
+        ResolvedLocation currentLocation;
+        SftpRenameSelection current;
+        const HRESULT read = ReadSelection(*_owner, _path, currentLocation, current);
+        if (read == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || read == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND) ||
+            read == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || (read == S_OK && ! _selection.Matches(current)))
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        RETURN_IF_FAILED(read);
+
+        const auto& connection = currentLocation.connection;
+        const auto destination = JoinPluginPath(ParentPath(current.remotePath), leaf);
+        std::wstring unusedBackup;
+        const HRESULT probed = PrepareOverwriteTargetForRename(connection, destination, false, unusedBackup);
+        if (probed == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS))
+        {
+            result->mutation.outcomeKnown         = TRUE;
+            result->mutation.originalStillPresent = TRUE;
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+        RETURN_IF_FAILED(probed);
+        RETURN_IF_FAILED(FileSystemCheckOperationControl(options));
+
+        _mutationDispatched       = true;
+        result->mutationAttempted = TRUE;
+        const HRESULT renamed     = RemoteRename(connection, current.remotePath, destination);
+        CurlPublicationResult publication{};
+        publication.primaryCommitted = renamed == S_OK;
+        result->mutation             = BuildExplicitRenameReceipt(publication, false);
+        if (publication.primaryCommitted)
+            _owner->NotifySyntheticPathMoved(_path, JoinPluginPath(parent, leaf));
+        Debug::Perf::Emit(L"fileops.curl.probed_rename_us", L"sftp", Debug::Perf::ElapsedUs(started), 3u, 1u, renamed);
+        return renamed;
+    }
+
+private:
+    std::atomic_ulong _refs{1u};
+    const wil::com_ptr<FileSystemCurl> _owner;
+    const std::wstring _path;
+    const SftpRenameSelection _selection;
+    std::mutex _mutationMutex;
+    bool _mutationDispatched = false;
+};
+
+HRESULT STDMETHODCALLTYPE FileSystemCurl::CaptureProbedRenameSource(const wchar_t* path,
+                                                                    const FileSystemOptions* options,
+                                                                    IFileSystemProbedRenameSource** source) noexcept
+{
+    if (! source)
+        return E_POINTER;
+    *source = nullptr;
+    if (! path || path[0] == L'\0' || ! FileSystemOptionsHaveValidHeader(options))
+        return E_INVALIDARG;
+    if (_protocol != FileSystemCurlProtocol::Sftp)
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
+    const auto started = std::chrono::steady_clock::now();
+    const CurlOperationOptionsScope operationOptionsScope(options);
+    RETURN_IF_FAILED(FileSystemCheckOperationControl(options));
+    ResolvedLocation location;
+    SftpRenameSelection selection;
+    RETURN_IF_FAILED(ProbedRenameSource::ReadSelection(*this, path, location, selection));
+    RETURN_IF_FAILED(FileSystemCheckOperationControl(options));
+
+    wil::com_ptr<IFileSystemProbedRenameSource> captured;
+    captured.attach(new (std::nothrow) ProbedRenameSource(this, path, std::move(selection)));
+    if (! captured)
+        return E_OUTOFMEMORY;
+    *source = captured.detach();
+    Debug::Perf::Emit(L"fileops.curl.probed_rename_capture_us", L"sftp", Debug::Perf::ElapsedUs(started), 2u, 0u, S_OK);
+    return S_OK;
+}
+
 HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItem(const wchar_t* sourcePath,
                                                      const wchar_t* destinationPath,
                                                      FileSystemFlags flags,

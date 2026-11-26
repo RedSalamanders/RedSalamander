@@ -4318,6 +4318,13 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::QueryInterface(REFIID riid, void** ppv
         return S_OK;
     }
 
+    if (riid == __uuidof(IFileSystemProbedRename) && _protocol == FileSystemCurlProtocol::Sftp)
+    {
+        *ppvObject = static_cast<IFileSystemProbedRename*>(this);
+        AddRef();
+        return S_OK;
+    }
+
     if (riid == __uuidof(IFileSystemDirectoryOperations))
     {
         *ppvObject = static_cast<IFileSystemDirectoryOperations*>(this);
