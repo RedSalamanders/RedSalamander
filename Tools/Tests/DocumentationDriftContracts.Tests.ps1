@@ -694,9 +694,10 @@ Describe 'Published product scenario capture provenance' {
 
     It 'covers Search, Space, actual viewers, plugins and every Preferences category' {
         $gallery.schema | Should Be 'red-salamander.product-documentation-gallery.v1'
-        @($gallery.captures).Count | Should Be 47
-        @($gallery.captures.name | Select-Object -Unique).Count | Should Be 47
-        @($gallery.captures | Where-Object group -eq 'product').Count | Should Be 26
+        @($gallery.captures).Count | Should Be 46
+        @($gallery.captures.name | Select-Object -Unique).Count | Should Be 46
+        @($gallery.captures | Where-Object group -eq 'product').Count | Should Be 25
+        ($gallery.captures.name -contains 'preferences-monitor') | Should Be $false
         @($gallery.captures | Where-Object group -eq 'viewer').Count | Should Be 8
         @($gallery.captures | Where-Object group -eq 'space').Count | Should Be 13
         foreach ($name in @('find-files','find-files-empty','plugins','preferences-plugin-mtp','connections','connections-mtp','command-palette',
@@ -706,7 +707,7 @@ Describe 'Published product scenario capture provenance' {
                 'viewer-space-refresh-refused','viewer-space-empty','viewer-space-error','viewer-space-explorer','viewer-space-bottom-panel','viewer-space-map-only','viewer-space-excluded','viewer-space-cleanup-review')) {
             ($gallery.captures.name -contains $name) | Should Be $true
         }
-        foreach ($page in @('general','panes','viewers','editors','keyboard','mouse','themes','advanced','compare-directories','hot-paths','file-operations','user-menu','monitor')) {
+        foreach ($page in @('general','panes','viewers','editors','keyboard','mouse','themes','advanced','compare-directories','hot-paths','file-operations','user-menu')) {
             ($gallery.captures.name -contains ('preferences-'+$page)) | Should Be $true
         }
     }

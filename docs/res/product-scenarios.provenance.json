@@ -136,13 +136,6 @@
       "provenance": "docs/res/preferences-user-menu.provenance.json"
     },
     {
-      "name": "preferences-monitor",
-      "group": "product",
-      "sha256": "3ac14df6eb4d55beb3261f572b000122fd88fb60f35823db0bc5f12cab09b812",
-      "scenario": "cmd_product_documentation_gallery/preferences-monitor",
-      "provenance": "docs/res/preferences-monitor.provenance.json"
-    },
-    {
       "name": "preferences-plugin-mtp",
       "group": "product",
       "sha256": "081bb9dee0bde732c04544ddd1f24886916e5e7f39eff2adb5b221bab76cacbb",

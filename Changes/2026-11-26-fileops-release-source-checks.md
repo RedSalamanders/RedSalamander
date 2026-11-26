@@ -1,0 +1,1 @@
+- Reconcile published gallery and source checks with Monitor retirement, typed Graph upload validation and Preferences focus coverage.
