@@ -1945,8 +1945,8 @@ struct QueuedByNameDelete final
         return packResult.has_value();
     },
         {.timeout = SelfTest::Scale(kIdentityLessWait), .operationName = L"archive writer completion"});
-    if (! packed.conditionMet || ! packResult.has_value() || FAILED(packResult->hr) || packResult->operation != L"pack" ||
-        packResult->archivePath != archive || ! std::filesystem::exists(archive))
+    if (! packed.conditionMet || ! packResult.has_value() || FAILED(packResult->hr) || packResult->operation != L"pack" || packResult->archivePath != archive ||
+        ! std::filesystem::exists(archive))
         return reject(std::format(L"Pack did not write its archive into the folder: completed={} hr=0x{:08X} exists={}",
                                   packed.conditionMet,
                                   packResult.has_value() ? static_cast<unsigned long>(packResult->hr) : 0ul,

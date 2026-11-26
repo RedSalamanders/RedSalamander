@@ -9992,11 +9992,10 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     FolderWindow::FileOperationState::CompletedTaskSummary duplicateSummary{};
     state.Require(waitForSummary(duplicateTaskId, duplicateSummary, SelfTest::Scale(std::chrono::seconds{10})),
                   L"Hard-link duplicate admission should reach a terminal summary.");
-    state.Require(
-        duplicateSummary.resultHr == E_INVALIDARG && SelfTest::PathExists(duplicateSource) && SelfTest::PathExists(duplicateAlias) &&
-            ! SelfTest::PathExists(duplicateRoot / L"duplicate-one.txt") && ! SelfTest::PathExists(duplicateRoot / L"duplicate-two.txt"),
-        std::format(L"Worker admission must reject an invalid plan containing two aliases of one object before publication or mutation: hr=0x{:08X}.",
-                    static_cast<unsigned long>(duplicateSummary.resultHr)));
+    state.Require(duplicateSummary.resultHr == E_INVALIDARG && SelfTest::PathExists(duplicateSource) && SelfTest::PathExists(duplicateAlias) &&
+                      ! SelfTest::PathExists(duplicateRoot / L"duplicate-one.txt") && ! SelfTest::PathExists(duplicateRoot / L"duplicate-two.txt"),
+                  std::format(L"Worker admission must reject an invalid plan containing two aliases of one object before publication or mutation: hr=0x{:08X}.",
+                              static_cast<unsigned long>(duplicateSummary.resultHr)));
     fileOps->DismissCompletedTask(duplicateTaskId);
 
     const std::filesystem::path capturedRoot        = root / L"captured-intent";
