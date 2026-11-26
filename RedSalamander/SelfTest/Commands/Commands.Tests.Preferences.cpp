@@ -329,34 +329,6 @@ private:
     std::filesystem::path _schemaBackupPath;
 };
 
-[[nodiscard]] bool ReadSmallPreferencesSelfTestFile(const std::filesystem::path& path, std::string& outText) noexcept
-{
-    outText.clear();
-
-    std::ifstream file(path, std::ios::binary);
-    if (! file)
-    {
-        return false;
-    }
-
-    file.seekg(0, std::ios::end);
-    const std::streampos end = file.tellg();
-    if (end < std::streampos{} || end > std::streampos{1024 * 1024})
-    {
-        return false;
-    }
-
-    file.seekg(0, std::ios::beg);
-    outText.resize(static_cast<size_t>(end));
-    if (outText.empty())
-    {
-        return true;
-    }
-
-    file.read(outText.data(), static_cast<std::streamsize>(outText.size()));
-    return file.gcount() == static_cast<std::streamsize>(outText.size());
-}
-
 [[nodiscard]] HWND WaitForPreferencesKeyboardSearchInputTarget(std::chrono::milliseconds timeout, PreferencesDebugSnapshot& outSnapshot) noexcept
 {
     using namespace std::chrono_literals;
