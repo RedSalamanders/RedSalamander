@@ -1,1 +1,0 @@
-- Route RedSalamander performance and resource requirements through a Core contract with links to the existing budget and test owners.

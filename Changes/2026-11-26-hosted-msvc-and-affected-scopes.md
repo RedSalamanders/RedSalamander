@@ -1,1 +1,0 @@
-- Share hosted MSVC setup and ordinary Affected planning while retaining the contained installer, timeout, canonical build scope and archived evidence.
