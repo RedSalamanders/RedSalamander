@@ -147,6 +147,7 @@ Describe 'Product documentation capture fixtures' {
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"'
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"folderView_drop_integrity_guards"'
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation"'
+        $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_pane_batchRename_admission_worker_owned_cancellable"'
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"main_menu_information_architecture"'
         $menuCase = [regex]::Match($settingsCommands, '(?ms)\[\[nodiscard\]\] bool TestMainMenuInformationArchitecture\(.*?^}')
         $menuCase.Success | Should Be $true
@@ -160,7 +161,7 @@ Describe 'Product documentation capture fixtures' {
         }
         $startupAdmission.Value | Should Not Match '_wcsicmp|starts_with|SelfTestCaseNameEquals'
         $runner = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp'
-        $runner | Should Match 'const bool noActivationDirectCase\s*=\s*\(\s*options\.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"\s*\|\|\s*options\.caseFilter == L"folderView_drop_integrity_guards"\s*\|\|\s*options\.caseFilter == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation"\s*\|\|\s*options\.caseFilter == L"main_menu_information_architecture"\s*\)\s*&&\s*options\.flakyProofCaseName\.empty\(\)\s*&&\s*options\.orderProofCaseName\.empty\(\)'
+        $runner | Should Match 'const bool noActivationDirectCase\s*=\s*\(\s*options\.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"\s*\|\|\s*options\.caseFilter == L"folderView_drop_integrity_guards"\s*\|\|\s*options\.caseFilter == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation"\s*\|\|\s*options\.caseFilter == L"cmd_pane_batchRename_admission_worker_owned_cancellable"\s*\|\|\s*options\.caseFilter == L"main_menu_information_architecture"\s*\)\s*&&\s*options\.flakyProofCaseName\.empty\(\)\s*&&\s*options\.orderProofCaseName\.empty\(\)'
         $bypass = [regex]::Match($runner, '(?s)if \(! options\.listCasesOnly && noActivationDirectCase &&\s*RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread\(\)\)\s*\{\s*runRegisteredCases\(options\);\s*\}')
         $bypass.Success | Should Be $true
         $warningIndex = $runner.IndexOf('const DirectedSelfTestInputWarning inputWarning', [StringComparison]::Ordinal)
@@ -177,6 +178,23 @@ Describe 'Product documentation capture fixtures' {
         $dropCase.Value | Should Not Match '\b(?:SendInput|SetCursorPos|SetForegroundWindow|RequestForegroundWindow|AttachThreadInput|TryActivateOwnedWindow|DoDragDrop)\s*\('
         $interactiveIndex | Should BeLessThan $warningIndex
         $interactiveIndex | Should BeLessThan $prepareIndex
+    }
+
+    It 'keeps the exact worker-admission and archive-interlock witnesses independent of desktop input' {
+        $batchSource = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.BatchRename.cpp'
+        $batchCase = [regex]::Match($batchSource, '(?ms)^\[\[nodiscard\]\] bool TestBatchRenameAdmissionIsWorkerOwnedAndCancellable\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $batchCase.Success | Should Be $true
+        $batchCase.Value | Should Match 'DebugStartBatchRenameWindowExecution\(\)'
+        $batchCase.Value | Should Match 'PostMessageW\(closeWindow, WM_CLOSE'
+        $identityLessSource = Get-RSText -Path 'RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.IdentityLess.cpp'
+        $archiveCase = [regex]::Match($identityLessSource, '(?ms)^\[\[nodiscard\]\] bool RunDeleteIdentityLessPinnedTreeArchiveWriterChecks\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $archiveCase.Success | Should Be $true
+        $archiveCase.Value | Should Match 'ScopedWindowActivationBlocker::IsActiveForCurrentThread\(\)'
+        $archiveCase.Value | Should Match 'DebugSetNextArchiveCommandOptionsForTest'
+        $archiveCase.Value | Should Match 'FinishQueuedByNameDelete'
+        foreach ($body in @($batchCase.Value, $archiveCase.Value)) {
+            $body | Should Not Match '\b(?:SendInput|SetCursorPos|SetFocus|GetFocus|SetForegroundWindow|GetForegroundWindow|RequestForegroundWindow|AttachThreadInput|TryActivateOwnedWindow|PrepareMainWindowForIsolatedUiCase|DirectedSelfTestInputWarning|UIAutomation)\s*(?:\(|\b)'
+        }
     }
 
     It 'keeps Search documentation seeding UI-thread-only and refuses an active search' {

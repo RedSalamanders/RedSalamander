@@ -216,12 +216,17 @@ The exact Commands case `main_menu_information_architecture` runs with the proce
 
 The non-activating File Operations case `FileOps_DeferredExitRefusesNewWork` also checks Create Folder against a delayed Dummy provider. It waits on the exact second Create Folder task before mutation, navigates the pane to a sibling, then verifies that completion preserves the new pane path and creates the directory only under the original parent. `FileOps.SelfTest.CreateFolderAfterNavigationUs` records release-to-completion time and name-prompt latency.
 
-The exact Commands case `cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation` injects publication failure for the stored ZIP and 7z writers. Each attempt preserves the previous output bytes and retires only its staged sibling by handle. It also holds each Pack worker just before commit, verifies that the command has returned to the pane, and cancels the task while the previous archive remains readable. The worker reports exact rollback and a later attempt publishes a complete archive. The exact regular-file cleanup control also verifies that the published archive denies a competing write open while source revalidation is held. The Unpack controls hold the stored and deflated ZIP workers before committing an entry. Cancel preserves the ZIP and the prior output, rolls back the private stage and queues no source cleanup even after cleanup consent.
+The exact Commands case `cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation` injects publication failure for the stored ZIP and 7z writers. Each attempt preserves the previous output bytes and retires only its staged sibling by handle. It also holds each Pack worker just before commit, verifies that the command has returned to the pane, and cancels the task while the previous archive remains readable. The worker reports exact rollback and a later attempt publishes a complete archive. The exact regular-file cleanup control also verifies that the published archive denies a competing write open while source revalidation is held. The Pack source guard checks the worker publication result and retained archive handle at cleanup admission. The identity-less Delete witness awaits the real parallel Pack result through an alternate path spelling while the earlier Delete still waits, then verifies that the changed tree is refused and the archive survives. The Unpack controls hold the stored and deflated ZIP workers before committing an entry. Cancel preserves the ZIP and the prior output, rolls back the private stage and queues no source cleanup even after cleanup consent.
 The case has the same
 admission rule. It dispatches real archive commands on sandbox fixtures through synthetic
 input and answers the archive cleanup question within the test. The case verifies that an
 Unpack collision skip preserves the selected archive and its existing destination, and that
 Pack keeps the originals when a link is omitted from the archive.
+
+The exact Commands case `cmd_pane_batchRename_admission_worker_owned_cancellable` uses the same
+no-activation admission. It opens Batch Rename on the guarded UI thread, starts its worker through
+an owned test hook and posts a close message to the window. It verifies worker admission, cancellation and
+teardown using owned provider fixtures.
 
 Before opening any fixture, bind `LOCALAPPDATA`, `TEMP` and `TMP` to marked
 capture scratch through the canonical `ScopedEnvironmentVariable` helper. Refuse
@@ -1198,11 +1203,12 @@ the same synchronous reporter and counter path as the pointer overload.
   `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage`,
   `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof`, `R0fGraph_FakeGraphReadWriteCreateRenameRecycle`,
   `Phase16_RemoteOneDrivePersonalInlineRename`, or
-  `Delete_IdentityLessPinnedTreeChangedEntry` case filter and no flaky/order proof injection.
+  `Delete_IdentityLessPinnedTreeChangedEntry` or `Delete_IdentityLessPinnedTreeArchiveWriter` case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
   copies and, for progress witnesses, owned HWND WGC capture;
   the Local direct-API witness uses owned filesystem data and callback controls, including its joined worker;
-  the identity-less Delete witness uses owned sandbox data and submits owned task decisions directly;
+  the identity-less Delete witnesses use owned sandbox data and submit task decisions directly. The archive writer
+  also submits and awaits a real parallel Pack in the pinned tree before it releases the Delete;
   the added storage/route witnesses use owned sandbox data and the same activation blocker;
   the Curl reply-loss case runs the owned loopback FTP endpoint through a joined worker with no UI;
   the repeated non-clipboard Copy and Move cases use owned task controls and sandbox files under the activation blocker;

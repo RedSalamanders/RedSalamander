@@ -1710,7 +1710,11 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                         .providerPath    = bindingPath.native(),
                         .ingressSnapshot = boundAuthority.authority.identity,
                     },
-                .finalLeafName = L"renamed-one.bin",
+                .finalLeafName              = L"renamed-one.bin",
+                .providerJoinedPath         = (bindingPath.parent_path() / L"renamed-one.bin").native(),
+                .providerParentKey          = bindingPath.parent_path().native(),
+                .providerSourceCollisionKey = bindingPath.filename().native(),
+                .providerCollisionKey       = L"renamed-one.bin",
             },
             {
                 .source =
@@ -1718,9 +1722,14 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                         .providerPath    = bindingAlias.native(),
                         .ingressSnapshot = sameAuthority.current.identity,
                     },
-                .finalLeafName = L"renamed-two.bin",
+                .finalLeafName              = L"renamed-two.bin",
+                .providerJoinedPath         = (bindingAlias.parent_path() / L"renamed-two.bin").native(),
+                .providerParentKey          = bindingAlias.parent_path().native(),
+                .providerSourceCollisionKey = bindingAlias.filename().native(),
+                .providerCollisionKey       = L"renamed-two.bin",
             },
         };
+        duplicateObjectRename.schedule.layers = {{.operationIndices = {0u, 1u}}};
         if (! require(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{duplicateObjectRename}, &validationBucket) == E_INVALIDARG &&
                           validationBucket == FileOperations::PlanRejectionBucket::InvalidRename,
                       L"Batch Rename validation must reject two paths bound to the same physical source object."))
@@ -1737,6 +1746,13 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             FileOperations::RevalidateObjectAuthority(state.fsLocal.get(), bindingPath.native(), L"local-win32", hostBindingFlags, boundAuthority.authority);
         if (! require(changedAuthority.state == FileOperations::ObjectRevalidationState::Changed && SUCCEEDED(changedAuthority.status),
                       L"Host revalidation should classify same-path replacement as changed."))
+        {
+            return true;
+        }
+
+        duplicateObjectRename.finalMappings.front().source.ingressSnapshot = changedAuthority.current.identity;
+        if (! require(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{duplicateObjectRename}, &validationBucket) == S_OK,
+                      L"The same complete Batch Rename plan must accept two distinct source objects."))
         {
             return true;
         }

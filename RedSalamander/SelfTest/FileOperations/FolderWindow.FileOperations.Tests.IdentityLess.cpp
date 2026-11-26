@@ -1857,9 +1857,8 @@ struct QueuedByNameDelete final
     return true;
 }
 
-// I35 S4 round 2 (pinned tree): Pack writes its archive directly, outside the File Operations admission,
-// the overlap question and the interlock. An archive packed into a subfolder of a folder whose delete by
-// name waits in the queue changes the pinned listing and survives that delete.
+// I35 S4 round 2 (pinned tree): a parallel Pack publishes through a different spelling of the
+// delete's subfolder. The queued delete must reject its changed tree and preserve the archive.
 [[nodiscard]] bool RunDeleteIdentityLessPinnedTreeArchiveWriterChecks(SelfTestState& state, std::wstring& skipped) noexcept
 {
     const auto reject = [](std::wstring_view reason) noexcept
@@ -1931,12 +1930,29 @@ struct QueuedByNameDelete final
     packOptions.archivePath = archive;
     packOptions.overwrite   = true;
     folder->DebugSetNextArchiveCommandOptionsForTest(packOptions);
+    // Select Parallel for this submission. Existing queue participants keep their order and
+    // the Pack task still goes through the mutation interlock.
+    const bool queueNewTasks = operations->GetQueueNewTasks();
+    operations->SetQueueNewTasks(false);
     folder->CommandPack(FolderWindow::Pane::Left);
-    const std::optional<FolderWindow::ArchiveCommandDebugResult> packResult = folder->DebugGetLastArchiveCommandResultForTest();
-    if (! packResult.has_value() || FAILED(packResult->hr) || ! std::filesystem::exists(archive))
-        return reject(std::format(L"Pack did not write its archive into the folder: hr=0x{:08X} exists={}",
+    operations->SetQueueNewTasks(queueNewTasks);
+
+    std::optional<FolderWindow::ArchiveCommandDebugResult> packResult;
+    const auto packed = RedSalamander::TestSupport::PumpMessagesUntil(
+        [&]() noexcept
+    {
+        packResult = folder->DebugGetLastArchiveCommandResultForTest();
+        return packResult.has_value();
+    },
+        {.timeout = SelfTest::Scale(kIdentityLessWait), .operationName = L"archive writer completion"});
+    if (! packed.conditionMet || ! packResult.has_value() || FAILED(packResult->hr) || packResult->operation != L"pack" || packResult->archivePath != archive ||
+        ! std::filesystem::exists(archive))
+        return reject(std::format(L"Pack did not write its archive into the folder: completed={} hr=0x{:08X} exists={}",
+                                  packed.conditionMet,
                                   packResult.has_value() ? static_cast<unsigned long>(packResult->hr) : 0ul,
                                   std::filesystem::exists(archive)));
+    if (! scope.WaitUntilWaitingToEnter(fixture.deletion, L"delete still queued after archive publication"))
+        return reject(L"the Delete did not stay queued until after the archive was published");
     std::error_code sizeError;
     const uintmax_t archiveBytes = std::filesystem::file_size(archive, sizeError);
 

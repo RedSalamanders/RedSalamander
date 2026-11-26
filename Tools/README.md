@@ -754,6 +754,10 @@ to FolderView while the no-activation guard is active.
 The exact `cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation` case admits `-NonInteractive`
 under the same restrictions. It dispatches the archive commands programmatically
 with owned inputs and a test prompt answer.
+The exact `cmd_pane_batchRename_admission_worker_owned_cancellable` case uses
+owned provider fixtures and a posted close message to verify worker cancellation. The exact FileOps
+`Delete_IdentityLessPinnedTreeArchiveWriter` case submits Pack and Delete through owned task controls.
+Both admit `-NonInteractive` with the activation guard held.
 `ViewerPETests TestViewerDocumentationGallery --no-activate` captures generated
 viewer fixtures; `TestViewerSpaceLifecycleCaptures --no-activate` covers Space.
 These focused captures do not qualify keyboard interaction or a Full run.
