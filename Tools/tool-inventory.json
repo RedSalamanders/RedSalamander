@@ -1205,7 +1205,7 @@
       "usage": "Run after adding, moving, retiring, or changing the role of tooling; use -FailOnFindings in validation.",
       "usedBy": [
         "Tool authors",
-        "repository validation workflows"
+        "validate.ps1"
       ],
       "prerequisites": [],
       "sideEffects": [],

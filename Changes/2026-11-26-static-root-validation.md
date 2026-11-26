@@ -1,0 +1,1 @@
+- Run the same guidance, tool inventory and specification validation from the root command and compiler-free PR CI, after the existing product audits.
