@@ -1,0 +1,1 @@
+- Restore the Change Case documentation capture through the guarded gallery entry point. The capture uses the production prompt and closes it after taking the screenshot.

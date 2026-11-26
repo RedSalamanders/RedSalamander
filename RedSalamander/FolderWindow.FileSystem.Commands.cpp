@@ -10412,6 +10412,7 @@ bool DebugShowDocumentationUtilityOptions(HWND owner, const AppTheme& theme, Doc
     const std::filesystem::path folder(L"C:\\Demo\\Workspace");
     switch (kind)
     {
+        case DocumentationUtilityOptions::ChangeCase: return ! PromptForChangeCase(owner, theme, true).has_value();
         case DocumentationUtilityOptions::FileList: return ! PromptForMakeFileListOptions(owner, theme, MakeFileListSettings{}).has_value();
         case DocumentationUtilityOptions::Pack: return ! PromptForArchivePackOptions(owner, theme, folder, {folder / L"project-plan.txt"}).has_value();
         case DocumentationUtilityOptions::Unpack: return ! PromptForArchiveUnpackOptions(owner, theme, folder, folder / L"workshop.zip").has_value();

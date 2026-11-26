@@ -191,7 +191,8 @@ enum class DocumentationUtilityOptions : uint8_t
     Pack,
     Unpack,
     CreateDirectory,
-    NewFile
+    NewFile,
+    ChangeCase
 };
 // Actual option surfaces, UI thread only, with invented input and no provider/action admission.
 [[nodiscard]] bool DebugShowDocumentationUtilityOptions(HWND owner, const AppTheme& theme, DocumentationUtilityOptions kind) noexcept;
