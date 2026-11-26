@@ -131,6 +131,17 @@
       "discrepancyIds": []
     },
     {
+      "path": "Specs/Core/Core_PerformanceAndResources.md",
+      "status": "VERIFIED_MATCH",
+      "contractOwner": "RedSalamander performance and resource policy",
+      "implementationAnchors": ["Common/Common/PerfJsonl.cpp", "Tools/Show-PerfRuns.ps1", "Tools/Run-AllTests.ps1", "Specs/Testing/FolderViewPerfBudgets.json5"],
+      "testAnchors": ["Tools/Tests/ShowPerfRuns.Tests.ps1", "Tools/Tests/TestRunArchive.Tests.ps1", "Tests/PerformanceTests2/Performance.Tests.Runner.cpp"],
+      "siblingSpecs": ["Specs/Testing/Testing_PerformanceValidation.md", "Specs/Testing/Testing_ValidationEvidence.md", "Specs/UI/UI_FolderView.md", "Specs/FileSystem/FileSystem_FileOperations.md"],
+      "reviewedSections": ["Mandate", "Budget authorities", "Measurement and acceptance"],
+      "reviewerNote": "Matched the Core contract to existing scenario coverage, instrumented rows, machine-keyed FolderView thresholds and source-bound archive checks. Setup and execution phases and technical budget details retain their existing owners.",
+      "discrepancyIds": []
+    },
+    {
       "path": "Specs/Core/Core_Search.md",
       "status": "VERIFIED_MATCH",
       "contractOwner": "SearchService broker and search providers",

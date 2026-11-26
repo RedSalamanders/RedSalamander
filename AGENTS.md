@@ -68,7 +68,7 @@ Any new feature, hot-path change, or optimization that can affect responsiveness
 - deterministic selftest coverage,
 - archived perf evidence under `Specs/TestRuns/`
 
-from the beginning. Follow RedHome's `test-evidence` performance workflow and RedSalamander's [performance validation contract](Specs/Testing/Testing_PerformanceValidation.md).
+from the beginning. Follow the [performance and resource contract](Specs/Core/Core_PerformanceAndResources.md) and the [performance validation procedures](Specs/Testing/Testing_PerformanceValidation.md). Use RedHome's `test-evidence` workflow to record validation evidence.
 
 ### Spec Closeout is Mandatory
 

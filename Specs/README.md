@@ -100,6 +100,7 @@ Read the owning spec before editing behavior. Update the owning contract, implem
 | Domain | Start with |
 |---|---|
 | Core | [Core/Core_SharedHelpers.md](Core/Core_SharedHelpers.md), [Core/Core_SettingsStore.md](Core/Core_SettingsStore.md), [Core/Core_Search.md](Core/Core_Search.md), [Core/Core_ConnectionManager.md](Core/Core_ConnectionManager.md), [Core/Core_StartupBootstrap.md](Core/Core_StartupBootstrap.md) |
+| Performance and resources | [Core/Core_PerformanceAndResources.md](Core/Core_PerformanceAndResources.md) |
 | UI | [UI/UI_DxUiWinUIDesign.md](UI/UI_DxUiWinUIDesign.md), [UI/UI_FolderWindow.md](UI/UI_FolderWindow.md), [UI/UI_FolderView.md](UI/UI_FolderView.md), [UI/UI_DxUiSharedGrid.md](UI/UI_DxUiSharedGrid.md), [UI/UI_TopLevelToolWindows.md](UI/UI_TopLevelToolWindows.md), [UI/UI_PreferencesDialog.md](UI/UI_PreferencesDialog.md) |
 | File systems | [FileSystem/FileSystem_FileOperations.md](FileSystem/FileSystem_FileOperations.md), [FileSystem/FileSystem_FtpSftpScp.md](FileSystem/FileSystem_FtpSftpScp.md), and the provider-specific specs |
 | Plugins | [Plugins/Plugins_PluginAPI.md](Plugins/Plugins_PluginAPI.md), [Plugins/Plugins_VirtualFileSystem.md](Plugins/Plugins_VirtualFileSystem.md), [Plugins/Plugins_ViewerPlugins.md](Plugins/Plugins_ViewerPlugins.md) |
