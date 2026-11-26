@@ -2,6 +2,7 @@ $repoRoot=Split-Path (Split-Path $PSScriptRoot)
 Describe 'Independent RedMonitor consumption' {
  It 'verifies the single vendored header and license entirely offline' {
   & (Join-Path $PSScriptRoot 'Helpers/RedMonitorClient.ps1') -RepositoryRoot $repoRoot
+  & (Join-Path $repoRoot 'Verify-RedMonitorClient.ps1') -RepositoryRoot $repoRoot
  }
  It 'refuses modified tooling before verifying the native client' {
   Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1')

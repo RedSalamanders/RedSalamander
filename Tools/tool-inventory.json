@@ -5116,9 +5116,10 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Explicitly fetch only the client header and MIT notice at one full upstream commit and update their lock.",
+      "purpose": "Explicitly fetch the client header and MIT notice at one reviewed commit and update their runtime lock.",
       "usage": "See command help and the RedMonitor integration contract.",
       "usedBy": [
+        "Update-RedMonitorClient.ps1",
         "Manual developer use"
       ],
       "prerequisites": [
@@ -5146,6 +5147,7 @@
       "purpose": "Verify the pinned local client tooling, header, and MIT notice without Git or network.",
       "usage": "See command help and the RedMonitor integration contract.",
       "usedBy": [
+        "Verify-RedMonitorClient.ps1",
         "Directory.Build.targets",
         "Tools/Restore-RedMonitor.ps1",
         "Tools/Tests/Helpers/RedMonitorClient.ps1"

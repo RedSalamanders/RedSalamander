@@ -569,6 +569,7 @@ cost without invoking the C++ compiler.
 | Validate repository guidance and inventories | `./validate.ps1` |
 | Validate agent guidance | `./validate-skills.ps1` |
 | Validate specification governance | `./validate-specs.ps1` |
+| Verify the pinned RedMonitor client and tooling | `./Verify-RedMonitorClient.ps1` |
 | Validate this inventory | `./Tools/Get-ToolInventory.ps1 -FailOnFindings` |
 | Run raw cloc for solution directories | `./Tools/InvokeSolutionCloc.ps1` |
 | Review archived performance runs | `./Tools/Show-PerfRuns.ps1` |
