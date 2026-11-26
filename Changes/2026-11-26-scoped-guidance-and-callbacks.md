@@ -1,0 +1,1 @@
+- Document ownership of prototype and tool guidance, and align the root callback exception rule with the existing typed handling and fatal allocation policy.

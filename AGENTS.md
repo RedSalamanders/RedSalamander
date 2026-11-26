@@ -146,7 +146,7 @@ paths with thin compatibility shims when they may have external consumers.
 - **File-action IDs:** treat viewer/editor/user-menu action IDs as stable but case-insensitive identifiers. Uniqueness and lookup are case-insensitive, IDs that differ only by case are invalid duplicates, and parameterized command dispatch or association resolution must never require exact casing.
 - **yyjson mutable builders:** never pass temporary/stack strings to non-copy APIs (`yyjson_mut_obj_add_str`, `yyjson_mut_str`); for dynamic keys use `yyjson_mut_strncpy` + `yyjson_mut_obj_add`, and for string values prefer `*_strcpy`/`*_strncpy` (`RedHome` `yyjson` skill).
 - **Thread-safety:** never read/write shared non-atomic state without a lock (or use `std::atomic` with correct memory ordering).
-- **Exceptions / `catch (...)`:** `catch (...)` is **FORBIDDEN**. If exception handling is mandatory at an ABI boundary (`noexcept` methods, Win32 callbacks, thread entrypoints), catch only explicitly named exception types and add a short comment explaining why catching is required there and what the fallback is. Prefer non-throwing APIs (e.g. `std::filesystem` overloads with `std::error_code`). If you catch-and-fail, log once with `Debug::Error(...)`; if you catch-and-continue, document the fallback (avoid empty catch without an explanation). Treat `std::bad_alloc` as fatal (`std::terminate()`), and never let it be swallowed by a broader `catch (const std::exception&)`.
+- **Exceptions at callbacks and ABI boundaries:** Keep C++ exceptions inside the boundary. `catch (...)` is **FORBIDDEN**. Prefer non-throwing APIs such as `std::filesystem` overloads with `std::error_code`. When a `noexcept` method, Win32 callback, thread entry point, or plugin ABI requires handling, catch explicitly named recoverable types and document the fallback. Log once with `Debug::Error(...)` when failing the operation. Treat `std::bad_alloc` as fatal with `std::terminate()` before any handler that could also catch it. `FormatLoadedStringResource` in `Common/Helpers.h` shows the fatal allocation and recoverable format-error paths.
 - **Detached threads:** avoid `std::thread(...).detach()` in plugin DLLs; prefer `TrySubmitThreadpoolCallback` or `std::jthread` + `stop_token`. If detach is unavoidable, pin module lifetime with `AcquireModuleReferenceFromAddress(...)` and make thread start exception-safe (especially in `noexcept` code).
 - **Threadpool module pins:** a plugin threadpool callback that owns an `AcquireModuleReferenceFromAddress(...)` handle MUST transfer it at callback entry with `TransferModulePinToCallbackReturn(instance, pin)`. Destroying the last `wil::unique_hmodule` inside the callback can unmap the callback's own code before it returns.
 - **Plugin unload quiet point:** stop producers → request shutdown/cancel → stop posting payload messages → `SetCallback(nullptr, nullptr)` → release instances → unload module only when no callbacks can still run.
@@ -175,7 +175,6 @@ paths with thin compatibility shims when they may have external consumers.
 - `sprintf_s` / `swprintf_s` in non-PoC code
 - `DestroyWindow(...get())` on `wil::unique_hwnd` owners
 - `AddRef()` + `attach()` (use `wil::com_ptr` assignment)
-- Empty `catch (...) {}` without explaining why it’s safe to ignore
 - Global state and singletons
 - Blocking UI thread
 - Hardcoded UI strings (use `.rc` resources)
@@ -225,7 +224,7 @@ When working with this codebase:
 - Suggest modern C++ patterns
 - Reference appropriate skills for detailed patterns
 
-## Scoped testing policy (2026-10-05)
+## Scoped testing policy
 
 Use `test.ps1 -Explain` and the affected default while editing. Use `-Mode PrePush` for the full local
 obligation and `-Full` to request canonical Full acceptance. Pull request checks are compiler-free. Active native
