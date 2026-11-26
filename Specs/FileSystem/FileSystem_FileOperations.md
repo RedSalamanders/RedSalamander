@@ -2614,7 +2614,7 @@ provider's reason and a `preparation.destinationName` diagnostic before any inte
 execution keeps its own re-query against that admitted join.
 
 Inline Rename enters the source mutation phase as the worker calls `RenameIfUnchanged` or the
-corroborated source token. A provider-name refusal during Preparing reports typed
+admitted corroborated or probed source token. A provider-name refusal during Preparing reports typed
 `Failed`/`NotAttempted`/`Retained` with the provider's status, as for other pre-Ready failures.
 An executor pre-bind or other early failure reports `Failed`/`NotPublished`/`Retained`; an
 early Skip retains its own skipped result. None becomes `Unknown` merely because no mutation
@@ -2636,6 +2636,12 @@ The worker validates the requested sibling and captures the provider's pre-dispa
 proved publication receipt. A file or folder must belong to the selected drive. Keep both uses a new
 sibling name. An indeterminate dispatch ends mutation authority. [Microsoft Drive provider contract](FileSystem_MicrosoftDrive.md)
 
+A Connection Manager SFTP profile can use the single-item probed Inline Rename route. The provider
+rechecks its selected route, parent and source facts in the conservative parent scope and probes
+the exact sibling name immediately before the server Rename. A known occupied name can offer Keep both.
+The SFTP server can replace a name created after the probe, and an uncertain dispatch ends the token.
+[FTP, SFTP and SCP provider contract](FileSystem_FtpSftpScp.md#scheduled-sftp-rename)
+
 If the host rejects the request before publishing a task, FolderView shows a localized pane-scoped
 operation error because no task card exists. After successful task publication, failure presentation
 belongs only to the central task UI; FolderView does not add a duplicate pane alert.
@@ -2644,8 +2650,8 @@ belongs only to the central task UI; FolderView does not add a duplicate pane al
   The exception survives live Queue reapplication and completion-driven pause recalculation:
   inline renames are excluded from the oldest-active selection used to compute queue-induced pauses.
   An explicit user pause and cancellation remain independent and retain their authority.
-- Before mutation, the worker retains exact no-follow authority for every governed root and its
-  provider ancestors. Roots overlap when their qualified endpoint/path profiles overlap lexically or
+- On exact-binding routes, the worker retains exact no-follow authority for every governed root and
+  its provider ancestors before mutation. Roots overlap when their qualified endpoint/path profiles overlap lexically or
   when retained authority proves that an alias reaches the same root or ancestor object. Common
   root-to-ancestor chains are interned and shared within a task, so retained authority grows with
   unique governed provider paths rather than selected sibling count or recursive tree size.
@@ -3996,7 +4002,11 @@ The File Operations selftest and provider-contract matrix cover:
 - Recycle on a location without a Recycle Bin (the loopback administrative-share alias of the
   sandbox): a file, a folder, and a sibling batch are each kept as a known non-commit, and the host
   asks for exact-item permanent-delete consent instead of reporting a Recycle
-  (`R0fSmb_LoopbackRecycleNeverDestroys`; the per-item verdict is also a FileSystem debug self-test);
+  (`R0fSmb_LoopbackRecycleNeverDestroys`; the per-item verdict is also a FileSystem debug self-test).
+  The exact `FileOps_SmbRecycleRefusal` witness uses a fresh file on the registered SMB endpoint and
+  checks the Local provider's guarded Recycle admission, the exact-item refusal question, and byte
+  retention after Skip. The Samba and Windows SMB evidence covers by-name and exact-identity consent respectively.
+  [Live x64 Release evidence](../TestRuns/4cb089111a23/FileOps/2026-11-26_182743_smb_recycle_refusal/README.md)
 - a Recycle the provider reports as destroyed (`COPYENGINE_E_RECYCLE_FORCE_NUKE`, committed removal)
   fails with `delete.recycle.destroyed` in both the per-item and BulkItems executors, without a
   permanent-delete prompt (`Phase10_RecycleDestroyedIsNeverRecycled`);

@@ -11,10 +11,11 @@ moved to RedMonitor.
 - The viewer, model, listener, rendering, resources and native viewer tests are owned by
   [RedSalamanders/RedMonitor](https://github.com/RedSalamanders/RedMonitor).
   RedSalamander vendors only ThirdParty/RedMonitor/include/RedMonitor/Client.h and its MIT notice.
-  Dependencies/RedMonitor.lock.json records the exact upstream commit, API and SHA-256 values.
-  Tools/Verify-RedMonitorClient.ps1 performs local-only verification; explicit
-  Tools/Update-RedMonitorClient.ps1 -Commit FULL_SHA updates the two files and lock together.
-  The former Restore-RedMonitor command is a read-only compatibility verifier.
+  `Dependencies/RedMonitor.lock.json` records the exact client commit, API, and SHA-256 values. Its separate tooling
+  pin binds the commands in `Dependencies/RedMonitorClientTools` to the SDK publisher's manifest.
+  `Verify-RedMonitorClient.ps1` checks the tool and client hashes locally. The explicit
+  `Update-RedMonitorClient.ps1 -Commit FULL_SHA` updates the two client files and their runtime pin.
+  Existing commands under `Tools/` remain available, including the read-only `Tools/Restore-RedMonitor.ps1` verifier.
 - There are no viewer/test/satellite projects in this solution. Builds, tests and portable ZIPs never
   clone, compile, stage or require a viewer. The ZIP carries only the client MIT notice; stale old
   viewer executables/satellites must not enter the package. The independent RedMonitor Release ZIP owns
@@ -26,16 +27,13 @@ moved to RedMonitor.
   client's 16,000 UTF-16-code-unit application-plus-message limit; the retained prefix ends before a complete
   surrogate pair and carries the `[truncated]` marker. The application and message together never exceed the
   client limit. Local/debug/crash/performance behavior remains owned here.
-- Preferences retains the legacy monitor settings adapter. In every consumer configuration its storage
-  path is RedSalamanderMonitor-7.0.settings.json, matching the installed Release viewer. Existing live
-  filter/mask signaling remains compatible. Native settings-path and consented real Preferences interaction
-  are separate checks. Independent settings/support narrowing remains tracked in the canonical WIP plan.
+- RedMonitor owns viewer profiles in its per-user settings directory and exposes **File > Open Settings File**. RedSalamander Preferences manages only the RedSalamander profile. The [viewer settings contract](https://github.com/RedSalamanders/RedMonitor/blob/main/Specs/Core/Core_Settings.md) defines first-use migration from retained legacy files.
 
 ## Historical viewer requirements transferred to the independent owner
 
 The following retained requirements document the original behavior. Their legacy source/build paths
 describe origin, not active projects in this repository. Current implementation and viewer qualification
-belong to RedMonitor; consumer acceptance covers logging, installed discovery, Preferences and app packaging.
+belong to RedMonitor; consumer acceptance covers logging, installed discovery and app packaging.
 ## Shared UI dependency
 
 The independent Monitor owner builds against its own exact external `DxUi.lib` pin through its supported MSBuild

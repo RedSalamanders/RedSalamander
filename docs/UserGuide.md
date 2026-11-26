@@ -233,7 +233,7 @@ Properties can be opened with **Files -> Properties** or `Alt+Enter`. The dialog
 
 - **Rename** (`F2`): rename the focused item. If more than one item is selected, RedSalamander opens Batch Rename instead. The rename prompt also offers **Batch...**: for a folder it opens Batch Rename rooted at that folder, for a file it opens Batch Rename with that file in the preview.
 - **Batch Rename**: preview selected files before bulk renaming them. The Rules area combines a new-name template, search/replace options, and independent file-name/extension case changes, or you can switch to Manual mode and type one target name per row. The preview grid validates every proposed name before any rename can run. The window is modeless, so you can keep working in the panes while it is open. For the full set of macros, search/replace options, case styles, validation rules, and reporting, see [Batch Rename](BatchRename.md).
-- **New Folder / MakeDir** (`F7`): create a directory in the focused pane.
+- Use **New Folder / MakeDir** (`F7`) to name a directory in the focused pane. Creation continues in the background. A pane showing the parent folder refreshes when creation finishes.
 - **New -> Shell templates**: lists Windows ShellNew templates for local folders. Choosing one prompts for a name, creates the file, refreshes the pane, and focuses the new item when it is visible.
 - **Change Case** (`Ctrl+F7`): change name casing for selected items (lower, upper, mixed) without opening the full preview window. See [Batch Rename](BatchRename.md#change-case) for the available case styles.
 - **Change Attributes**: uses mixed tri-state boxes for multi-selection so unchanged attributes stay untouched.
@@ -243,8 +243,8 @@ Properties can be opened with **Files -> Properties** or `Alt+Enter`. The dialog
 ![File operations popup](res/file-operations-popup.png)
 
 - **Copy** (`F5`): copy selected items to the other pane.
-- **Move/Rename** (`F6`): move selected items to the other pane or rename depending on context.
-- **Delete** (`Del` or `F8`): delete selected items, using the Recycle Bin when supported.
+- Use **Move/Rename** (`F6`) to move the selection into the other pane's current folder. Use **Rename** (`F2`) to change an item's name.
+- Use **Delete** (`Del` or `F8`) to move selected items to the Recycle Bin when supported. The task asks for your confirmation if permanent deletion is offered.
 - **Permanent Delete** (`Shift+Del` or `Shift+F8`): asks for confirmation, then bypasses the Recycle Bin.
 
 Long operations run in the background. The File Operations popup shows:
@@ -258,12 +258,12 @@ Long operations run in the background. The File Operations popup shows:
 - Speed at the right of the Throughput heading and the effective automatic
   transfer budget below the buttons.
 - Complete wrapped Last note text on an expanded finished card.
-
-See [File Operations](FileOperations.md) for counting, verification, source-retention
-results, note visibility and the actual Issues pane. Use [Selections and File
-Lists](SelectionsAndLists.md) to prepare a selection or report before an operation.
 - Conflict prompts for overwrite, retry, skip, and cancel decisions.
 - Issue export and diagnostic log access.
+
+See [File Operations](FileOperations.md) for counting, verification, source-retention
+results, note visibility and the Issues pane. Use [Selections and File
+Lists](SelectionsAndLists.md) to prepare a selection or report before an operation.
 
 ### Clipboard and Drag-and-Drop
 

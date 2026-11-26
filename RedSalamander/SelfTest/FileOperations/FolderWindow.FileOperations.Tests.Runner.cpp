@@ -76,6 +76,7 @@
 #include "Common.Tests.SandboxPath.h"
 #include "Common.Tests.WindowActivationGuard.h"
 #include "CompareDirectoriesWindow.h"
+#include "ConnectionCredentialPromptDialog.h"
 #include "ConnectionProfileUtils.h"
 #include "ContentDigest.h"
 #include "DirectoryInfoCache.h"
@@ -603,6 +604,7 @@ struct CompletedTaskInfo
     uint64_t conflictWaitUs                              = 0;
     uint64_t conflictConvergenceWaitUs                   = 0;
     uint64_t conflictPromptCount                         = 0;
+    uint64_t consentPromptCount                          = 0;
     uint64_t queueWaitUs                                 = 0;
     uint64_t interlockWaitUs                             = 0;
     uint64_t interlockWaitCount                          = 0;
@@ -986,6 +988,7 @@ struct SelfTestState
         Phase16_RemoteFtpSandbox,
         Phase16_RemoteSftpSecret,
         Phase16_RemoteSftpSandbox,
+        Phase16_RemoteSftpInlineRename,
         Phase16_RemoteScpSecret,
         Phase16_RemoteScpSandbox,
         Phase16_RemoteImapSecret,
@@ -1030,6 +1033,7 @@ struct SelfTestState
         FileOps_SelectionShapeSmb,
         FileOps_SmbExactRenameProvider,
         FileOps_SmbCorroboratedRenameProvider,
+        FileOps_SmbRecycleRefusal,
         Cleanup_RestorePluginConfig,
         Done,
         Failed,
@@ -1638,6 +1642,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Phase16_RemoteFtpSandbox: return L"Phase16_RemoteFtpSandbox";
         case SelfTestState::Step::Phase16_RemoteSftpSecret: return L"Phase16_RemoteSftpSecret";
         case SelfTestState::Step::Phase16_RemoteSftpSandbox: return L"Phase16_RemoteSftpSandbox";
+        case SelfTestState::Step::Phase16_RemoteSftpInlineRename: return L"Phase16_RemoteSftpInlineRename";
         case SelfTestState::Step::Phase16_RemoteScpSecret: return L"Phase16_RemoteScpSecret";
         case SelfTestState::Step::Phase16_RemoteScpSandbox: return L"Phase16_RemoteScpSandbox";
         case SelfTestState::Step::Phase16_RemoteImapSecret: return L"Phase16_RemoteImapSecret";
@@ -1682,6 +1687,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::FileOps_SelectionShapeSmb: return L"FileOps_SelectionShapeSmb";
         case SelfTestState::Step::FileOps_SmbExactRenameProvider: return L"FileOps_SmbExactRenameProvider";
         case SelfTestState::Step::FileOps_SmbCorroboratedRenameProvider: return L"FileOps_SmbCorroboratedRenameProvider";
+        case SelfTestState::Step::FileOps_SmbRecycleRefusal: return L"FileOps_SmbRecycleRefusal";
         case SelfTestState::Step::Cleanup_RestorePluginConfig: return L"Cleanup_RestorePluginConfig";
         case SelfTestState::Step::Done: return L"Done";
         case SelfTestState::Step::Failed: return L"Failed";
@@ -1874,6 +1880,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::FileOps_SelectionShapeSmb,
     SelfTestState::Step::FileOps_SmbExactRenameProvider,
     SelfTestState::Step::FileOps_SmbCorroboratedRenameProvider,
+    SelfTestState::Step::FileOps_SmbRecycleRefusal,
     SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns, // R0f-SMB - a wedged synchronous provider call returns on cancel
     SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete,       // R0f-SMB - read/write/create/rename/delete on a loopback share
     SelfTestState::Step::R0fSmb_LoopbackRecycleNeverDestroys,        // R0f-SMB - Recycle on a share keeps every item and asks before permanent delete
@@ -2015,6 +2022,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::Phase16_RemoteFtpSandbox,                            // Phase 16 â€” remote sandbox root configuration (FTP)
     SelfTestState::Step::Phase16_RemoteSftpSecret,                            // Phase 16 â€” secure secret retrieval (SFTP)
     SelfTestState::Step::Phase16_RemoteSftpSandbox,                           // Phase 16 â€” remote sandbox root configuration (SFTP)
+    SelfTestState::Step::Phase16_RemoteSftpInlineRename,                      // Phase 16 - scheduled Rename in a dedicated SFTP test folder
     SelfTestState::Step::Phase16_RemoteScpSecret,                             // Phase 16 â€” secure secret retrieval (SCP)
     SelfTestState::Step::Phase16_RemoteScpSandbox,                            // Phase 16 â€” remote sandbox root configuration (SCP)
     SelfTestState::Step::Phase16_RemoteImapSecret,                            // Phase 16 â€” secure secret retrieval (IMAP)
@@ -2248,6 +2256,7 @@ constexpr std::array<SelfTestState::Step, 5> kFileOpsFamilyR1dPreparing{{
 constexpr std::array kFileOpsFamilyR0fSmbContainment{
     SelfTestState::Step::FileOps_SmbExactRenameProvider,
     SelfTestState::Step::FileOps_SmbCorroboratedRenameProvider,
+    SelfTestState::Step::FileOps_SmbRecycleRefusal,
     SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns,
     SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete,
     SelfTestState::Step::R0fSmb_LoopbackRecycleNeverDestroys,
@@ -2359,12 +2368,13 @@ constexpr std::array<SelfTestState::Step, 2> kFileOpsFamilyPhase15{{
     SelfTestState::Step::Phase15_FileSystem7zMountPathImpact,
 }};
 
-constexpr std::array<SelfTestState::Step, 20> kFileOpsFamilyPhase16{{
+constexpr std::array<SelfTestState::Step, 21> kFileOpsFamilyPhase16{{
     SelfTestState::Step::Phase16_RemoteWatchContractExposure,
     SelfTestState::Step::Phase16_RemoteFtpSecret,
     SelfTestState::Step::Phase16_RemoteFtpSandbox,
     SelfTestState::Step::Phase16_RemoteSftpSecret,
     SelfTestState::Step::Phase16_RemoteSftpSandbox,
+    SelfTestState::Step::Phase16_RemoteSftpInlineRename,
     SelfTestState::Step::Phase16_RemoteScpSecret,
     SelfTestState::Step::Phase16_RemoteScpSandbox,
     SelfTestState::Step::Phase16_RemoteImapSecret,
@@ -11220,6 +11230,62 @@ using TickResult = std::optional<bool>;
             return reject(L"the pending fallback completion was not adopted after its worker joined");
     }
 
+    // Keep one real Local Copy in Stopping at the conflict metadata barrier.
+    {
+        SetFileOpsConflictMetadataPauseForSelfTest(true, static_cast<ULONGLONG>(SelfTest::Scale(15s).count()));
+        auto releaseMetadata      = wil::scope_exit([]() noexcept
+        {
+            ReleaseFileOpsConflictMetadataPauseForSelfTest();
+            SetFileOpsConflictMetadataPauseForSelfTest(false, 0u);
+        });
+        const uint64_t stoppingId = StartFileOperationAndGetId(operations,
+                                                               FILESYSTEM_COPY,
+                                                               FolderWindow::Pane::Left,
+                                                               FolderWindow::Pane::Right,
+                                                               folder->GetFileSystem(FolderWindow::Pane::Left),
+                                                               {queuedSource},
+                                                               destination,
+                                                               FILESYSTEM_FLAG_NONE,
+                                                               false,
+                                                               0u,
+                                                               State::ExecutionMode::PerItem,
+                                                               false,
+                                                               folder->GetFileSystem(FolderWindow::Pane::Right))
+                                        .value_or(0u);
+        if (stoppingId == 0u)
+            return reject(L"the Stopping cadence Copy was not admitted");
+        const auto blocked       = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept {
+            return HasFileOpsConflictMetadataPauseEnteredForSelfTest();
+        }, {.timeout = SelfTest::Scale(5s), .operationName = L"Stopping cadence Copy metadata gate"});
+        auto* const stoppingTask = operations->FindTask(stoppingId);
+        if (! blocked.conditionMet || ! stoppingTask)
+            return reject(L"the Stopping cadence Copy did not reach its metadata gate");
+        stoppingTask->RequestCancel();
+        if (! waitForInterval(100u, SelfTest::Scale(2s), L"Stopping Copy telemetry cadence").conditionMet)
+            return reject(L"the Stopping Copy did not select the 100 ms cadence");
+        TaskSnapshot stoppingBefore{}, stoppingAfter{};
+        if (! DebugGetFileOperationsPopupTaskSnapshot(popup, stoppingId, stoppingBefore) || stoppingBefore.finished ||
+            stoppingBefore.statusKind != TaskSnapshot::StatusKind::Stopping)
+            return reject(L"the held Copy was not Stopping at the beginning of the sample");
+        if (! measure(L"engine-stopping", 1200ms, before, after))
+            return reject(L"the Stopping measurement pump failed");
+        const uint64_t samples = after.popup.rateUpdates - before.popup.rateUpdates;
+        const bool stable =
+            HasFileOpsConflictMetadataPauseEnteredForSelfTest() && DebugGetFileOperationsPopupTaskSnapshot(popup, stoppingId, stoppingAfter) &&
+            ! stoppingAfter.finished && stoppingAfter.statusKind == TaskSnapshot::StatusKind::Stopping &&
+            stoppingAfter.completedBytes == stoppingBefore.completedBytes && stoppingAfter.currentSourcePath == stoppingBefore.currentSourcePath &&
+            stoppingAfter.currentDestinationPath == stoppingBefore.currentDestinationPath && after.popup.timerIntervalMs == 100u && samples >= 6u;
+        Debug::Perf::EmitValue(L"FileOps.PopupCadence.StoppingSamples", samples, stable ? S_OK : E_FAIL);
+        if (! stable)
+            fail(L"the held Local Copy did not keep its Stopping state and active sampling cadence");
+        releaseMetadata.reset();
+        const auto retired = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept { return ! operations->FindTask(stoppingId); },
+                                                                           {.timeout = SelfTest::Scale(5s), .operationName = L"Stopping cadence Copy retires"});
+        if (! retired.conditionMet)
+            return reject(retired.timeoutDiagnostic);
+        operations->DismissCompletedTask(stoppingId);
+    }
+
     // A second real Copy must keep the 100 ms cadence while its peer awaits credentials.
     // Hold both at their normal publication checkpoint so the observation cannot race completion.
     {
@@ -11297,6 +11363,124 @@ using TickResult = std::optional<bool>;
                 static_cast<unsigned>(active.statusKind),
                 work(popupWork),
                 after.popup.timerIntervalMs));
+        }
+        // Exercise the host's actual modal wait with an invented profile. The
+        // guarded popup timer checks the two live tasks and dismisses only this prompt.
+        {
+            struct CredentialPromptProbe final
+            {
+                State* operations          = nullptr;
+                HWND owner                 = nullptr;
+                HWND foreground            = nullptr;
+                uint64_t waitingId         = 0u;
+                uint64_t activeId          = 0u;
+                ULONGLONG firstObservation = 0u;
+                uint64_t initialTicks      = 0u;
+                uint64_t ticks             = 0u;
+                bool observed              = false;
+                bool closed                = false;
+
+                static void NoteWait(void* context, bool waiting) noexcept
+                {
+                    // A timed-out fixture worker can retire while the modal loop pumps.
+                    const auto* probe = static_cast<const CredentialPromptProbe*>(context);
+                    if (Task* const task = probe->operations->FindTask(probe->waitingId))
+                        Task::OnCredentialWait(task, waiting);
+                }
+
+                static void CALLBACK Observe(HWND popup, UINT, UINT_PTR timer, DWORD) noexcept
+                {
+                    auto* probe       = static_cast<CredentialPromptProbe*>(GetPropW(popup, L"RedSalamander.FileOpsCredentialCadence"));
+                    const HWND prompt = GetConnectionCredentialPromptDialogHandle();
+                    if (! probe || ! prompt || GetWindow(prompt, GW_OWNER) != probe->owner || GetWindowThreadProcessId(prompt, nullptr) != GetCurrentThreadId())
+                        return;
+
+                    TaskSnapshot waiting{}, active{};
+                    PopupTelemetryDebugSnapshot telemetry{};
+                    const bool waitingWithPeer = (GetWindowLongPtrW(prompt, GWL_EXSTYLE) & WS_EX_NOACTIVATE) != 0 &&
+                                                 GetForegroundWindow() == probe->foreground &&
+                                                 DebugGetFileOperationsPopupTaskSnapshot(popup, probe->waitingId, waiting) &&
+                                                 DebugGetFileOperationsPopupTaskSnapshot(popup, probe->activeId, active) &&
+                                                 DebugGetFileOperationsPopupTelemetrySnapshot(popup, telemetry) && waiting.waitingForCredentials &&
+                                                 waiting.statusKind == TaskSnapshot::StatusKind::AwaitingCredentials && ! active.waitingForCredentials &&
+                                                 active.statusKind == TaskSnapshot::StatusKind::Running;
+                    const ULONGLONG now        = GetTickCount64();
+                    if (probe->firstObservation == 0u)
+                    {
+                        probe->firstObservation = now;
+                        probe->initialTicks     = telemetry.timerTicks;
+                    }
+                    if (waitingWithPeer && now - probe->firstObservation < 700u)
+                        return;
+
+                    probe->ticks    = telemetry.timerTicks >= probe->initialTicks ? telemetry.timerTicks - probe->initialTicks : 0u;
+                    probe->observed = waitingWithPeer && probe->ticks >= 3u && telemetry.timerIntervalMs == 100u;
+                    KillTimer(popup, timer);
+                    probe->closed = PostMessageW(prompt, WM_CLOSE, 0, 0) != FALSE;
+                }
+            };
+
+            Task* const awaiting = operations->FindTask(waitingId);
+            wil::com_ptr<IHostConnections> hostConnections;
+            if (! awaiting || FAILED(GetHostServices()->QueryInterface(IID_PPV_ARGS(hostConnections.put()))) || ! hostConnections)
+                return reject(L"the owned credential prompt fixture could not bind its task and host");
+
+            using namespace Common::Settings;
+            auto savedConnections         = g_settings.connections;
+            const auto restoreConnections = wil::scope_exit([&]() noexcept { g_settings.connections = std::move(savedConnections); });
+            if (! g_settings.connections)
+                g_settings.connections.emplace();
+            ConnectionProfile profile{};
+            if (FAILED(CreateConnectionProfileId(profile.id)))
+                return reject(L"the credential prompt fixture could not allocate a private profile ID");
+            const std::wstring name = MakeUniqueConnectionProfileName(L"File Operations cadence");
+            profile.name            = name;
+            profile.pluginId        = kPluginIdFtp;
+            profile.host            = L"127.0.0.1";
+            profile.userName        = L"fixture";
+            g_settings.connections->items.push_back(std::move(profile));
+
+            CredentialPromptProbe probe{
+                .operations = operations, .owner = state.mainWindow, .foreground = GetForegroundWindow(), .waitingId = waitingId, .activeId = activeId};
+            constexpr wchar_t property[] = L"RedSalamander.FileOpsCredentialCadence";
+            if (! SetPropW(popup, property, &probe))
+                return reject(L"the owned credential prompt fixture could not bind its popup observation");
+            const UINT_PTR timer   = SetTimer(popup, reinterpret_cast<UINT_PTR>(&probe), 50u, &CredentialPromptProbe::Observe);
+            const auto retireProbe = wil::scope_exit([&]() noexcept
+            {
+                if (timer)
+                    KillTimer(popup, timer);
+                RemovePropW(popup, property);
+            });
+            if (! timer)
+                return reject(L"the owned credential prompt fixture could not observe the modal wait");
+
+            const uint64_t initialGeneration = awaiting->_rateSamplingStateGeneration.load(std::memory_order_acquire);
+            const auto promptStart           = std::chrono::steady_clock::now();
+            wil::unique_cotaskmem_string secret;
+            HRESULT promptHr = E_FAIL;
+            {
+                const ScopedHostCredentialWaitObserver observer({&probe, &CredentialPromptProbe::NoteWait});
+                promptHr = hostConnections->PromptForConnectionSecret(name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, state.mainWindow, secret.put());
+            }
+            Task* const resolvedTask   = operations->FindTask(waitingId);
+            const uint64_t transitions = resolvedTask ? resolvedTask->_rateSamplingStateGeneration.load(std::memory_order_acquire) - initialGeneration : 0u;
+            const bool passed = resolvedTask && ! resolvedTask->IsWaitingForCredentials() && transitions == 2u && probe.observed && probe.closed &&
+                                promptHr == S_FALSE && ! secret && ! GetConnectionCredentialPromptDialogHandle() && GetForegroundWindow() == probe.foreground;
+            Debug::Perf::Emit(L"FileOps.PopupCadence.HostCredentialPrompt",
+                              L"cancel-owned-profile",
+                              Debug::Perf::ElapsedUs(promptStart),
+                              transitions,
+                              probe.ticks,
+                              passed ? S_OK : E_FAIL);
+            if (! passed)
+                fail(std::format(L"the owned host credential prompt wait failed: held={} transitions={} observed={} closed={} ticks={} hr=0x{:08X}",
+                                 resolvedTask != nullptr,
+                                 transitions,
+                                 probe.observed,
+                                 probe.closed,
+                                 probe.ticks,
+                                 static_cast<unsigned long>(promptHr)));
         }
         ReleaseFileOpsLiveOutputPublishedPauseForSelfTest();
         const auto bothRetired     = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
@@ -13926,6 +14110,162 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
     return smbRootText;
 }
 
+[[nodiscard]] bool RunFileOpsSmbRecycleRefusalChecks(SelfTestState& state, std::wstring& unavailableReason) noexcept
+{
+    using Task        = FolderWindow::FileOperationState::Task;
+    const auto reject = [](std::wstring_view reason) noexcept
+    {
+        AppendLog(std::format(L"SMB Recycle: {}", reason));
+        return false;
+    };
+    const auto registeredRoot = ResolveSmbSelfTestRootForSelfTest(unavailableReason);
+    if (! registeredRoot.has_value())
+        return true;
+
+    const std::filesystem::path root(registeredRoot.value());
+    const auto isOrdinaryDirectory = [](const std::filesystem::path& path) noexcept
+    {
+        const DWORD attributes = GetFileAttributesW(path.c_str());
+        return attributes != INVALID_FILE_ATTRIBUTES && (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == FILE_ATTRIBUTE_DIRECTORY;
+    };
+    if (! isOrdinaryDirectory(root))
+        return reject(L"registered root must be an ordinary directory");
+
+    auto* const operations = TryGetFileOps(TryGetFolderWindow(state.mainWindow));
+    wil::com_ptr<IFileSystemIO> io;
+    if (! operations || operations->HasActiveOperations() || ! state.fsLocal || ! state.fsLocal.try_query_to(io.put()))
+        return reject(L"Local provider or quiet task owner is unavailable");
+
+    RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
+    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
+        return reject(L"no-activation guard is unavailable");
+
+    const auto fixture = root / std::format(L"recycle-refusal-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    if (! CreateDirectoryW(fixture.c_str(), nullptr))
+        return reject(std::format(L"could not create an exclusive fixture child (error {})", GetLastError()));
+    AppendLog(std::format(L"SMB Recycle fixture: {}", fixture.filename().native()));
+    const auto source                       = fixture / L"retain.txt";
+    constexpr std::string_view kSourceBytes = "I66 live SMB Recycle refusal witness";
+    uint64_t taskId                         = 0u;
+    bool fixtureRemoved                     = false;
+    const auto release                      = wil::scope_exit([&]() noexcept
+    {
+        if (taskId != 0u && CancelOutstandingSelfTestOperations(operations))
+        {
+            operations->DismissCompletedTask(taskId);
+            operations->DebugRemoveDiagnosticsForTask(taskId);
+            state.completedTasks.erase(taskId);
+        }
+        if (! fixtureRemoved)
+            AppendLog(std::format(L"SMB Recycle retained fixture {}", fixture.filename().native()));
+    });
+    if (! SelfTest::WriteTextFile(source, kSourceBytes))
+        return reject(L"could not write the owned file");
+
+    wil::com_ptr<IFileSystemObjectBinding> binding;
+    if (! state.fsLocal.try_query_to(binding.put()))
+        return reject(L"Local provider does not expose an identity probe");
+    constexpr auto readFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+    wil::com_ptr<IFileSystemBoundObject> original;
+    const HRESULT identity = binding->BindObject(source.c_str(), readFlags, original.put());
+    const bool exact       = identity == S_OK && original;
+    if (! exact && (identity != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || original))
+        return reject(std::format(L"the identity probe returned 0x{:08X}", static_cast<uint32_t>(identity)));
+    original.reset();
+    const auto consentBucket = exact ? Task::ConflictBucket::RecycleFailed : Task::ConflictBucket::RecycleFailedByName;
+
+    const auto sourceRetained = [&]() noexcept
+    {
+        const DWORD attributes = GetFileAttributesW(source.c_str());
+        std::string bytes;
+        return attributes != INVALID_FILE_ATTRIBUTES && (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == 0u &&
+               ReadFileTextFsIo(io, source, bytes) && bytes == kSourceBytes;
+    };
+
+    const auto started      = std::chrono::steady_clock::now();
+    const HRESULT admission = operations->AdmitOperation(FILESYSTEM_DELETE,
+                                                         FolderWindow::Pane::Left,
+                                                         std::nullopt,
+                                                         state.fsLocal,
+                                                         {source},
+                                                         {},
+                                                         FILESYSTEM_FLAG_USE_RECYCLE_BIN,
+                                                         false,
+                                                         0u,
+                                                         FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                         false,
+                                                         nullptr,
+                                                         &taskId);
+    if (admission != S_OK || taskId == 0u)
+        return reject(std::format(L"Delete admission returned 0x{:08X}", static_cast<uint32_t>(admission)));
+
+    std::optional<Task::ConflictPromptState> prompt;
+    const auto waiting = RedSalamander::TestSupport::PumpMessagesUntil(
+        [&]() noexcept
+    {
+        prompt = TryGetConflictPromptCopy(operations->FindTask(taskId));
+        return (prompt.has_value() && prompt.value().buttonsPublishable) || state.completedTasks.contains(taskId);
+    },
+        {.timeout = SelfTest::Scale(std::chrono::seconds(20)), .operationName = L"SMB Recycle refusal"});
+    auto* const task     = operations->FindTask(taskId);
+    const auto plans     = task ? task->LoadPlans() : nullptr;
+    const auto* deletion = plans && plans->size() == 1u ? std::get_if<FileOperations::DeletePlan>(&plans->front()) : nullptr;
+    if (! waiting.conditionMet || ! task || ! deletion || deletion->mode != FileOperations::DeleteMode::Recycle || ! prompt.has_value())
+    {
+        const auto completed = state.completedTasks.find(taskId);
+        const HRESULT result = completed == state.completedTasks.end() ? E_PENDING : completed->second.hr;
+        return reject(std::format(L"the guarded Recycle did not reach exact-item consent (task result 0x{:08X})", static_cast<uint32_t>(result)));
+    }
+    const auto& question = prompt.value();
+    if (! question.buttonsPublishable || ! question.deferredConsent || question.bucket != consentBucket ||
+        question.status != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || question.sourceItemIndex != 0u || question.sourcePath != source.native() ||
+        ! PromptHasAction(question, Task::ConflictAction::PermanentDelete) || ! PromptHasAction(question, Task::ConflictAction::Skip) || ! sourceRetained())
+        return reject(std::format(L"expected one exact-item consent with bytes retained (bucket={}, expected={}, status=0x{:08X}, index={})",
+                                  static_cast<unsigned int>(question.bucket),
+                                  static_cast<unsigned int>(consentBucket),
+                                  static_cast<uint32_t>(question.status),
+                                  question.sourceItemIndex.value_or((std::numeric_limits<size_t>::max)())));
+
+    const auto decisionUs = Debug::Perf::ElapsedUs(started);
+    if (! task->SubmitConflictDecision(question.generation, Task::ConflictAction::Skip, false))
+        return reject(L"Skip did not accept the exact consent generation");
+    const auto done = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return state.completedTasks.contains(taskId) && ! operations->HasActiveOperations();
+    }, {.timeout = SelfTest::Scale(std::chrono::seconds(20)), .operationName = L"SMB Recycle Skip completion"});
+    if (! done.conditionMet)
+        return reject(L"the Recycle task did not settle after Skip");
+    const auto& completed = state.completedTasks.at(taskId);
+    const auto& items     = completed.sourceItemResults;
+    if (completed.hr != S_FALSE || completed.consentPromptCount != 1u || completed.conflictPromptCount != 0u || items.size() != 1u ||
+        ! items.front().has_value() || items.front().value().completion != FileOperations::ItemCompletion::Skipped ||
+        items.front().value().sourceDisposition != FileOperations::SourceDisposition::Retained || ! sourceRetained())
+        return reject(std::format(L"Skip must preserve the file and report one skipped item (hr=0x{:08X}, consents={}, conflicts={})",
+                                  static_cast<uint32_t>(completed.hr),
+                                  completed.consentPromptCount,
+                                  completed.conflictPromptCount));
+
+    // Only retire this fresh file and its now-empty parent, after rechecking the
+    // parent types and the file's contents. Failed observations keep the fixture.
+    if (! isOrdinaryDirectory(root) || ! isOrdinaryDirectory(fixture) || ! sourceRetained() || ! DeleteFileW(source.c_str()) ||
+        ! RemoveDirectoryW(fixture.c_str()))
+        return reject(L"could not retire the verified fixture nonrecursively");
+    const DWORD fixtureAttributes = GetFileAttributesW(fixture.c_str());
+    const DWORD fixtureError      = fixtureAttributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
+    fixtureRemoved                = fixtureError == ERROR_FILE_NOT_FOUND || fixtureError == ERROR_PATH_NOT_FOUND;
+    if (! fixtureRemoved)
+        return reject(L"the fixture's absence could not be confirmed");
+
+    Debug::Perf::Emit(L"FileOps.SelfTest.SmbRecycleRefusal",
+                      exact ? L"exact-identity consent and Skip" : L"by-name consent and Skip",
+                      decisionUs,
+                      completed.consentPromptCount,
+                      1u,
+                      question.status);
+    AppendLog(std::format(L"SMB Recycle: known non-commit, one exact-item question, original bytes retained on Skip, fixture removed ({} us to consent).",
+                          decisionUs));
+    return true;
+}
+
 // The nested fixture of the SMB cases: four folder levels with files at every level, an empty folder and a folder of
 // 300 small files. Each folder gets its own last-write time in 2001 once its contents exist, so a folder whose basic
 // information was not restored after its children were copied shows the copy time instead.
@@ -14884,9 +15224,10 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     return true;
 }
 
-[[nodiscard]] HRESULT RunGraphInlineRenameForSelfTest(const wil::com_ptr<IFileSystem>& fileSystem,
-                                                      const std::filesystem::path& source,
-                                                      std::wstring_view destinationLeaf) noexcept
+[[nodiscard]] HRESULT RunRemoteInlineRenameForSelfTest(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                       std::wstring_view pluginId,
+                                                       const std::filesystem::path& source,
+                                                       std::wstring_view destinationLeaf) noexcept
 {
     RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
     if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
@@ -14894,7 +15235,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
 
     Common::Settings::Settings settings{};
     wil::unique_hwnd privateHost(
-        CreateWindowExW(0, L"STATIC", L"Owned Graph test", WS_POPUP, 0, 0, 640, 480, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));
+        CreateWindowExW(0, L"STATIC", L"Owned remote Rename test", WS_POPUP, 0, 0, 640, 480, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));
     FolderWindow owner;
     owner.SetSettings(&settings);
     constexpr auto pane = FolderWindow::Pane::Left;
@@ -14904,8 +15245,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     const PluginMetaData* metadata = nullptr;
     if (! information || information->GetMetaData(&metadata) != S_OK || ! metadata || ! metadata->shortId)
         return E_UNEXPECTED;
-    RETURN_IF_FAILED(
-        owner.SetFileSystemInstanceForPane(pane, fileSystem, std::wstring(kPluginIdOneDrivePersonal), metadata->shortId, L"graph-rename-selftest"));
+    RETURN_IF_FAILED(owner.SetFileSystemInstanceForPane(pane, fileSystem, std::wstring(pluginId), metadata->shortId, L"remote-rename-selftest"));
 
     auto* operations = owner.DebugGetFileOperationState();
     if (! operations)
@@ -14921,7 +15261,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         return FAILED(admitted) ? admitted : E_UNEXPECTED;
     const auto finished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
         return completion.has_value() && completion->taskId == id && operations->FindTask(id) == nullptr;
-    }, {.timeout = SelfTest::Scale(std::chrono::seconds(30)), .operationName = L"Graph inline Rename completion"});
+    }, {.timeout = SelfTest::Scale(std::chrono::seconds(30)), .operationName = L"Remote inline Rename completion"});
     if (! finished.conditionMet)
         return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
     if (completion->hr != S_OK || completion->itemOutcomes.size() != 1u)
@@ -14933,6 +15273,139 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         result.finalDestinationPath.filename().native() != destinationLeaf)
         return E_UNEXPECTED;
     return S_OK;
+}
+
+[[nodiscard]] HRESULT RunLiveSftpInlineRenameForSelfTest(const Common::Settings::ConnectionProfile& profile) noexcept
+{
+    const auto reject = [](std::wstring_view stage, HRESULT status = E_UNEXPECTED) noexcept
+    {
+        AppendLog(std::format(L"Live SFTP Rename: {} (hr=0x{:08X}).", stage, static_cast<unsigned long>(status)));
+        return FAILED(status) ? status : E_UNEXPECTED;
+    };
+    RETURN_IF_FAILED(FileSystemPluginManager::GetInstance().EnablePlugin(kPluginIdSftp, g_settings));
+    const auto* entry = FindLoadedPluginEntry(kPluginIdSftp);
+    if (! entry || ! entry->fileSystem)
+        return reject(L"the registered provider instance is unavailable");
+
+    const auto fs          = entry->fileSystem;
+    const auto io          = fs.try_query<IFileSystemIO>();
+    const auto directories = fs.try_query<IFileSystemDirectoryOperations>();
+    const auto probed      = fs.try_query<IFileSystemProbedRename>();
+    if (! io || ! directories || ! probed)
+        return reject(L"the selected provider did not expose the required interfaces", E_NOINTERFACE);
+
+    const auto isPlainDirectory = [&](const std::wstring& providerPath) noexcept
+    {
+        unsigned long attributes = 0u;
+        return io->GetAttributes(providerPath.c_str(), &attributes) == S_OK && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u &&
+               (attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0u;
+    };
+    const auto configuredRoot = MakeConnectionPathForSelfTest(profile.name, NormalizePluginPathForSelfTest(profile.initialPath));
+    if (configuredRoot.empty() || ! isPlainDirectory(configuredRoot))
+        return reject(L"the configured fixture root is unavailable or redirects");
+    const std::wstring guid = NewGuidString();
+    if (guid.empty())
+        return reject(L"could not generate a fresh fixture name");
+    const std::wstring root =
+        MakeConnectionPathForSelfTest(profile.name, JoinPluginPathForSelfTest(profile.initialPath, std::format(L"fileops-selftest-sftp-rename-{}", guid)));
+    if (root.empty())
+        return E_INVALIDARG;
+    const HRESULT created = directories->CreateDirectory(root.c_str());
+    if (created != S_OK)
+        return reject(L"could not create the fresh fixture", created);
+    AppendLog(std::format(L"Live SFTP Rename created owned fixture {}.", guid));
+
+    const auto notFound = [&](const std::filesystem::path& path) noexcept
+    {
+        unsigned long facts = 0u;
+        const HRESULT hr    = io->GetAttributes(ToPluginPathText(path).c_str(), &facts);
+        return hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
+    };
+    const auto hasBytes = [&](const std::filesystem::path& path, std::string_view expected) noexcept
+    {
+        unsigned long attributes = 0u;
+        if (io->GetAttributes(ToPluginPathText(path).c_str(), &attributes) != S_OK ||
+            (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u)
+            return false;
+        std::string actual;
+        return ReadFileTextFsIo(io, path, actual) && actual == expected;
+    };
+
+    const std::filesystem::path parent(root);
+    const auto original      = parent / L"before.txt";
+    const auto occupant      = parent / L"occupied.txt";
+    const auto renamed       = parent / L"renamed.txt";
+    const auto caseOnly      = parent / L"Renamed.txt";
+    const auto folder        = parent / L"folder-before";
+    const auto renamedFolder = parent / L"folder-after";
+    const auto fileBytes     = std::format("owned live SFTP source {}", Common::Strings::Utf8FromUtf16StrictOrEmpty(guid));
+    const auto occupiedBytes = std::format("owned live SFTP occupant {}", Common::Strings::Utf8FromUtf16StrictOrEmpty(guid));
+    const auto started       = std::chrono::steady_clock::now();
+    const HRESULT result     = [&]() noexcept -> HRESULT
+    {
+        if (! WriteFileTextFsIo(io, original, fileBytes) || ! WriteFileTextFsIo(io, occupant, occupiedBytes) ||
+            directories->CreateDirectory(ToPluginPathText(folder).c_str()) != S_OK || ! WriteFileTextFsIo(io, folder / L"inside.txt", fileBytes))
+            return reject(L"could not seed the fresh file, occupant and folder", E_FAIL);
+        wil::com_ptr<IFileSystemProbedRenameSource> source;
+        const HRESULT captured = probed->CaptureProbedRenameSource(ToPluginPathText(original).c_str(), nullptr, source.put());
+        if (captured != S_OK || ! source)
+            return reject(L"could not capture the selected file and parent", captured);
+        FileSystemCorroboratedRenameResult refusal{};
+        const HRESULT collision = source->RenameToFreeSibling(L"occupied.txt", nullptr, &refusal);
+        if (collision != HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || refusal.mutationAttempted != FALSE || refusal.mutation.outcomeKnown != TRUE ||
+            refusal.mutation.mutationCommitted != FALSE || refusal.mutation.originalStillPresent != TRUE || ! hasBytes(original, fileBytes) ||
+            ! hasBytes(occupant, occupiedBytes))
+            return reject(L"occupied-name refusal did not keep both exact files before dispatch", collision);
+        source.reset();
+
+        const HRESULT renamedHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdSftp, original, L"renamed.txt");
+        if (renamedHr != S_OK || ! notFound(original) || ! hasBytes(renamed, fileBytes))
+            return reject(L"scheduled file Rename did not prove the new name and exact bytes", renamedHr);
+        const HRESULT caseHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdSftp, renamed, L"Renamed.txt");
+        if (caseHr != S_OK || ! notFound(renamed) || ! hasBytes(caseOnly, fileBytes))
+            return reject(L"case-only Rename did not prove the exact spelling and bytes", caseHr);
+        const HRESULT folderHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdSftp, folder, L"folder-after");
+        if (folderHr != S_OK || ! notFound(folder) || ! hasBytes(renamedFolder / L"inside.txt", fileBytes) || ! hasBytes(occupant, occupiedBytes))
+            return reject(L"folder Rename did not keep its child and the occupied sibling", folderHr);
+        return S_OK;
+    }();
+
+    // SFTP deletes by name. Verify each exact payload in the fresh parent and use
+    // nonrecursive removal so unexpected files prevent parent removal.
+    if (! isPlainDirectory(configuredRoot) || ! isPlainDirectory(root))
+        return reject(L"the owned parent is unavailable or redirects", HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
+    const auto remove = [&](const std::filesystem::path& path) noexcept
+    {
+        const HRESULT removed = fs->DeleteItem(ToPluginPathText(path).c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+        if (removed != S_OK || ! notFound(path))
+            return reject(L"nonrecursive cleanup did not retire the verified fixture entry", removed);
+        return S_OK;
+    };
+    const auto removeFile = [&](const std::filesystem::path& path, std::string_view expected) noexcept
+    {
+        if (notFound(path))
+            return S_OK;
+        if (! hasBytes(path, expected))
+            return reject(L"cleanup could not verify the exact fixture bytes", HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
+        return remove(path);
+    };
+    for (const auto& path : {original, renamed, caseOnly})
+        RETURN_IF_FAILED(removeFile(path, fileBytes));
+    RETURN_IF_FAILED(removeFile(occupant, occupiedBytes));
+    for (const auto& path : {folder, renamedFolder})
+    {
+        if (notFound(path))
+            continue;
+        if (! isPlainDirectory(ToPluginPathText(path)))
+            return reject(L"fixture subfolder is unavailable or redirects", HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
+        RETURN_IF_FAILED(removeFile(path / L"inside.txt", fileBytes));
+        RETURN_IF_FAILED(remove(path));
+    }
+    RETURN_IF_FAILED(remove(parent));
+
+    Debug::Perf::Emit(
+        L"FileOps.SelfTest.SftpInlineRenameUs", L"owned live file, case-only, folder and collision", Debug::Perf::ElapsedUs(started), 3u, 1u, result);
+    return result;
 }
 
 [[nodiscard]] HRESULT RunLiveOneDrivePersonalInlineRenameForSelfTest(const Common::Settings::ConnectionProfile& profile) noexcept
@@ -15006,15 +15479,15 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
             return reject(L"occupied-name refusal did not keep both files before dispatch", collision);
         source.reset();
 
-        const HRESULT fileHr = RunGraphInlineRenameForSelfTest(fs, original, L"renamed.txt");
+        const HRESULT fileHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdOneDrivePersonal, original, L"renamed.txt");
         if (fileHr != S_OK || ! notFound(original) || ! hasBytes(renamed, fileBytes) || ! hasBytes(occupant, occupantBytes))
             return reject(L"host file Rename did not prove a free sibling and its exact bytes", fileHr);
 
-        const HRESULT caseHr = RunGraphInlineRenameForSelfTest(fs, renamed, L"Renamed.txt");
+        const HRESULT caseHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdOneDrivePersonal, renamed, L"Renamed.txt");
         if (caseHr != S_OK || ! hasBytes(parent / L"Renamed.txt", fileBytes))
             return reject(L"host case-only Rename did not prove the requested spelling and bytes", caseHr);
 
-        const HRESULT folderHr = RunGraphInlineRenameForSelfTest(fs, folder, L"folder-after");
+        const HRESULT folderHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdOneDrivePersonal, folder, L"folder-after");
         if (folderHr != S_OK || ! notFound(folder) || ! hasBytes(renamedFolder / L"inside.txt", fileBytes))
             return reject(L"host folder Rename did not prove publication and preserved contents", folderHr);
         return S_OK;
@@ -18594,6 +19067,25 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             RecordCurrentPhase(state,
                                unavailableReason.empty() ? SelfTest::SelfTestCaseResult::Status::passed : SelfTest::SelfTestCaseResult::Status::skipped,
                                unavailableReason);
+            NextStep(state, SelfTestState::Step::FileOps_SmbRecycleRefusal);
+            return false;
+        }
+        case SelfTestState::Step::FileOps_SmbRecycleRefusal:
+        {
+            static bool active = false;
+            if (active || ! TryGetFolderWindow(state.mainWindow))
+                return false;
+            active            = true;
+            const auto finish = wil::scope_exit([]() noexcept { active = false; });
+            std::wstring unavailableReason;
+            if (! RunFileOpsSmbRecycleRefusalChecks(state, unavailableReason))
+            {
+                Fail(L"The registered SMB Recycle refusal failed. See the File Operations trace.");
+                return true;
+            }
+            RecordCurrentPhase(state,
+                               unavailableReason.empty() ? SelfTest::SelfTestCaseResult::Status::passed : SelfTest::SelfTestCaseResult::Status::skipped,
+                               unavailableReason);
             NextStep(state, SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns);
             return false;
         }
@@ -19590,6 +20082,7 @@ void FileOperationsSelfTest::NotifyTaskCompleted(FolderWindow* owner, std::uint6
             info.conflictWaitUs                              = task->_perf.conflictWaitUs;
             info.conflictConvergenceWaitUs                   = task->_perf.conflictConvergenceWaitUs;
             info.conflictPromptCount                         = task->_perf.conflictPromptCount;
+            info.consentPromptCount                          = task->_perf.consentPromptCount;
             info.queueWaitUs                                 = task->_perf.queueWaitUs;
             info.interlockWaitUs                             = task->_perf.interlockWaitUs;
             info.interlockWaitCount                          = task->_perf.interlockWaitCount;

@@ -35,9 +35,9 @@ the published hash and review metadata. Human whole-frame privacy review remains
 
 ## Product scenario captures
 
-The [Visual Tour](../VisualTour.md) links 45 additional native frames: 26 workspace,
-Search, Preferences, plugin, connection and palette scenes; eight actual viewer
-examples; and thirteen Space lifecycle/workspace states. The [gallery index](product-scenarios.provenance.json)
+The [Visual Tour](../VisualTour.md) links native captures of the workspace, Search,
+Preferences, plugins, connections, the Command Palette, viewers and Space. The
+[gallery index](product-scenarios.provenance.json)
 binds every image to adjacent build/scenario/DPI/hash metadata. Captures use private
 default settings, generated content, fixed synthetic metadata and the existing fake
 MTP picker. No real search, account connection or device enumeration is admitted.
@@ -69,7 +69,7 @@ their real scrollbars, and the guides describe options below the visible viewpor
 | [preferences-hot-paths.png](preferences-hot-paths.png) | Preferences hot paths. [Provenance](preferences-hot-paths.provenance.json). |
 | [preferences-file-operations.png](preferences-file-operations.png) | Preferences file operations. [Provenance](preferences-file-operations.provenance.json). |
 | [preferences-user-menu.png](preferences-user-menu.png) | Preferences user menu. [Provenance](preferences-user-menu.provenance.json). |
-| [preferences-monitor.png](preferences-monitor.png) | Preferences monitor. [Provenance](preferences-monitor.provenance.json). |
+| [preferences-monitor.png](preferences-monitor.png) | Historical Preferences Monitor page. [Provenance](preferences-monitor.provenance.json). |
 | [preferences-plugin-mtp.png](preferences-plugin-mtp.png) | Preferences plugin mtp. [Provenance](preferences-plugin-mtp.provenance.json). |
 | [find-files.png](find-files.png) | Find files. [Provenance](find-files.provenance.json). |
 | [find-files-empty.png](find-files-empty.png) | Find files empty. [Provenance](find-files-empty.provenance.json). |

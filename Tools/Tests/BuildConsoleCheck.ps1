@@ -37,7 +37,7 @@ if(-not $ScratchRoot){
     }else{$ScratchRoot=Join-Path $Root ('.build/BuildConsoleTests/'+[guid]::NewGuid().ToString('N'))}
 }
 [void][IO.Directory]::CreateDirectory($ScratchRoot)
-Import-Module (Join-Path $Root 'Build/BuildConsole.psm1') -Scope Local -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot '../../Build/BuildConsole.psm1') -Scope Local -ErrorAction Stop
 function Require([bool]$Condition,[string]$Message){if(-not $Condition){throw $Message}}
 function Refuses([scriptblock]$Body,[string]$Pattern){
     $failed=$false

@@ -495,9 +495,7 @@ New diff criteria go through `CompareDirectoriesDiffBit` + `ComputeDecisionForFo
 
 ### Batch Rename, Change Case & Rename Batching
 
-_Preview-first bulk rename engine plus the Change Case command and the shared arena-backed batch-rename marshaller that drives every multi-item leaf rename._
-
-This subsystem turns a set of files/folders into a validated rename plan, previews it, and applies it through the plugin file-system layer. It is split into a pure engine, a modeless UI window, helper-menu logic, a standalone Change Case command, and the low-level batch marshaller they all share.
+Batch Rename previews a mapping in the modeless window. Change Case discovers and validates its mapping after you choose the case options. Both submit the planned mappings to the File Operations scheduler.
 
 #### Key files and types
 
@@ -505,11 +503,11 @@ This subsystem turns a set of files/folders into a validated rename plan, previe
 |------|------|
 | `RedSalamander/BatchRenameEngine.{h,cpp}` | Pure `BatchRename::BuildPlan(targets, rules)` -> `Plan` (macros, search/replace, case, validation). No I/O, `noexcept`. |
 | `RedSalamander/BatchRenameWindow.{h,cpp}` | Modeless `BatchRenameWindow` (DxUi): scope/collection, preview grid, threading envelope, settings, undo, debug API. |
-| `RedSalamander/BatchRenameExecutionEngine.{h,cpp}` | Window-free Batch Rename provider-dispatch engine: dependency layers, cycle temp hops, per-item outcome bookkeeping, undo entries, directory-move path rewriting, and execution metrics. |
+| `RedSalamander/BatchRenameExecutionEngine.{h,cpp}` | Dependency scheduling and execution result types, including per-item outcomes, undo entries and directory-move path rewriting. |
 | `RedSalamander/BatchRenameMenus.{h,cpp}` | Template/regex/replacement helper flyouts and caret-aware insertion. |
 | `RedSalamander/MaskSyntax.{h,cpp}` | `*.*`-style include/exclude wildcard masks + MRU history. |
-| `RedSalamander/ChangeCase.{h,cpp}` | `cmd/pane/changeCase` casing logic + `ApplyToPaths` recursive driver. |
-| `RedSalamander/FileSystemRenameBatch.{h,cpp}` | Arena-backed `Execute()` that calls `IFileSystem::RenameItems`, falling back to per-item `RenameItem`. |
+| `RedSalamander/ChangeCase.{h,cpp}` | Casing transforms and `BuildRenameOperations` discovery for `cmd/pane/changeCase`. |
+| `RedSalamander/FileSystemRenameBatch.{h,cpp}` | Arena-backed provider bulk API helper exercised by the direct Change Case test adapter. |
 
 #### Control and data flow
 
@@ -517,21 +515,21 @@ Launch goes through `FolderWindow::CommandBatchRename` (`RedSalamander/FolderWin
 
 `BuildPlan` applies transforms in a fixed order: macro expansion (`ExpandTemplate`/`ResolveMacro`, canonical `{macro}` plus `$(Macro)` aliases via `NormalizeAliasTokens`), then search/replace (`ApplyReplacement`: literal `ReplaceLiteral` or one compiled `std::wregex`), then `ApplyCaseTransforms` (which delegates to `ChangeCase::TransformLeafName`), then `ValidateLeafName`/`AddWarningIssues`/`MarkDuplicateTargets`. Issues carry stable IDs (`name_empty`, `name_duplicate`, `name_reserved_device`, `macro_unknown`, `macro_invalid_format`, `regex_invalid`, `regex_match_failed`, ...) localized by `LocalizeBatchRenameIssueId`. The hot path uses allocation-light leaf splitting for `{stem}`/`{ext}` and helper-owned `FileSystemPathIdentity` keys for duplicate detection when the profile can safely provide them; every key hit is still verified with identity equality.
 
-Execution: `BatchRenameWindow::ExecuteRename` builds non-no-op `BatchRenameExecutionOp`s, sorts deepest-first, and hands them to a worker wrapper (MTA COM). The wrapper keeps the provider owner alive until before `CoUninitialize`, calls `RunBatchRenameExecutionEngine`, and posts `WndMsg::kBatchRenameCompleted` back to the UI thread. `BatchRenameExecutionEngine` processes depth groups, builds dependency layers, refuses a pure rename cycle (`BuildBatchRenameExecutionSchedule` returns `ERROR_CIRCULAR_DEPENDENCY`; preview already marks its members `name_dependency_cycle` and disables Rename) instead of breaking it with a temporary name, and dispatches each layer through `FileSystemRenameBatch::Execute`. Per-item outcomes come from the engine callback's `FileSystemItemCompleted`; `OnExecutionCompleted` refreshes targets, fires `DirectoryInfoCache::NotifyPathMoved`, stores the report/undo plan, and invokes `onSuccessfulRename` -> `FolderWindow::RefreshPanesAfterBatchRename`.
+The Batch Rename window passes the changed rows through `BatchRenamePaneContext::onStartRename`. File Operations qualifies each path and builds the immutable dependency schedule before mutation. It refuses a cyclic mapping with `ERROR_CIRCULAR_DEPENDENCY`. Its worker processes the layers with exact source binding and conditional Rename, then returns typed results. The window projects committed outcomes into its report and undo plan, and invokes `FolderWindow::RefreshPanesAfterBatchRename` for successful rows.
 
 #### Threading and UI-thread rules
 
-`BuildPlan`, validation, local revalidation, all grid/model updates, and settings persistence are UI-thread only. Only target collection and the provider-dispatch phase run on the single `_taskWorker` jthread. Progress arrives via `WndMsg::kBatchRenameTaskUpdate` (throttled ~100 ms). Reserved message IDs live in `Common/WindowMessages.h`. Re-entrancy guard: `_executing`/`_collecting` block `Rename`; the footer `Cancel` sets `_cancelRequested`. Close path calls `CancelAndJoinBackgroundTask` then drains posted payloads in `WM_NCDESTROY`. Stale results are discarded via `_taskGeneration`.
+Preview planning, grid updates and settings persistence run on the UI thread. Folder-scope collection and scheduled Rename execution each use their owning worker. Close and Cancel signal the current work, and window teardown drains posted payloads. The window uses `_taskGeneration` to discard results from an earlier operation.
 
 #### Invariants, extension points, gotchas
 
 - `RenameItems`/`RenameItem` take leaf names only; macro/manual output with path separators is a blocking error.
 - New macros: extend `ResolveMacro` and the helper specs in `BatchRenameMenus.cpp` together. New issue IDs need a `LocalizeBatchRenameIssueId` mapping + RC string.
-- Change Case is invoked two ways: standalone `FolderWindow::CommandChangeCase` -> `ChangeCase::ApplyToPaths` (recursive, deepest-first, 64-item batches, `std::stop_token`), and inline in the engine via `TransformLeafName`.
+- `FolderWindow::CommandChangeCase` discovers mappings with `ChangeCase::BuildRenameOperations` and submits them to the same scheduler. Batch Rename rules use `ChangeCase::TransformLeafName` for the shared casing transform.
 - **Gotcha:** `Specs/UI/UI_BatchRenameWindow.md` mandates a single resolved `FileSystemPathIdentity` profile at every identity-sensitive "same path?" site. Batch Rename now routes duplicate/case-only validation, dependency layering, provider callback pairing fallback, destination probing, cache notification, target refresh, provider-selection matching, and undo path finalization through that profile. Same-context Copy/Move/Delete also rejects missing, malformed, unsupported, or unstable `pathIdentity` before task creation.
 - **Gotcha:** folder-scope collection parses the mask once per collection run, and provider directory walks poll cancellation only after validating each entry's buffer bounds. Do not move cancellation checks ahead of malformed-buffer validation.
 - **Perf contract:** keep `batchrename.preview.build_plan_us`, `batchrename.validation.us`, `batchrename.collect.us`, and `batchrename.execute.target_refresh_match.us` healthy; the 10,000-row preview and target-refresh selftests are the canaries for accidental O(n^2) work.
-- **Gotcha:** undo entries record only the NET original->final transition; temp hops are hidden, and an orphaned temp is restored best-effort.
+- Undo entries record the proved original and final names for each committed row.
 
 Cross-links: `Specs/UI/UI_BatchRenameWindow.md`, `Specs/Plugins/Plugins_VirtualFileSystem.md`, and user-facing [UserGuide.md](UserGuide.md).
 
@@ -607,7 +605,7 @@ Five built-in `ThemeMode` values exist: `System`, `Light`, `Dark`, `Rainbow`, an
 
 `ShowPreferencesDialog{,Plugins,HotPaths,UserMenu}` call `PreferencesDialog::Show(...)` with an initial `PrefCategory`. The dialog is **modeless and single-instance** (`GetHandle`). `PreferencesDialogHost` extends `PreferencesDialogState` and owns one pane object per category (`_generalPane`, `_themesPane`, …) plus three `DxUi::WindowHost`s (`_categoryTreeHost`, `_shellHost`, `_pageHostHost`). Pages are created lazily: `EnsurePreferencesPageInitialized` switches on `currentCategory`, calls `pane.InitializePage(...)` once (guarded by `paneFirstCreateDone[]`), and toggles `paneWrapperPanels[]` visibility. `SelectCategory` (line ~4132) and `RefreshPreferencesPage` (the `case` dispatch around line 3847) route to each pane's `Refresh`/`LayoutPage`.
 
-Settings use a two-copy model in `PreferencesDialogState`: `baselineSettings` vs `workingSettings` (monitor settings tracked separately). `SetDirty` enables Apply; external on-disk changes set `staleFromExternalReload` and trigger `ReloadPreferencesDialogFromDisk`.
+Settings use a two-copy model in `PreferencesDialogState`: `baselineSettings` vs `workingSettings`. `SetDirty` enables Apply; external on-disk changes set `staleFromExternalReload` and trigger `ReloadPreferencesDialogFromDisk`.
 
 #### Theme preview and commit
 
@@ -640,8 +638,8 @@ and immutable lock. See [the consumer contract](../Specs/Core/Core_RedSalamander
 
 Explicit --redmonitor discovers only an installed production helper in LocalAppData/Programs/RedMonitor
 or ProgramFiles/RedMonitor. Bare Debug startup may launch it asynchronously; Release, help, tests and
-probes do not auto-launch. The app never waits for or kills the helper. Preferences keeps the legacy
-Release 7.0 monitor settings file for compatibility in every consumer configuration.
+probes do not auto-launch. The app never waits for or kills the helper. RedMonitor owns its settings profile and opens it
+through **File > Open Settings File**.
 ### Localization, Resources, Build & Test Infrastructure
 
 _How RedSalamander stores localizable UI in .rc resources with satellite DLLs, builds via build.ps1/MSBuild, and validates via in-product self-tests and the Run-AllTests harness._

@@ -501,6 +501,30 @@ case SelfTestState::Step::Phase16_RemoteSftpSandbox:
     }
 
     RecordCurrentPhase(state, outcome.status, outcome.reason);
+    NextStep(state, SelfTestState::Step::Phase16_RemoteSftpInlineRename);
+    return false;
+}
+case SelfTestState::Step::Phase16_RemoteSftpInlineRename:
+{
+    PhaseCheckResult prerequisite = CheckRemoteConnectionSecret(L"SFTP", kSelfTestEnvConnSftp, kSelfTestDefaultConnSftp, kPluginIdSftp);
+    if (prerequisite.status == SelfTest::SelfTestCaseResult::Status::passed)
+        prerequisite = CheckRemoteConnectionSandbox(L"SFTP", kSelfTestEnvConnSftp, kSelfTestDefaultConnSftp, kPluginIdSftp);
+    if (prerequisite.status == SelfTest::SelfTestCaseResult::Status::failed)
+    {
+        Fail(prerequisite.reason);
+        return true;
+    }
+    if (prerequisite.status == SelfTest::SelfTestCaseResult::Status::passed)
+    {
+        const auto resolved = ResolveRemoteConnectionProfile(kSelfTestEnvConnSftp, kSelfTestDefaultConnSftp, kPluginIdSftp);
+        const HRESULT hr    = resolved.profile ? RunLiveSftpInlineRenameForSelfTest(*resolved.profile) : E_UNEXPECTED;
+        if (hr != S_OK)
+        {
+            Fail(std::format(L"Live SFTP Rename or owned fixture cleanup failed (hr=0x{:08X}).", static_cast<unsigned long>(hr)));
+            return true;
+        }
+    }
+    RecordCurrentPhase(state, prerequisite.status, prerequisite.reason);
     NextStep(state, SelfTestState::Step::Phase16_RemoteScpSecret);
     return false;
 }
@@ -1703,6 +1727,17 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
         const auto itCopy = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
         if (itCopy == state.completedTasks.end())
         {
+            if (state.taskA.has_value())
+            {
+                const auto prompt = TryGetConflictPromptCopy(state.fileOps->FindTask(state.taskA.value()));
+                if (prompt.has_value() && ! prompt->metadataLoading && prompt->buttonsPublishable)
+                {
+                    Fail(std::format(L"OneDrive Personal upload stopped at a File Operations decision (bucket={}, hr=0x{:08X}).",
+                                     static_cast<unsigned int>(prompt->bucket),
+                                     static_cast<unsigned long>(prompt->status)));
+                    return true;
+                }
+            }
             return false;
         }
 

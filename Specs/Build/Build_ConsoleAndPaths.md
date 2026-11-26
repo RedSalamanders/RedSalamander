@@ -34,7 +34,8 @@ dependency fingerprints; an old archive cannot reuse the changed policy's output
 
 ## Successful terminal output
 
-Build/BuildConsole.psm1 implements the common result/diagnostic/link contract.
+`Build/BuildConsole.psm1` binds the result, diagnostic, and link implementation to the exact clean CI engine checkout.
+The diagnostic gate also refuses structured MSVC tool exception dumps.
 A native success summary is green only after native exit success, zero logged
 warnings/errors and the entrypoint's existing provenance/attestation checks.
 Failed builds remain failures. Clean/package-only operations preserve their

@@ -624,7 +624,9 @@ Describe 'Microsoft Drive credential-boundary source contracts' {
         $source | Should Match 'struct ValidatedGraphApiUrl'
         $source | Should Match 'struct ValidatedPreauthenticatedUploadUrl'
         $source | Should Match 'ValidateGraphApiUrl\(rawUrl, graphUrl\)'
-        $source | Should Match 'ValidatePreauthenticatedUploadUrl\(rawUploadUrl, uploadUrlOut\)'
+        $source | Should Match 'ValidatePreauthenticatedUploadUrl\(\s*rawUploadUrl,\s*mode,\s*uploadUrlOut\s*\)'
+        $source | Should Match 'ParseUploadUrl\(\s*sessionResponse\.body,\s*_fileSystem->Mode\(\),\s*_uploadUrl\s*\)'
+        $source | Should Match 'ParseUploadUrl\(\s*sessionResponse\.body,\s*_fileSystem->Mode\(\),\s*uploadUrl\s*\)'
         $source | Should Match 'SendPreauthenticatedUploadRequest'
         $source | Should Match 'WINHTTP_DISABLE_REDIRECTS'
         $source | Should Match 'Common::Paging::WideContinuationGuard pager'
@@ -1699,14 +1701,14 @@ Describe 'Test harness source contracts' {
         $reverseBlock | Should Match 'stableSamples = 0u'
         $reverseBlock | Should Match 'initial reverse-navigation reset", true\)'
         $reverseBlock | Should Match 'pre-key", context\), false\)'
-        $reverseBlock | Should Match 'sendCategoryTreeKey\(kPrefCategoryGeneral'
-        $reverseBlock | Should Match 'sendCategoryTreeKey\(kPrefCategoryAdvanced'
-        $reverseBlock | Should Match 'sendCategoryTreeKey\(kPrefCategoryMonitor'
-        $reverseBlock | Should Match 'sendCategoryTreeKey\(kPrefCategoryHotPaths'
-        $reverseBlock | Should Match 'sendCategoryTreeKey\([^\r\n]+VK_HOME'
-        $reverseBlock | Should Match 'sendCategoryTreeKey\([^\r\n]+VK_END'
-        $reverseBlock | Should Match 'sendCategoryTreeKey\([^\r\n]+VK_UP'
-        $reverseBlock | Should Match 'sendCategoryTreeKey\([^\r\n]+VK_DOWN'
+        $reverseBlock | Should Match 'sendCategoryTreeKey\(\s*kPrefCategoryGeneral\b'
+        $reverseBlock | Should Match 'sendCategoryTreeKey\(\s*kPrefCategoryAdvanced\b'
+        $reverseBlock | Should Match 'sendCategoryTreeKey\(\s*kPrefCategoryCompareDirectories\b'
+        $reverseBlock | Should Match 'sendCategoryTreeKey\(\s*kPrefCategoryHotPaths\b'
+        $reverseBlock | Should Match 'sendCategoryTreeKey\(\s*[^\r\n]+VK_HOME\b'
+        $reverseBlock | Should Match 'sendCategoryTreeKey\(\s*[^\r\n]+VK_END\b'
+        $reverseBlock | Should Match 'sendCategoryTreeKey\(\s*[^\r\n]+VK_UP\b'
+        $reverseBlock | Should Match 'sendCategoryTreeKey\(\s*[^\r\n]+VK_DOWN\b'
         $reverseBlock | Should Match 'DebugSendPreferencesCategoryTreeKey\(virtualKey\)'
         $reverseBlock | Should Match 'pre-key'
         $reverseBlock | Should Not Match 'SendMessageW\(categoryTreeHost,\s*WM_KEYDOWN'
@@ -5820,7 +5822,6 @@ Specs\TestRuns\local_scratch
         $transaction = Get-RSText -Path 'Common\LocalFileTransaction.h'
         $hotReload = Get-RSText -Path 'RedSalamander\SettingsHotReload.cpp'
         $preferences = Get-RSText -Path 'RedSalamander\Preferences.Dialog.cpp'
-        $resource = Get-RSText -Path 'RedSalamander\RedSalamander.rc'
         $tests = Get-RSText -Path 'Tests\SettingsSchemaTests\SettingsSchema.Tests.Runner.cpp'
 
         $header | Should Match 'SettingsPersistenceState[\s\S]{0,700}std::optional<SettingsFileStamp> expectedFileStamp'
@@ -5839,10 +5840,9 @@ Specs\TestRuns\local_scratch
         $hotReload | Should Match 'struct StampLineage[\s\S]{0,300}std::vector<std::optional<Common::Settings::SettingsFileStamp>>\s+sources[\s\S]{0,120}committed'
         $hotReload | Should Match 'expected\s*==\s*lineage->second\.committed\s*\|\|\s*ContainsSourceStamp\(lineage->second,\s*expected\)'
         $hotReload | Should Match 'RememberSourceStamp\(lineage->second,\s*committedStamp\)'
-        $preferences | Should Match 'struct PreferencesSaveResult[\s\S]{0,180}bool mainSaved[\s\S]{0,100}bool monitorSaved'
-        $preferences | Should Match 'if\s*\(saveResult\.monitorSaved\)[\s\S]{0,180}monitorBaselineSettings\s*=\s*state\.workingMonitorSettings'
-        $preferences | Should Match 'IDS_FMT_PREFS_MONITOR_SAVE_FAILED_AFTER_MAIN'
-        $resource | Should Match 'IDS_FMT_PREFS_MONITOR_SAVE_FAILED_AFTER_MAIN[\s\S]{0,500}\{0\}[\s\S]{0,220}\{1:08X\}'
+        $preferences | Should Match 'SettingsHotReload::SaveSettingsAndSchema\(state\.appId,\s*merged\)'
+        $preferences | Should Match 'merged\.monitor\.reset\(\)'
+        $preferences | Should Not Match 'kPreferencesMonitorAppId|RedSalamanderMonitor|workingMonitorSettings'
 
         $tests | Should Match '--settings-store-cas-child'
         $tests | Should Match 'ERROR_REVISION_MISMATCH'
@@ -6657,10 +6657,9 @@ Describe 'Captured DxUi metadata process source contracts' {
 }
 
 Describe 'Background Git metadata launch closure' {
-    It 'keeps the finite engine-free transport exceptions no-window before either pipe or raw query starts' {
+    It 'keeps the reviewed engine-free Git transports no-window before process start' {
         $helpers=@(
             @('Tools/Modules/Testing/ScopedTesting.psm1','Invoke-ScopedGit'),
-            @('Tools/Modules/Testing/ScopedTesting.psm1','Invoke-ScopedWorkflowMetadata'),
             @('Tools/Modules/Tooling/ToolInventory.psm1','Invoke-RSToolInventoryGitCapture'),
             @('Tools/Modules/Tooling/SpecInformationArchitecture.psm1','Get-RSGitOutput'),
             @('Tools/Modules/Testing/GitMetadataCapture.psm1','Invoke-RSTestGitMetadataCapture')

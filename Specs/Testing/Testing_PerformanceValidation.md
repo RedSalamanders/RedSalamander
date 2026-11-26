@@ -1318,6 +1318,12 @@ The `FileOps.PopupCadence.CredentialWait` event in `FileOps_PopupIdleCadence` me
 task's two observer transitions between real rate samples. The case checks nested waits,
 status and the new rate window while the test provider holds the task at a transfer barrier.
 The peer ETA and taskbar projection check uses the same aggregate builder as the running popup.
+The same case opens the real host password prompt with an invented in-memory
+profile under the activation blocker. While the prompt waits, the exact held
+Copy shows Awaiting Credentials and its peer continues to receive popup ticks.
+The owned timer requests Cancel and verifies the wait clears without a secret.
+`FileOps.PopupCadence.HostCredentialPrompt` records elapsed time, observer
+transitions and popup timer ticks while the peer is running.
 
 The no-activation `FileOps_ReviewRemediationContracts` selection compares explicit per-item
 Recycle and normal Find and Viewer admission on equivalent same-parent Local batches. It verifies
@@ -2634,6 +2640,13 @@ whole second with a fixed clock. The short chip stays stable and queue status ha
 the preparation clock restarts before execution. Compare the existing
 `FileOps.PopupCadence.Counters` rows for matching running, paused, prompting, queued and idle
 fixtures. `FileOps.Admission.TaskLayoutBytes` tracks the per-task storage cost.
+
+The `engine-stopping` window in `FileOps_PopupIdleCadence` holds a real Local
+Copy at the conflict metadata barrier after requesting cancellation. The task
+must stay unfinished with the same paths and completed bytes at the 100 ms
+cadence. Use `FileOps.PopupCadence.Counters` for the window and timer counts,
+and `FileOps.PopupCadence.StoppingSamples` for the rate-update count. Compare
+allocations only for matching rate-update events inside the recorded window.
 
 `FileOps_PopupIdleCadence` also selects the opposite Queue/Parallel footer mode on an idle,
 non-activating application owner, flushes pending writes, and creates a second owner from the saved

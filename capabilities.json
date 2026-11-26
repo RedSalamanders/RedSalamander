@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "product": "RedSalamander",
+  "platform": "Windows",
+  "status": "released",
+  "supported": [
+    "dual-pane DirectX file manager",
+    "modeless file and directory search with indexed and fallback backends",
+    "virtual file system, archive, network and cloud plugins",
+    "MTP and PTP access with read-only device defaults",
+    "embedded and floating terminal sessions",
+    "command palette, shortcuts and themed preferences",
+    "extensible text, image, database and WebView2 viewers",
+    "header-only RedMonitor client and optional installed viewer"
+  ],
+  "pending": [
+    "native x64 and ARM64 portable-launcher acceptance",
+    "independent RedMonitor settings and legacy profile acceptance",
+    "guarded settings save convergence",
+    "shared local crash retention and restart acceptance",
+    "DxUi API 6 consumer migration"
+  ]
+}

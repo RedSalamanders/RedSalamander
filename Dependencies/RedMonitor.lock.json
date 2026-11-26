@@ -11,5 +11,19 @@
       "path": "LICENSE.txt",
       "sha256": "331f8e30499d292197d5a990845b104fea1b6034744f1473e1c41619ca97d7e4"
     }
-  ]
+  ],
+  "tooling": {
+    "schemaVersion": 1,
+    "commit": "93fdb0a19acbd48ed59182f4aa42d214cacda6b1",
+    "files": [
+      {
+        "path": "Update-RedMonitorClient.ps1",
+        "sha256": "3af2b90ab689d161478cd6b76d490eb49ee87b28f56a0e9a7dbbf7186f726f4e"
+      },
+      {
+        "path": "Verify-RedMonitorClient.ps1",
+        "sha256": "17ef5240d361f75ac72f3c48d358412545883f50485e5d4608af2697151beec0"
+      }
+    ]
+  }
 }

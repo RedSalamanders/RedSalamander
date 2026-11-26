@@ -10,8 +10,7 @@ never auto-launch it. Missing helpers do not block RedSalamander; an explicit re
 
 Messages carry the RedSalamander label, severity, Unicode text and original process/thread/time metadata.
 Existing debugger, file and crash diagnostics remain independent. ETW collection may require Performance
-Log Users membership or elevation. Preferences continues to edit the Release monitor 7.0 settings profile
-in every configuration, including Debug; standalone Debug viewer profiles are separate development tools.
+Log Users membership or elevation. Open **File > Open Settings File** in RedMonitor to edit its profile under `%LOCALAPPDATA%\RedMonitor\Settings`. RedMonitor imports supported values from a legacy profile on first use and retains the original file.
 
 Developers use Tools/Update-RedMonitorClient.ps1 -Commit FULL_SHA to update only Client.h, its MIT notice
 and the immutable lock. Ordinary builds run the local verifier and never clone or compile the helper.

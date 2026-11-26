@@ -241,14 +241,11 @@ Windows developers often clone/install to:
 ## Testing
 
 ```powershell
-# Test with -Verbose to see discovery path
-.\tool-script.ps1 -Verbose
+# Set $toolScript and $toolExe to paths in the owned test fixture.
+& $toolScript -Verbose
+& $toolScript -ToolExe $toolExe
 
-# Test explicit override
-.\tool-script.ps1 -ToolExe "C:\custom\path\tool.exe"
-
-# Test error message when tool not found
-# (rename tool.exe temporarily to verify helpful error)
+# Exercise missing discovery with an empty fixture and a controlled search path.
 ```
 
 ## Related

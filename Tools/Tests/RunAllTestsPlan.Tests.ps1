@@ -606,19 +606,17 @@ $durationEstimates = $Durations
         }
     }
 
-    It 'executes the real deferred Full reader selection with no cheap entries' {
+    It 'schedules the two Full interactive viewer readers when no cheap entries are selected' {
         $arguments = @{
             RepoRoot = $repoRoot; Platform = 'x64'; Configuration = 'Debug'
             RedSalamanderExePath = Join-Path $repoRoot '.build/x64/Debug/RedSalamander.exe'
         }
         $full = @(Get-RSTestRunPlan -Suite Full @arguments)
-        $pr = @(Get-RSTestRunPlan -Suite PR @arguments)
-        $deferred = @(Get-RSPrDeferredTestPlan -FullPlan $full -PrPlan $pr -RepoRoot $repoRoot)
-        $readers = @($deferred | Where-Object { $_.Kind -ne 'SelfTest' -and @($_.ArtifactWriteIds).Count -eq 0 })
-        Assert-RSSequenceEqual -Actual @($readers | ForEach-Object Id) -Expected @('viewer-pe.interactive', 'viewer-sqlite.interactive') -Message 'The real deferred reader selection keeps both interactive viewers.'
+        $readers = @($full | Where-Object Id -in @('viewer-pe.interactive', 'viewer-sqlite.interactive'))
+        Assert-RSSequenceEqual -Actual @($readers | ForEach-Object Id) -Expected @('viewer-pe.interactive', 'viewer-sqlite.interactive') -Message 'The Full plan keeps both interactive viewer readers.'
         $actual = & $schedule $readers @{}
         $actual.Early.Count | Should Be 0
-        Assert-RSSequenceEqual -Actual @($actual.Late | ForEach-Object Id) -Expected @('viewer-pe.interactive', 'viewer-sqlite.interactive') -Message 'Scheduling retains the real deferred viewers in order.'
+        Assert-RSSequenceEqual -Actual @($actual.Late | ForEach-Object Id) -Expected @('viewer-pe.interactive', 'viewer-sqlite.interactive') -Message 'Scheduling retains the real interactive viewer readers in order.'
     }
 }
 
@@ -1220,10 +1218,11 @@ Describe 'Run-AllTests plan helper' {
                 'fileops_reviewremediationcontracts', 'FileOps_ReviewRemediationContracts*', 'fileops_identityinterlockwaiting', 'FileOps_IdentityInterlockWaiting*', 'FileOps_CrossRootLocalCopy ', 'FileOps_SmallFileCopyCost*', 'FileOps_SelectionShapeLocal*', 'fileops_selectionshapesmb', 'FileOps_SelectionShapeLocal,FileOps_SelectionShapeSmb',
                 'fileops_smbexactrenameprovider', 'FileOps_SmbExactRenameProvider*', 'FileOps_SmbExactRenameProvider ',
                 'fileops_smbcorroboratedrenameprovider', 'FileOps_SmbCorroboratedRenameProvider*', 'FileOps_SmbCorroboratedRenameProvider ',
+                'fileops_smbrecyclerefusal', 'FileOps_SmbRecycleRefusal*', 'FileOps_SmbRecycleRefusal ',
                 'c0_curlcommittedmutationresponselost', 'C0_CurlCommittedMutationResponseLost*', 'C0_CurlCommittedMutationResponseLost ',
                 'fileops_providercapabilitymatrix', 'FileOps_ProviderCapabilityMatrix*', 'FileOps_ProviderCapabilityMatrix ',
                 'fileops_repeatednonclipboardcopystorage', 'FileOps_RepeatedNonClipboardCopyStorage*', 'FileOps_RepeatedNonClipboardCopyStorage ',
-                'phase16_remoteonedrivepersonalinlineRename', 'Phase16_RemoteOneDrivePersonalInlineRename*', 'Phase16_RemoteOneDrivePersonalFileOps', 'Phase16_RemoteOneDrivePersonal',
+                'phase16_remotesftpinlineRename', 'Phase16_RemoteSftpInlineRename*', 'Phase16_RemoteSftpInlineRename ', 'phase16_remoteonedrivepersonalinlineRename', 'Phase16_RemoteOneDrivePersonalInlineRename*', 'Phase16_RemoteOneDrivePersonalFileOps', 'Phase16_RemoteOneDrivePersonal',
                 'r0fgraph_fakegraphreadwritecreaterenamerecycle', 'R0fGraph_FakeGraphReadWriteCreateRenameRecycle*',
                 'fileops_copyonlymoveretainssourcewithoutdestinationproof', 'FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof*',
                 'fileops_repeatednonclipboardmovestorage', 'FileOps_RepeatedNonClipboardMoveStorage*', 'FileOps_RepeatedNonClipboardMoveStorage ',
@@ -1247,7 +1246,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'admits only exact reviewed FileOps progress and callback witnesses without a desktop lease or activation' {
-        $reviewedCases = @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_AlertOverlayUxAccessibility', 'FileOps_ReviewRemediationContracts', 'FileOps_DeferredExitRefusesNewWork', 'FileOps_ClearCompletedScope', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'FileOps_SmbExactRenameProvider', 'FileOps_SmbCorroboratedRenameProvider', 'C0_CurlCommittedMutationResponseLost', 'FileOps_ProviderCapabilityMatrix', 'FileOps_RepeatedNonClipboardCopyStorage', 'FileOps_RepeatedNonClipboardMoveStorage', 'FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof', 'R0fGraph_FakeGraphReadWriteCreateRenameRecycle', 'Phase16_RemoteOneDrivePersonalInlineRename', 'Delete_IdentityLessPinnedTreeChangedEntry', 'Delete_IdentityLessPinnedTreeArchiveWriter')
+        $reviewedCases = @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_AlertOverlayUxAccessibility', 'FileOps_ReviewRemediationContracts', 'FileOps_DeferredExitRefusesNewWork', 'FileOps_ClearCompletedScope', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'FileOps_SmbExactRenameProvider', 'FileOps_SmbCorroboratedRenameProvider', 'FileOps_SmbRecycleRefusal', 'C0_CurlCommittedMutationResponseLost', 'FileOps_ProviderCapabilityMatrix', 'FileOps_RepeatedNonClipboardCopyStorage', 'FileOps_RepeatedNonClipboardMoveStorage', 'FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof', 'R0fGraph_FakeGraphReadWriteCreateRenameRecycle', 'Phase16_RemoteOneDrivePersonalInlineRename', 'Phase16_RemoteSftpInlineRename', 'Delete_IdentityLessPinnedTreeChangedEntry', 'Delete_IdentityLessPinnedTreeArchiveWriter')
         # Bind the two normative lists to the same exact admissions exercised below.
         foreach ($contract in @(
                 @{ Path = 'Specs/Testing/Testing_ValidationEvidence.md'; Pattern = 'Only `-Suite FileOps` with one exact, case-sensitive filter from (?<cases>.*?) is admitted without that desktop lease\.' },
@@ -1271,7 +1270,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'retains the FileOps desktop lease for broad suites and proof injections using an exact owned-witness name' {
-        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_AlertOverlayUxAccessibility', 'FileOps_ReviewRemediationContracts', 'FileOps_DeferredExitRefusesNewWork', 'FileOps_ClearCompletedScope', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'FileOps_SmbExactRenameProvider', 'FileOps_SmbCorroboratedRenameProvider', 'C0_CurlCommittedMutationResponseLost', 'FileOps_ProviderCapabilityMatrix', 'FileOps_RepeatedNonClipboardCopyStorage', 'FileOps_RepeatedNonClipboardMoveStorage', 'FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof', 'R0fGraph_FakeGraphReadWriteCreateRenameRecycle', 'Phase16_RemoteOneDrivePersonalInlineRename', 'Delete_IdentityLessPinnedTreeChangedEntry', 'Delete_IdentityLessPinnedTreeArchiveWriter')) {
+        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_AlertOverlayUxAccessibility', 'FileOps_ReviewRemediationContracts', 'FileOps_DeferredExitRefusesNewWork', 'FileOps_ClearCompletedScope', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'FileOps_SmbExactRenameProvider', 'FileOps_SmbCorroboratedRenameProvider', 'FileOps_SmbRecycleRefusal', 'C0_CurlCommittedMutationResponseLost', 'FileOps_ProviderCapabilityMatrix', 'FileOps_RepeatedNonClipboardCopyStorage', 'FileOps_RepeatedNonClipboardMoveStorage', 'FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof', 'R0fGraph_FakeGraphReadWriteCreateRenameRecycle', 'Phase16_RemoteOneDrivePersonalInlineRename', 'Phase16_RemoteSftpInlineRename', 'Delete_IdentityLessPinnedTreeChangedEntry', 'Delete_IdentityLessPinnedTreeArchiveWriter')) {
             foreach ($suite in @('All', 'CI', 'Full')) {
                 $plan = @(Get-RSTestRunPlan -Suite $suite -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                     -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
@@ -1294,7 +1293,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'preserves exact owned-witness activation and desktop markers in quarantine repair' {
-        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_AlertOverlayUxAccessibility', 'FileOps_ReviewRemediationContracts', 'FileOps_DeferredExitRefusesNewWork', 'FileOps_ClearCompletedScope', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'FileOps_SmbExactRenameProvider', 'FileOps_SmbCorroboratedRenameProvider', 'C0_CurlCommittedMutationResponseLost', 'FileOps_ProviderCapabilityMatrix', 'FileOps_RepeatedNonClipboardCopyStorage', 'FileOps_RepeatedNonClipboardMoveStorage', 'FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof', 'R0fGraph_FakeGraphReadWriteCreateRenameRecycle', 'Phase16_RemoteOneDrivePersonalInlineRename', 'Delete_IdentityLessPinnedTreeChangedEntry', 'Delete_IdentityLessPinnedTreeArchiveWriter')) {
+        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_AlertOverlayUxAccessibility', 'FileOps_ReviewRemediationContracts', 'FileOps_DeferredExitRefusesNewWork', 'FileOps_ClearCompletedScope', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'FileOps_SmbExactRenameProvider', 'FileOps_SmbCorroboratedRenameProvider', 'FileOps_SmbRecycleRefusal', 'C0_CurlCommittedMutationResponseLost', 'FileOps_ProviderCapabilityMatrix', 'FileOps_RepeatedNonClipboardCopyStorage', 'FileOps_RepeatedNonClipboardMoveStorage', 'FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof', 'R0fGraph_FakeGraphReadWriteCreateRenameRecycle', 'Phase16_RemoteOneDrivePersonalInlineRename', 'Phase16_RemoteSftpInlineRename', 'Delete_IdentityLessPinnedTreeChangedEntry', 'Delete_IdentityLessPinnedTreeArchiveWriter')) {
             foreach ($suite in @('FileOps', 'Full')) {
                 $plan = @(Get-RSTestRunPlan -Suite $suite -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                     -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)

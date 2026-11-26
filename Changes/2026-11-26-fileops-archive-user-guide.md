@@ -1,1 +1,0 @@
-- Clarify ZIP and 7z Pack, ZIP Unpack, and background archive processing in the User Guide.

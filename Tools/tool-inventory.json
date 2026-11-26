@@ -323,7 +323,8 @@
       ],
       "usage": "See Changes/README.md and the command help; run on the default branch after merge, normally through Submit-ChangelogFold.ps1, never in a feature change.",
       "prerequisites": [
-        "PowerShell 7"
+        "PowerShell 7",
+        "The shared CI engine checkout at .ci-engine, at the commit .ci/project.json pins"
       ],
       "tests": [
         "Tools/Tests/Changelog.Tests.ps1"
@@ -338,7 +339,34 @@
         "Tools/Submit-ChangelogFold.ps1",
         "Tools/Tests/Changelog.Tests.ps1"
       ],
-      "purpose": "Fold validated Changes fragments into CHANGELOG.md on the default branch, with preview and a read-only zero-fragment gate."
+      "purpose": "Engine shim (Specs/ProjectCommands.md in the shared CI engine): runs the pinned .ci-engine implementation. Fold validated Changes fragments into CHANGELOG.md on the default branch, with preview and a read-only zero-fragment gate."
+    },
+    {
+      "lifecycle": "active",
+      "visibility": "public",
+      "replacement": null,
+      "ownerSpec": "Specs/Core/Core_Changes.md",
+      "kind": "command",
+      "sideEffects": [
+        "Atomically replaces CHANGELOG.md with the exact release transition; WhatIf is read-only"
+      ],
+      "usage": "See Changes/README.md and the command help; only in a release-only change after every fragment is folded, never in a feature change.",
+      "prerequisites": [
+        "PowerShell 7",
+        "The shared CI engine checkout at .ci-engine, at the commit .ci/project.json pins"
+      ],
+      "tests": [
+        "Tools/Tests/Changelog.Tests.ps1"
+      ],
+      "outputs": [
+        "Updated changelog",
+        "Console summary"
+      ],
+      "path": "Tools/Release-Changelog.ps1",
+      "usedBy": [
+        "Manual release use"
+      ],
+      "purpose": "Engine shim (Specs/ProjectCommands.md in the shared CI engine): runs the pinned .ci-engine implementation. Generate one release heading from the already folded Unreleased notes, as a separate release-only change."
     },
     {
       "lifecycle": "active",
@@ -354,7 +382,8 @@
       "prerequisites": [
         "PowerShell 7",
         "Git",
-        "Authenticated gh unless PushOnly"
+        "Authenticated gh unless PushOnly",
+        "The shared CI engine checkout at .ci-engine, at the commit .ci/project.json pins"
       ],
       "tests": [
         "Tools/Tests/Changelog.Tests.ps1"
@@ -369,7 +398,7 @@
         "Tools/Test-ChangelogWorkflow.ps1",
         "Tools/Tests/Changelog.Tests.ps1"
       ],
-      "purpose": "Fold the default branch's Changes fragments on a fold branch and open its pull request without touching the caller's checkout."
+      "purpose": "Engine shim (Specs/ProjectCommands.md in the shared CI engine): runs the pinned .ci-engine implementation. Fold the default branch's Changes fragments on a fold branch and open its pull request without touching the caller's checkout."
     },
     {
       "lifecycle": "active",
@@ -381,7 +410,8 @@
       "usage": "See Changes/README.md and the command help; run while editing, and with -Base before a push (PrePush) and in CI.",
       "prerequisites": [
         "PowerShell 7",
-        "Git for -Base"
+        "Git for -Base",
+        "The shared CI engine checkout at .ci-engine, at the commit .ci/project.json pins"
       ],
       "tests": [
         "Tools/Tests/Changelog.Tests.ps1"
@@ -397,7 +427,7 @@
         "Tools/Submit-ChangelogFold.ps1",
         "Tools/Tests/Changelog.Tests.ps1"
       ],
-      "purpose": "Read-only shared fragment-format validation, the exact-fold comparison of CHANGELOG.md with a base ref, and an optional check of a finished fold."
+      "purpose": "Engine shim (Specs/ProjectCommands.md in the shared CI engine): runs the pinned .ci-engine implementation. Read-only shared fragment-format validation, the exact-fold comparison of CHANGELOG.md with a base ref, and an optional check of a finished fold."
     },
     {
       "lifecycle": "active",
@@ -411,7 +441,8 @@
       "usage": "See Changes/README.md and the command help; run through the Changelog Pester adapter.",
       "prerequisites": [
         "PowerShell 7",
-        "Git"
+        "Git",
+        "The shared CI engine checkout at .ci-engine, at the commit .ci/project.json pins"
       ],
       "tests": [
         "Tools/Tests/Changelog.Tests.ps1"
@@ -423,37 +454,7 @@
       "usedBy": [
         "Tools/Tests/Changelog.Tests.ps1"
       ],
-      "purpose": "Run the shared cross-repository behavior fixtures inside a caller-provided existing marked sandbox scratch directory."
-    },
-    {
-      "lifecycle": "active",
-      "visibility": "internal",
-      "replacement": null,
-      "ownerSpec": "Specs/Core/Core_Changes.md",
-      "kind": "module",
-      "sideEffects": [
-        "Exported fold writes changelog and removes folded inputs; import, validation and the base comparison (read-only Git commands) never write"
-      ],
-      "usage": "See Changes/README.md and the command help; imported by the changelog commands and the shared behavior suite.",
-      "prerequisites": [
-        "PowerShell 7",
-        "Git for the base comparison"
-      ],
-      "tests": [
-        "Tools/Tests/Changelog.Tests.ps1"
-      ],
-      "outputs": [
-        "Fragment/problem records",
-        "Merged Markdown",
-        "Fold count"
-      ],
-      "path": "Tools/Modules/Documentation/Changelog.psm1",
-      "usedBy": [
-        "Tools/Fold-Changelog.ps1",
-        "Tools/Test-Changelog.ps1",
-        "Tools/Test-ChangelogWorkflow.ps1"
-      ],
-      "purpose": "Shared fragment validation, exact-fold comparison with a base ref, deterministic merge, refusal of ambiguous duplicate pending text and recoverable staged folding, identical across the six projects."
+      "purpose": "Engine shim (Specs/ProjectCommands.md in the shared CI engine): runs the pinned .ci-engine implementation. Run the shared cross-repository behavior fixtures inside a caller-provided existing marked sandbox scratch directory."
     },
     {
       "lifecycle": "active",
@@ -541,25 +542,21 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate native test naming and verify reviewed candidate PR coverage against workflow/action/tooling execution closure and scheduled unchanged-source decisions. Private engine-independent no-window Git and optional workflow-metadata transports retain raw output, separate diagnostics and exact exit.",
+      "purpose": "Validate contextual native test naming and inventory membership. The Git query preserves repository-relative paths.",
       "usage": "Import from Test-Changes and its focused policy tests; canonical Startrail owns execution and evidence.",
       "usedBy": [
         "Test-Changes.ps1",
-        "Tools/Tests/ScopedTesting.Tests.ps1",
-        ".github/workflows/asan.yml",
-        ".github/workflows/nightly-ci.yml"
+        "Tools/Tests/ScopedTesting.Tests.ps1"
       ],
       "prerequisites": [
         "PowerShell 7",
         "Git"
       ],
       "sideEffects": [
-        "Read-only Git/GitHub scope discovery; canonical Startrail owns all execution receipts and source/artifact identities."
+        "Read-only Git and file inventory."
       ],
       "outputs": [
-        "Native naming findings",
-        "PR execution closure digest",
-        "PR delegation scopes"
+        "Native test count or naming and inventory diagnostics"
       ],
       "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
       "tests": [
@@ -1584,7 +1581,7 @@
       "visibility": "public",
       "lifecycle": "active",
       "purpose": "Build, verify the selected executable/plugin receipt closure, project non-secret machine resources, and execute canonical validation with fail-closed normalized results and typed 0..5 exits. Each contained FileOperations launch isolates its LOCALAPPDATA in governed scratch without changing the parent environment. After artifact re-attestation, cached receipt bindings and downstream entry fingerprints describe the same verified receipt. Noninteractive planning and execution report empty or nonempty desktop-pending selections without blocking admitted entries. Standalone scheduling retains later entries when the cheap selection is empty, including PR-deferred Full. Early-exit case inventory does not acquire the desktop lease; actual tests retain declared desktop admission. Rejected validation contracts append their reason codes and unallowed skipped case names without losing earlier diagnostics or changing executed case statuses. Re-attestation preserves the independently verified dependency recipe, key, manifest and original SDK descriptor before native execution. Alternate-volume opt-in uses only existing explicitly initialized marked roots and never creates or marks a physical drive-root sandbox. Optional RequireCleanQuarantine rejects invalid or blocking parsed state before native work and forbids every repair dispatch; default-false callers retain the ordinary blocking repair lane. All three tracked build-graph enumerations use contained no-window metadata capture and refuse nonzero discovery before governance admission.",
-      "usage": "Use -Suite PR (the pull-request/push gate), CI (the nightly suite), or Full with -ValidationMode Fresh for authoritative gates, Full Resume/Affected for their documented narrower roles, or a focused suite/family for iteration. Exact SMB Rename case filters select one of the two guarded binding routes without activation. The exact FileOps_ClearCompletedScope case uses a private popup and also runs without desktop admission. The exact C0_CurlCommittedMutationResponseLost case uses a loopback provider fixture without desktop admission. The exact FileOps_ProviderCapabilityMatrix case exercises private providers and task decisions without desktop admission. The exact repeated non-clipboard Copy and Move cases use owned tasks without desktop admission. The exact FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof case uses an owned provider and synthetic task decisions without desktop admission. The exact R0fGraph_FakeGraphReadWriteCreateRenameRecycle case uses the owned Graph loopback. The exact Phase16_RemoteOneDrivePersonalInlineRename case uses saved sign-in and a configured live fixture without desktop admission. Test-generated local data and validation evidence stay beneath exact X:/RedSalamander.Perf; select X with -TestRoot or REDSALAMANDER_TEST_ROOT and use -AllowExternalTestRoot only for first initialization. All six x64/ARM64 Debug/Release/ASan Debug profiles are admitted; Full artifact writers and native inventory use that exact profile.",
+      "usage": "Use -Suite PR (the pull-request/push gate), CI (the nightly suite), or Full with -ValidationMode Fresh for authoritative gates, Full Resume/Affected for their documented narrower roles, or a focused suite/family for iteration. Exact SMB Rename case filters select one of the two guarded binding routes without activation. FileOps_SmbRecycleRefusal checks the live guarded Shell refusal and Skip on one owned SMB file without activating the desktop. The exact FileOps_ClearCompletedScope case uses a private popup and also runs without desktop admission. The exact C0_CurlCommittedMutationResponseLost case uses a loopback provider fixture without desktop admission. The exact FileOps_ProviderCapabilityMatrix case exercises private providers and task decisions without desktop admission. The exact repeated non-clipboard Copy and Move cases use owned tasks without desktop admission. The exact FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof case uses an owned provider and synthetic task decisions without desktop admission. The exact R0fGraph_FakeGraphReadWriteCreateRenameRecycle case uses the owned Graph loopback. The exact Phase16_RemoteOneDrivePersonalInlineRename and Phase16_RemoteSftpInlineRename cases use saved sign-in and configured live fixtures without desktop admission. Test-generated local data and validation evidence stay beneath exact X:/RedSalamander.Perf; select X with -TestRoot or REDSALAMANDER_TEST_ROOT and use -AllowExternalTestRoot only for first initialization. All six x64/ARM64 Debug/Release/ASan Debug profiles are admitted; Full artifact writers and native inventory use that exact profile.",
       "usedBy": [
         "Developers",
         "CI workflows",
@@ -2268,6 +2265,30 @@
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "tests": [
         "Tools/Tests/VcpkgToolCheckout.Tests.ps1"
+      ],
+      "replacement": null
+    },
+    {
+      "path": "Tools/Modules/Build/RedMonitorClientTools.psm1",
+      "kind": "module",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Checks the producer tooling pin and both script hashes before loading a client command.",
+      "usage": "Import from the RedMonitor client compatibility commands.",
+      "usedBy": [
+        "Tools/Verify-RedMonitorClient.ps1",
+        "Tools/Update-RedMonitorClient.ps1"
+      ],
+      "prerequisites": [
+        "Vendored RedMonitor tooling and lock"
+      ],
+      "sideEffects": [],
+      "outputs": [
+        "Verified command script block"
+      ],
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "tests": [
+        "Tools/Tests/RedMonitorConsumption.Tests.ps1"
       ],
       "replacement": null
     },
@@ -2995,7 +3016,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Construct declarative stable-ID validation entries with FileOps desktop serialization independent of no-activation, exact no-activation Commands cases for static documentation, cache cancellation, synthetic FolderView drops, the owned archive roundtrip and main-menu architecture, plus eleven exact case-sensitive FileOps-only owned progress/callback/storage lease exceptions including identity-less Delete and identity-interlock waiting, fresh selection convergence and real SMB Copy/Move shape parity, its exact documentation interaction opt-in, other explicit GUI activation groups, the fourteen Commands family contracts, and isolated selected-profile artifact-mutating Pester coverage for each Run-AllTests suite. The closed case-sensitive FileOps no-desktop list additionally admits the exact FileOps_PopupIdleCadence, FileOps_AlertOverlayUxAccessibility, FileOps_DeferredExitRefusesNewWork, FileOps_ClearCompletedScope, C0_CurlCommittedMutationResponseLost, FileOps_ProviderCapabilityMatrix, FileOps_RepeatedNonClipboardCopyStorage, FileOps_RepeatedNonClipboardMoveStorage, FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof, R0fGraph_FakeGraphReadWriteCreateRenameRecycle, and Phase16_RemoteOneDrivePersonalInlineRename cases. The exact Batch Rename admission and identity-less Pack/Delete interlock witnesses also run without the lease using guarded owned-window and task controls. Broad, family, prefix, multi-case and proof-injected selections retain the lease.",
+      "purpose": "Construct declarative stable-ID validation entries with FileOps desktop serialization independent of no-activation, exact no-activation Commands cases for static documentation, cache cancellation, synthetic FolderView drops, the owned archive roundtrip and main-menu architecture, plus eleven exact case-sensitive FileOps-only owned progress/callback/storage lease exceptions including identity-less Delete and identity-interlock waiting, fresh selection convergence and real SMB Copy/Move shape parity, its exact documentation interaction opt-in, other explicit GUI activation groups, the fourteen Commands family contracts, and isolated selected-profile artifact-mutating Pester coverage for each Run-AllTests suite. The closed case-sensitive FileOps no-desktop list additionally admits the exact FileOps_PopupIdleCadence, FileOps_AlertOverlayUxAccessibility, FileOps_DeferredExitRefusesNewWork, FileOps_ClearCompletedScope, C0_CurlCommittedMutationResponseLost, FileOps_ProviderCapabilityMatrix, FileOps_RepeatedNonClipboardCopyStorage, FileOps_RepeatedNonClipboardMoveStorage, FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof, R0fGraph_FakeGraphReadWriteCreateRenameRecycle, Phase16_RemoteOneDrivePersonalInlineRename, and Phase16_RemoteSftpInlineRename cases. FileOps_SmbRecycleRefusal uses one fresh file under a registered SMB fixture and submits Skip directly. The exact Batch Rename admission and identity-less Pack/Delete interlock witnesses also run without the lease using guarded owned-window and task controls. Broad, family, prefix, multi-case and proof-injected selections retain the lease.",
       "usage": "Loaded through the TestRunPlan facade; current commands and inventory tooling consume Get-RSTestRunPlan through that facade, Full's first writer inherits the caller-selected platform/configuration, and Commands family selection is limited to -Suite Commands iteration.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
@@ -5091,9 +5112,10 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Explicitly fetch only the client header and MIT notice at one full upstream commit and update their lock.",
+      "purpose": "Explicitly fetch the client header and MIT notice at one reviewed commit and update their runtime lock.",
       "usage": "See command help and the RedMonitor integration contract.",
       "usedBy": [
+        "Update-RedMonitorClient.ps1",
         "Manual developer use"
       ],
       "prerequisites": [
@@ -5118,9 +5140,10 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Verify exactly the local pinned client header and MIT notice without Git or network.",
+      "purpose": "Verify the pinned local client tooling, header, and MIT notice without Git or network.",
       "usage": "See command help and the RedMonitor integration contract.",
       "usedBy": [
+        "Verify-RedMonitorClient.ps1",
         "Directory.Build.targets",
         "Tools/Restore-RedMonitor.ps1",
         "Tools/Tests/Helpers/RedMonitorClient.ps1"

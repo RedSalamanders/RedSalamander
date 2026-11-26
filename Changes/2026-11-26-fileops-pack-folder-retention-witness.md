@@ -1,1 +1,0 @@
-- Verify that ZIP and 7z Pack retain directory selections when Delete after cannot prove the complete cleanup set.
