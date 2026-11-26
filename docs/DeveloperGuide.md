@@ -605,7 +605,7 @@ Five built-in `ThemeMode` values exist: `System`, `Light`, `Dark`, `Rainbow`, an
 
 `ShowPreferencesDialog{,Plugins,HotPaths,UserMenu}` call `PreferencesDialog::Show(...)` with an initial `PrefCategory`. The dialog is **modeless and single-instance** (`GetHandle`). `PreferencesDialogHost` extends `PreferencesDialogState` and owns one pane object per category (`_generalPane`, `_themesPane`, …) plus three `DxUi::WindowHost`s (`_categoryTreeHost`, `_shellHost`, `_pageHostHost`). Pages are created lazily: `EnsurePreferencesPageInitialized` switches on `currentCategory`, calls `pane.InitializePage(...)` once (guarded by `paneFirstCreateDone[]`), and toggles `paneWrapperPanels[]` visibility. `SelectCategory` (line ~4132) and `RefreshPreferencesPage` (the `case` dispatch around line 3847) route to each pane's `Refresh`/`LayoutPage`.
 
-Settings use a two-copy model in `PreferencesDialogState`: `baselineSettings` vs `workingSettings` (monitor settings tracked separately). `SetDirty` enables Apply; external on-disk changes set `staleFromExternalReload` and trigger `ReloadPreferencesDialogFromDisk`.
+Settings use a two-copy model in `PreferencesDialogState`: `baselineSettings` vs `workingSettings`. `SetDirty` enables Apply; external on-disk changes set `staleFromExternalReload` and trigger `ReloadPreferencesDialogFromDisk`.
 
 #### Theme preview and commit
 
@@ -638,8 +638,8 @@ and immutable lock. See [the consumer contract](../Specs/Core/Core_RedSalamander
 
 Explicit --redmonitor discovers only an installed production helper in LocalAppData/Programs/RedMonitor
 or ProgramFiles/RedMonitor. Bare Debug startup may launch it asynchronously; Release, help, tests and
-probes do not auto-launch. The app never waits for or kills the helper. Preferences keeps the legacy
-Release 7.0 monitor settings file for compatibility in every consumer configuration.
+probes do not auto-launch. The app never waits for or kills the helper. RedMonitor owns its settings profile and opens it
+through **File > Open Settings File**.
 ### Localization, Resources, Build & Test Infrastructure
 
 _How RedSalamander stores localizable UI in .rc resources with satellite DLLs, builds via build.ps1/MSBuild, and validates via in-product self-tests and the Run-AllTests harness._

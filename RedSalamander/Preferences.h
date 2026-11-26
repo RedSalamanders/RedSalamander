@@ -139,24 +139,6 @@ enum class PreferencesAdvancedDebugFocusTarget : uint8_t
     OpenSettingsFileLink,
 };
 
-enum class PreferencesMonitorDebugFocusTarget : uint8_t
-{
-    None = 0u,
-    ToolbarToggle,
-    LineNumbersToggle,
-    AlwaysOnTopToggle,
-    ShowIdsToggle,
-    AutoScrollToggle,
-    FilterPresetCombo,
-    FilterTextToggle,
-    FilterErrorToggle,
-    FilterWarningToggle,
-    FilterInfoToggle,
-    FilterPerfToggle,
-    FilterDebugToggle,
-    OpenSettingsFileLink,
-};
-
 enum class PreferencesCompareDirectoriesDebugFocusTarget : uint8_t
 {
     None = 0u,
@@ -292,8 +274,6 @@ struct PreferencesDebugSnapshot
     bool hotPathsSecondPathFocusable                                            = false;
     bool hotPathsOpenPrefsFocusable                                             = false;
     PreferencesAdvancedDebugFocusTarget advancedFocusTarget                     = PreferencesAdvancedDebugFocusTarget::None;
-    PreferencesMonitorDebugFocusTarget monitorFocusTarget                       = PreferencesMonitorDebugFocusTarget::None;
-    bool monitorSettingsFileCardLast                                            = false;
     PreferencesCompareDirectoriesDebugFocusTarget compareDirectoriesFocusTarget = PreferencesCompareDirectoriesDebugFocusTarget::None;
     size_t compareDirectoriesVisibleSectionHeaderCount                          = 0u;
     PreferencesFileOperationsDebugFocusTarget fileOperationsFocusTarget         = PreferencesFileOperationsDebugFocusTarget::None;
@@ -580,8 +560,6 @@ struct PreferencesDebugSnapshot
 [[nodiscard]] bool DebugFocusPreferencesHotPathsOpenPrefsToggle() noexcept;
 [[nodiscard]] bool DebugGetPreferencesHotPathsOpenPrefsToggleChecked(bool& outChecked) noexcept;
 [[nodiscard]] bool DebugFocusPreferencesAdvancedBypassHelloToggle() noexcept;
-[[nodiscard]] bool DebugFocusPreferencesMonitorToolbarToggle() noexcept;
-[[nodiscard]] bool DebugSelectPreferencesMonitorFilterPreset(std::wstring_view displayText) noexcept;
 void DebugSetPreferencesSettingsFileOpenCapture(bool capture) noexcept;
 void DebugClearPreferencesLastSettingsFileOpen() noexcept;
 [[nodiscard]] bool DebugGetPreferencesLastSettingsFileOpen(std::filesystem::path& outPath, HRESULT& outHr) noexcept;

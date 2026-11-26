@@ -98,8 +98,6 @@ namespace PreferencesDialog
 [[nodiscard]] bool DebugFocusHotPathsOpenPrefsToggle() noexcept;
 [[nodiscard]] bool DebugGetHotPathsOpenPrefsToggleChecked(bool& outChecked) noexcept;
 [[nodiscard]] bool DebugFocusAdvancedBypassHelloToggle() noexcept;
-[[nodiscard]] bool DebugFocusMonitorToolbarToggle() noexcept;
-[[nodiscard]] bool DebugSelectMonitorFilterPreset(std::wstring_view displayText) noexcept;
 void DebugSetSettingsFileOpenCapture(bool capture) noexcept;
 void DebugClearLastSettingsFileOpen() noexcept;
 [[nodiscard]] bool DebugGetLastSettingsFileOpen(std::filesystem::path& outPath, HRESULT& outHr) noexcept;

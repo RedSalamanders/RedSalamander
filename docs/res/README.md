@@ -69,7 +69,7 @@ their real scrollbars, and the guides describe options below the visible viewpor
 | [preferences-hot-paths.png](preferences-hot-paths.png) | Preferences hot paths. [Provenance](preferences-hot-paths.provenance.json). |
 | [preferences-file-operations.png](preferences-file-operations.png) | Preferences file operations. [Provenance](preferences-file-operations.provenance.json). |
 | [preferences-user-menu.png](preferences-user-menu.png) | Preferences user menu. [Provenance](preferences-user-menu.provenance.json). |
-| [preferences-monitor.png](preferences-monitor.png) | Preferences monitor. [Provenance](preferences-monitor.provenance.json). |
+| [preferences-monitor.png](preferences-monitor.png) | Historical Preferences Monitor page. [Provenance](preferences-monitor.provenance.json). |
 | [preferences-plugin-mtp.png](preferences-plugin-mtp.png) | Preferences plugin mtp. [Provenance](preferences-plugin-mtp.provenance.json). |
 | [find-files.png](find-files.png) | Find files. [Provenance](find-files.provenance.json). |
 | [find-files-empty.png](find-files-empty.png) | Find files empty. [Provenance](find-files-empty.provenance.json). |
