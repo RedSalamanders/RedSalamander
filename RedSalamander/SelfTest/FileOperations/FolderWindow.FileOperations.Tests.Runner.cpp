@@ -15277,17 +15277,22 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
 
 [[nodiscard]] HRESULT RunLiveSftpInlineRenameForSelfTest(const Common::Settings::ConnectionProfile& profile) noexcept
 {
+    const auto reject = [](std::wstring_view stage, HRESULT status = E_UNEXPECTED) noexcept
+    {
+        AppendLog(std::format(L"Live SFTP Rename: {} (hr=0x{:08X}).", stage, static_cast<unsigned long>(status)));
+        return FAILED(status) ? status : E_UNEXPECTED;
+    };
     RETURN_IF_FAILED(FileSystemPluginManager::GetInstance().EnablePlugin(kPluginIdSftp, g_settings));
     const auto* entry = FindLoadedPluginEntry(kPluginIdSftp);
     if (! entry || ! entry->fileSystem)
-        return E_UNEXPECTED;
+        return reject(L"the registered provider instance is unavailable");
 
     const auto fs          = entry->fileSystem;
     const auto io          = fs.try_query<IFileSystemIO>();
     const auto directories = fs.try_query<IFileSystemDirectoryOperations>();
     const auto probed      = fs.try_query<IFileSystemProbedRename>();
     if (! io || ! directories || ! probed)
-        return E_NOINTERFACE;
+        return reject(L"the selected provider did not expose the required interfaces", E_NOINTERFACE);
 
     const auto isPlainDirectory = [&](const std::wstring& providerPath) noexcept
     {
@@ -15297,18 +15302,17 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     };
     const auto configuredRoot = MakeConnectionPathForSelfTest(profile.name, NormalizePluginPathForSelfTest(profile.initialPath));
     if (configuredRoot.empty() || ! isPlainDirectory(configuredRoot))
-        return E_UNEXPECTED;
-
+        return reject(L"the configured fixture root is unavailable or redirects");
     const std::wstring guid = NewGuidString();
     if (guid.empty())
-        return E_UNEXPECTED;
+        return reject(L"could not generate a fresh fixture name");
     const std::wstring root =
         MakeConnectionPathForSelfTest(profile.name, JoinPluginPathForSelfTest(profile.initialPath, std::format(L"fileops-selftest-sftp-rename-{}", guid)));
     if (root.empty())
         return E_INVALIDARG;
     const HRESULT created = directories->CreateDirectory(root.c_str());
     if (created != S_OK)
-        return FAILED(created) ? created : E_UNEXPECTED;
+        return reject(L"could not create the fresh fixture", created);
     AppendLog(std::format(L"Live SFTP Rename created owned fixture {}.", guid));
 
     const auto notFound = [&](const std::filesystem::path& path) noexcept
@@ -15331,52 +15335,76 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     const auto original      = parent / L"before.txt";
     const auto occupant      = parent / L"occupied.txt";
     const auto renamed       = parent / L"renamed.txt";
+    const auto caseOnly      = parent / L"Renamed.txt";
+    const auto folder        = parent / L"folder-before";
+    const auto renamedFolder = parent / L"folder-after";
     const auto fileBytes     = std::format("owned live SFTP source {}", Common::Strings::Utf8FromUtf16StrictOrEmpty(guid));
     const auto occupiedBytes = std::format("owned live SFTP occupant {}", Common::Strings::Utf8FromUtf16StrictOrEmpty(guid));
     const auto started       = std::chrono::steady_clock::now();
     const HRESULT result     = [&]() noexcept -> HRESULT
     {
-        if (! WriteFileTextFsIo(io, original, fileBytes) || ! WriteFileTextFsIo(io, occupant, occupiedBytes))
-            return E_FAIL;
+        if (! WriteFileTextFsIo(io, original, fileBytes) || ! WriteFileTextFsIo(io, occupant, occupiedBytes) ||
+            directories->CreateDirectory(ToPluginPathText(folder).c_str()) != S_OK || ! WriteFileTextFsIo(io, folder / L"inside.txt", fileBytes))
+            return reject(L"could not seed the fresh file, occupant and folder", E_FAIL);
         wil::com_ptr<IFileSystemProbedRenameSource> source;
         const HRESULT captured = probed->CaptureProbedRenameSource(ToPluginPathText(original).c_str(), nullptr, source.put());
         if (captured != S_OK || ! source)
-            return FAILED(captured) ? captured : E_UNEXPECTED;
+            return reject(L"could not capture the selected file and parent", captured);
         FileSystemCorroboratedRenameResult refusal{};
         const HRESULT collision = source->RenameToFreeSibling(L"occupied.txt", nullptr, &refusal);
         if (collision != HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || refusal.mutationAttempted != FALSE || refusal.mutation.outcomeKnown != TRUE ||
             refusal.mutation.mutationCommitted != FALSE || refusal.mutation.originalStillPresent != TRUE || ! hasBytes(original, fileBytes) ||
             ! hasBytes(occupant, occupiedBytes))
-            return E_UNEXPECTED;
+            return reject(L"occupied-name refusal did not keep both exact files before dispatch", collision);
         source.reset();
 
         const HRESULT renamedHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdSftp, original, L"renamed.txt");
-        if (renamedHr != S_OK)
-            return FAILED(renamedHr) ? renamedHr : E_UNEXPECTED;
-        return notFound(original) && hasBytes(renamed, fileBytes) && hasBytes(occupant, occupiedBytes) ? S_OK : E_UNEXPECTED;
+        if (renamedHr != S_OK || ! notFound(original) || ! hasBytes(renamed, fileBytes))
+            return reject(L"scheduled file Rename did not prove the new name and exact bytes", renamedHr);
+        const HRESULT caseHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdSftp, renamed, L"Renamed.txt");
+        if (caseHr != S_OK || ! notFound(renamed) || ! hasBytes(caseOnly, fileBytes))
+            return reject(L"case-only Rename did not prove the exact spelling and bytes", caseHr);
+        const HRESULT folderHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdSftp, folder, L"folder-after");
+        if (folderHr != S_OK || ! notFound(folder) || ! hasBytes(renamedFolder / L"inside.txt", fileBytes) || ! hasBytes(occupant, occupiedBytes))
+            return reject(L"folder Rename did not keep its child and the occupied sibling", folderHr);
+        return S_OK;
     }();
 
     // SFTP deletes by name. Verify each exact payload in the fresh parent and use
     // nonrecursive removal so unexpected files prevent parent removal.
     if (! isPlainDirectory(configuredRoot) || ! isPlainDirectory(root))
-        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
-    for (const auto& [path, bytes] : {std::pair{original, std::string_view(fileBytes)},
-                                      std::pair{renamed, std::string_view(fileBytes)},
-                                      std::pair{occupant, std::string_view(occupiedBytes)}})
+        return reject(L"the owned parent is unavailable or redirects", HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
+    const auto remove = [&](const std::filesystem::path& path) noexcept
+    {
+        const HRESULT removed = fs->DeleteItem(ToPluginPathText(path).c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+        if (removed != S_OK || ! notFound(path))
+            return reject(L"nonrecursive cleanup did not retire the verified fixture entry", removed);
+        return S_OK;
+    };
+    const auto removeFile = [&](const std::filesystem::path& path, std::string_view expected) noexcept
+    {
+        if (notFound(path))
+            return S_OK;
+        if (! hasBytes(path, expected))
+            return reject(L"cleanup could not verify the exact fixture bytes", HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
+        return remove(path);
+    };
+    for (const auto& path : {original, renamed, caseOnly})
+        RETURN_IF_FAILED(removeFile(path, fileBytes));
+    RETURN_IF_FAILED(removeFile(occupant, occupiedBytes));
+    for (const auto& path : {folder, renamedFolder})
     {
         if (notFound(path))
             continue;
-        if (! hasBytes(path, bytes))
-            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
-        const HRESULT removed = fs->DeleteItem(ToPluginPathText(path).c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
-        if (removed != S_OK || ! notFound(path))
-            return FAILED(removed) ? removed : E_UNEXPECTED;
+        if (! isPlainDirectory(ToPluginPathText(path)))
+            return reject(L"fixture subfolder is unavailable or redirects", HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
+        RETURN_IF_FAILED(removeFile(path / L"inside.txt", fileBytes));
+        RETURN_IF_FAILED(remove(path));
     }
-    const HRESULT removed = fs->DeleteItem(root.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
-    if (removed != S_OK || ! notFound(parent))
-        return FAILED(removed) ? removed : E_UNEXPECTED;
+    RETURN_IF_FAILED(remove(parent));
 
-    Debug::Perf::Emit(L"FileOps.SelfTest.SftpInlineRenameUs", L"owned live file and collision", Debug::Perf::ElapsedUs(started), 1u, 1u, result);
+    Debug::Perf::Emit(
+        L"FileOps.SelfTest.SftpInlineRenameUs", L"owned live file, case-only, folder and collision", Debug::Perf::ElapsedUs(started), 3u, 1u, result);
     return result;
 }
 

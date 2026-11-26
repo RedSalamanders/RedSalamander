@@ -1223,8 +1223,9 @@ the same synchronous reporter and counter path as the pointer overload.
   `R0fGraph_FakeGraphReadWriteCreateRenameRecycle` uses a loopback Graph fixture and an owned pane;
   `Phase16_RemoteOneDrivePersonalInlineRename` uses saved sign-in and a fresh test-only fixture child, with exact file and folder Rename, case-only spelling, occupied-name refusal, and Recycle verification;
   `Phase16_RemoteSftpInlineRename` requires saved sign-in and the approved existing SFTP test folder.
-  It creates one fresh child, verifies an occupied-name refusal and a scheduled free-name Rename,
-  and checks each generated payload before nonrecursive cleanup.
+  It creates one fresh child and verifies occupied-name refusal and scheduled file, case-only and
+  folder Rename. Cleanup verifies every generated payload and removes only the named fixture entries
+  nonrecursively.
   `FileOps_SmbRecycleRefusal` uses one fresh child of `path.smb.primary`. It checks that the guarded Local Shell route
   reports a known non-commit on the share, offers one item-specific permanent-delete decision on the independently
   probed exact or by-name route and retains the same bytes

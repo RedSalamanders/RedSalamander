@@ -460,6 +460,23 @@ real FTP/SSH session-limit qualification.
   not a live-endpoint throughput result; no apples-to-apples historical metric
   exists, and the transactional-writer archive is not used as a comparison.
 
+### Scheduled SFTP Rename
+
+Connection Manager SFTP profiles expose the optional `IFileSystemProbedRename` interface for ordinary
+files and directories within their current parent. The token retains the selected profile and
+endpoint, parent and source listing facts. It acquires credentials through the host for each
+operation and stores no connection secrets. The worker rechecks the route, source and parent
+before obtaining a fresh, complete destination listing. A changed selection or parent is refused
+before mutation. Equal listing facts cannot distinguish every replacement on an identity-less server.
+
+An observed occupant returns a known non-commit with the original present. Keep both can then probe
+a different valid sibling. Lookup failures do not grant mutation authority. A free exact-case name
+uses the existing SFTP server-side Rename with the current host-key, deadline and cancellation rules.
+A name created after the lookup can still be replaced by the server. The token grants no Replace
+authority. A committed Rename or uncertain dispatch closes the token. The `fileops.curl.probed_rename_capture_us`
+and `fileops.curl.probed_rename_us` metrics record capture and worker durations.
+FTP and SCP have separate live qualification requirements for the scheduled interface.
+
 ### Conditional publication and identity-safe recovery
 
 - FTP `RNFR`/`RNTO` does not expose an atomic publish-if-absent operation or an

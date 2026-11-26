@@ -74,7 +74,10 @@ own unsupported-operation error when the source exists.
 Press **F2**, edit the name, and press **Enter**. On an SMB share that supports guarded same-folder
 rename, F2 can also rename files and folders when the share does not report exact item IDs.
 On OneDrive Personal, F2 renames files and folders stored on the connected drive within their current folder.
-If the chosen name is taken on either of these routes, **Keep both** uses a new name and preserves the existing item.
+On a Connection Manager SFTP connection, F2 can rename an ordinary file or folder within its current
+folder. RedSalamander checks the target name just before asking the server to rename. A name created
+by another client after that check can still be replaced by the server.
+If RedSalamander finds that the chosen name is already taken, **Keep both** uses a new name and preserves the existing item.
 RedSalamander checks the exact spelling for case-only changes. A result it cannot verify appears as
 **Outcome unknown** with details in the File Operations popup.
 

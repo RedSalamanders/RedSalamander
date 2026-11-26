@@ -1,1 +1,1 @@
-- Add a non-activating live SFTP Rename check that verifies the occupied-name refusal, scheduled Rename and cleanup in a fresh child of an approved test folder.
+- Enable scheduled same-folder SFTP Rename with a fresh destination check and verify file, case-only and folder Rename in the approved live test sandbox.
