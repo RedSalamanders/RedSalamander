@@ -89,6 +89,7 @@ std::wstring g_debugGraphBaseUrlOverride; // `http://127.0.0.1:<port>/v1.0` whil
     return std::wstring(kGraphBaseUrl);
 }
 constexpr std::wstring_view kAuthHost                       = L"login.microsoftonline.com";
+constexpr std::wstring_view kOneDrivePersonalContentHost    = L"my.microsoftpersonalcontent.com";
 constexpr std::wstring_view kLoopbackPath                   = L"/redsalamander/oauth2";
 constexpr std::wstring_view kDefaultAuthUserAgent           = L"RedSalamander Microsoft Drive/0.1";
 constexpr std::wstring_view kDefaultOAuthPageSummarySuccess = L"Your Microsoft account is linked. Return to RedSalamander to keep browsing.";
@@ -1966,7 +1967,9 @@ struct ValidatedPreauthenticatedUploadUrl final
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ValidatePreauthenticatedUploadUrl(std::wstring_view url, ValidatedPreauthenticatedUploadUrl& validatedOut) noexcept
+[[nodiscard]] HRESULT ValidatePreauthenticatedUploadUrl(std::wstring_view url,
+                                                        FileSystemMicrosoftDriveMode mode,
+                                                        ValidatedPreauthenticatedUploadUrl& validatedOut) noexcept
 {
     SecureClear(validatedOut.value);
 #if defined(ENABLE_TESTS)
@@ -1982,8 +1985,11 @@ struct ValidatedPreauthenticatedUploadUrl final
     {
         return hr;
     }
+    // Personal Graph upload sessions can use the exact Microsoft consumer content host.
+    const bool personalContent =
+        mode == FileSystemMicrosoftDriveMode::OneDrivePersonal && OrdinalString::EqualsNoCase(parsed.host, kOneDrivePersonalContentHost);
     if (parsed.scheme != INTERNET_SCHEME_HTTPS || parsed.port != INTERNET_DEFAULT_HTTPS_PORT || parsed.hasUserInfo || parsed.hasFragment ||
-        ! IsApprovedPreauthenticatedUploadHost(parsed.host))
+        (! personalContent && ! IsApprovedPreauthenticatedUploadHost(parsed.host)))
     {
         return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
     }
@@ -2008,7 +2014,7 @@ struct ValidatedPreauthenticatedUploadUrl final
     {
         return L"https/oauth-authority";
     }
-    if (https && IsApprovedPreauthenticatedUploadHost(parsed.host))
+    if (https && (IsApprovedPreauthenticatedUploadHost(parsed.host) || OrdinalString::EqualsNoCase(parsed.host, kOneDrivePersonalContentHost)))
     {
         return L"https/preauthenticated-upload";
     }
@@ -3480,7 +3486,7 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ParseUploadUrl(std::string_view bodyUtf8, ValidatedPreauthenticatedUploadUrl& uploadUrlOut) noexcept
+[[nodiscard]] HRESULT ParseUploadUrl(std::string_view bodyUtf8, FileSystemMicrosoftDriveMode mode, ValidatedPreauthenticatedUploadUrl& uploadUrlOut) noexcept
 {
     SecureClear(uploadUrlOut.value);
 
@@ -3503,7 +3509,7 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
-    return ValidatePreauthenticatedUploadUrl(rawUploadUrl, uploadUrlOut);
+    return ValidatePreauthenticatedUploadUrl(rawUploadUrl, mode, uploadUrlOut);
 }
 
 [[nodiscard]] HRESULT ParseNextExpectedUploadOffset(std::string_view bodyUtf8, uint64_t totalBytes, uint64_t& offsetOut) noexcept
@@ -7538,11 +7544,17 @@ HRESULT MicrosoftDriveFileWriter::InitializeStreamingUpload() noexcept
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     }
 
+    const auto reportFailure = [](std::wstring_view stage, HRESULT failure, DWORD httpStatus = 0u) noexcept
+    {
+        Debug::Perf::Emit(L"FileOps.MicrosoftDrive.UploadSessionFailure", stage, 0u, httpStatus, 0u, failure);
+        return failure;
+    };
+
     DriveContext context{};
     HRESULT hr = BuildDriveContext(*_fileSystem, _destinationPath, context);
     if (FAILED(hr))
     {
-        return hr;
+        return reportFailure(L"drive context", hr);
     }
 
     const std::wstring normalizedPath = TrimTrailingSlashPreserveRoot(NormalizePluginPath(context.drivePath));
@@ -7562,7 +7574,7 @@ HRESULT MicrosoftDriveFileWriter::InitializeStreamingUpload() noexcept
         }
         if (! IsNotFoundStatus(hr))
         {
-            return hr;
+            return reportFailure(L"target probe", hr);
         }
     }
     if (_expectedReplacement.has_value())
@@ -7570,7 +7582,7 @@ HRESULT MicrosoftDriveFileWriter::InitializeStreamingUpload() noexcept
         hr = ResolveReplaceOccupant(context, normalizedPath);
         if (FAILED(hr))
         {
-            return hr;
+            return reportFailure(L"target revision", hr);
         }
     }
 
@@ -7578,7 +7590,7 @@ HRESULT MicrosoftDriveFileWriter::InitializeStreamingUpload() noexcept
     hr = BuildJsonBodyForUploadSession(allowOverwrite, bodyUtf8);
     if (FAILED(hr))
     {
-        return hr;
+        return reportFailure(L"session request body", hr);
     }
 
     HttpResponse sessionResponse{};
@@ -7592,17 +7604,17 @@ HRESULT MicrosoftDriveFileWriter::InitializeStreamingUpload() noexcept
         *_fileSystem, context, L"POST", BuildGraphCreateUploadSessionUrl(context, normalizedPath), bodyUtf8, sessionHeaders, false, sessionResponse);
     if (FAILED(hr))
     {
-        return hr;
+        return reportFailure(L"create session transport", hr);
     }
     if (sessionResponse.statusCode < 200u || sessionResponse.statusCode >= 300u)
     {
-        return HresultFromGraphError(sessionResponse.statusCode, sessionResponse.body);
+        return reportFailure(L"create session response", HresultFromGraphError(sessionResponse.statusCode, sessionResponse.body), sessionResponse.statusCode);
     }
 
-    hr = ParseUploadUrl(sessionResponse.body, _uploadUrl);
+    hr = ParseUploadUrl(sessionResponse.body, _fileSystem->Mode(), _uploadUrl);
     if (FAILED(hr))
     {
-        return hr;
+        return reportFailure(L"session URL validation", hr, sessionResponse.statusCode);
     }
 
     _streamSettings             = _fileSystem->SnapshotSettings();
@@ -7660,7 +7672,9 @@ HRESULT MicrosoftDriveFileWriter::FlushStreamingChunk() noexcept
         }
         if (uploadResponse.statusCode != 202u)
         {
-            return HresultFromGraphError(uploadResponse.statusCode, uploadResponse.body);
+            hr = HresultFromGraphError(uploadResponse.statusCode, uploadResponse.body);
+            Debug::Perf::Emit(L"FileOps.MicrosoftDrive.UploadSessionFailure", L"streaming chunk response", 0u, uploadResponse.statusCode, 0u, hr);
+            return hr;
         }
 
         uint64_t nextOffset = 0u;
@@ -7825,7 +7839,7 @@ HRESULT MicrosoftDriveFileWriter::UploadWithSession(const DriveContext& context,
     }
 
     ValidatedPreauthenticatedUploadUrl uploadUrl{};
-    hr = ParseUploadUrl(sessionResponse.body, uploadUrl);
+    hr = ParseUploadUrl(sessionResponse.body, _fileSystem->Mode(), uploadUrl);
     if (FAILED(hr))
     {
         return hr;
@@ -11214,30 +11228,59 @@ void RunDebugCredentialUrlValidationSelfTest(unsigned int& passed, unsigned int&
                failed);
 
     ValidatedPreauthenticatedUploadUrl uploadUrl{};
-    DebugCheck(SUCCEEDED(ValidatePreauthenticatedUploadUrl(L"https://sn3302.up.1drv.com/up/session?opaque=1", uploadUrl)),
+    DebugCheck(SUCCEEDED(ValidatePreauthenticatedUploadUrl(
+                   L"https://sn3302.up.1drv.com/up/session?opaque=1", FileSystemMicrosoftDriveMode::OneDrivePersonal, uploadUrl)),
                L"upload URL validation should accept the documented OneDrive preauthenticated origin",
                passed,
                failed);
-    DebugCheck(SUCCEEDED(ValidatePreauthenticatedUploadUrl(L"https://tenant.sharepoint.com/_api/upload?opaque=1", uploadUrl)),
+    constexpr std::wstring_view personalContentUrl = L"https://my.microsoftpersonalcontent.com/personal/fixture/_api/upload?opaque=1";
+    DebugCheck(SUCCEEDED(ValidatePreauthenticatedUploadUrl(personalContentUrl, FileSystemMicrosoftDriveMode::OneDrivePersonal, uploadUrl)) &&
+                   uploadUrl.value == personalContentUrl,
+               L"personal upload sessions must preserve the exact Microsoft consumer content URL",
+               passed,
+               failed);
+    DebugCheck(FAILED(ValidatePreauthenticatedUploadUrl(personalContentUrl, FileSystemMicrosoftDriveMode::OneDriveBusiness, uploadUrl)) &&
+                   FAILED(ValidatePreauthenticatedUploadUrl(personalContentUrl, FileSystemMicrosoftDriveMode::SharePoint, uploadUrl)),
+               L"the personal content origin must stay outside business and SharePoint upload authority",
+               passed,
+               failed);
+    DebugCheck(FAILED(ValidatePreauthenticatedUploadUrl(
+                   L"https://sub.my.microsoftpersonalcontent.com/personal/fixture/_api/upload", FileSystemMicrosoftDriveMode::OneDrivePersonal, uploadUrl)) &&
+                   FAILED(ValidatePreauthenticatedUploadUrl(L"https://my.microsoftpersonalcontent.com.example/personal/fixture/_api/upload",
+                                                            FileSystemMicrosoftDriveMode::OneDrivePersonal,
+                                                            uploadUrl)),
+               L"the personal content origin must match the entire host",
+               passed,
+               failed);
+    DebugCheck(FAILED(ValidatePreauthenticatedUploadUrl(
+                   L"https://my.microsoftpersonalcontent.com:444/personal/fixture/_api/upload", FileSystemMicrosoftDriveMode::OneDrivePersonal, uploadUrl)),
+               L"the personal content origin requires the normal HTTPS port",
+               passed,
+               failed);
+    DebugCheck(SUCCEEDED(ValidatePreauthenticatedUploadUrl(
+                   L"https://tenant.sharepoint.com/_api/upload?opaque=1", FileSystemMicrosoftDriveMode::SharePoint, uploadUrl)),
                L"upload URL validation should accept a tenant SharePoint preauthenticated origin",
                passed,
                failed);
-    DebugCheck(FAILED(ValidatePreauthenticatedUploadUrl(L"http://sn3302.up.1drv.com/up/session", uploadUrl)),
+    DebugCheck(FAILED(ValidatePreauthenticatedUploadUrl(L"http://sn3302.up.1drv.com/up/session", FileSystemMicrosoftDriveMode::OneDrivePersonal, uploadUrl)),
                L"upload URL validation should reject plaintext HTTP",
                passed,
                failed);
-    DebugCheck(FAILED(ValidatePreauthenticatedUploadUrl(L"https://up.1drv.com.evil.example/up/session", uploadUrl)),
-               L"upload URL validation should reject suffix-confusion origins",
-               passed,
-               failed);
-    DebugCheck(FAILED(ValidatePreauthenticatedUploadUrl(L"https://user@sn3302.up.1drv.com/up/session", uploadUrl)),
-               L"upload URL validation should reject userinfo",
-               passed,
-               failed);
-    DebugCheck(FAILED(ValidatePreauthenticatedUploadUrl(L"https://sn3302.up.1drv.com/up/session#fragment", uploadUrl)),
-               L"upload URL validation should reject fragments",
-               passed,
-               failed);
+    DebugCheck(
+        FAILED(ValidatePreauthenticatedUploadUrl(L"https://up.1drv.com.evil.example/up/session", FileSystemMicrosoftDriveMode::OneDrivePersonal, uploadUrl)),
+        L"upload URL validation should reject suffix-confusion origins",
+        passed,
+        failed);
+    DebugCheck(
+        FAILED(ValidatePreauthenticatedUploadUrl(L"https://user@sn3302.up.1drv.com/up/session", FileSystemMicrosoftDriveMode::OneDrivePersonal, uploadUrl)),
+        L"upload URL validation should reject userinfo",
+        passed,
+        failed);
+    DebugCheck(
+        FAILED(ValidatePreauthenticatedUploadUrl(L"https://sn3302.up.1drv.com/up/session#fragment", FileSystemMicrosoftDriveMode::OneDrivePersonal, uploadUrl)),
+        L"upload URL validation should reject fragments",
+        passed,
+        failed);
 }
 
 enum class ContinuationDebugScenario
@@ -11371,8 +11414,8 @@ void RunDebugCredentialDiagnosticRedactionSelfTest(unsigned int& passed, unsigne
     DebugCheck(FAILED(hr), L"injected authorized Graph transport failure should propagate", passed, failed);
 
     ValidatedPreauthenticatedUploadUrl uploadUrl{};
-    const std::wstring rawUploadUrl = std::format(L"https://sn3302.up.1drv.com/up/session?auth={}", kUploadSentinel);
-    hr                              = ValidatePreauthenticatedUploadUrl(rawUploadUrl, uploadUrl);
+    const std::wstring rawUploadUrl = std::format(L"https://my.microsoftpersonalcontent.com/personal/fixture/_api/upload?auth={}", kUploadSentinel);
+    hr                              = ValidatePreauthenticatedUploadUrl(rawUploadUrl, FileSystemMicrosoftDriveMode::OneDrivePersonal, uploadUrl);
     if (SUCCEEDED(hr))
     {
         hr = SendPreauthenticatedUploadRequest(settings, L"PUT", uploadUrl, {}, nullptr, 0u, false, response);
@@ -11565,16 +11608,18 @@ struct StreamingUploadDebugContext final
     if (OrdinalString::EqualsNoCase(method, L"POST") && url.find(L"createUploadSession") != std::wstring_view::npos)
     {
         responseOut.statusCode = 200u;
-        responseOut.body       = R"json({"uploadUrl":"https://sn3302.up.1drv.com/up/session?opaque=streaming-selftest"})json";
+        responseOut.body       = R"json({"uploadUrl":"https://my.microsoftpersonalcontent.com/personal/fixture/_api/upload?opaque=streaming-selftest"})json";
         return S_OK;
     }
-    if (OrdinalString::EqualsNoCase(method, L"DELETE") && url == L"https://sn3302.up.1drv.com/up/session?opaque=streaming-selftest")
+    if (OrdinalString::EqualsNoCase(method, L"DELETE") &&
+        url == L"https://my.microsoftpersonalcontent.com/personal/fixture/_api/upload?opaque=streaming-selftest")
     {
         ++context->cancelDeletes;
         responseOut.statusCode = 204u;
         return S_OK;
     }
-    if (! OrdinalString::EqualsNoCase(method, L"PUT") || url != L"https://sn3302.up.1drv.com/up/session?opaque=streaming-selftest")
+    if (! OrdinalString::EqualsNoCase(method, L"PUT") ||
+        url != L"https://my.microsoftpersonalcontent.com/personal/fixture/_api/upload?opaque=streaming-selftest")
     {
         return E_UNEXPECTED;
     }

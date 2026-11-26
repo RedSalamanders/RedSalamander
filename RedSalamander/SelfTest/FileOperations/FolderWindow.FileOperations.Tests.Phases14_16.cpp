@@ -1727,6 +1727,17 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
         const auto itCopy = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
         if (itCopy == state.completedTasks.end())
         {
+            if (state.taskA.has_value())
+            {
+                const auto prompt = TryGetConflictPromptCopy(state.fileOps->FindTask(state.taskA.value()));
+                if (prompt.has_value() && ! prompt->metadataLoading && prompt->buttonsPublishable)
+                {
+                    Fail(std::format(L"OneDrive Personal upload stopped at a File Operations decision (bucket={}, hr=0x{:08X}).",
+                                     static_cast<unsigned int>(prompt->bucket),
+                                     static_cast<unsigned long>(prompt->status)));
+                    return true;
+                }
+            }
             return false;
         }
 

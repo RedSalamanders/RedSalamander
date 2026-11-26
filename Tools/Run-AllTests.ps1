@@ -95,6 +95,8 @@
     cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation supports -NonInteractive through synthetic archive commands and sandbox files.
     Exact FileOps SMB Rename provider cases may run with -NonInteractive. Select
     FileOps_SmbExactRenameProvider or FileOps_SmbCorroboratedRenameProvider for the relevant binding route.
+    FileOps_SmbRecycleRefusal supports -NonInteractive. It checks that the guarded Shell route retains
+    the file and asks for exact-item consent on a registered SMB share.
     FileOps_ClearCompletedScope also supports -NonInteractive through a private popup and test-owned data.
     C0_CurlCommittedMutationResponseLost supports -NonInteractive and uses only loopback FTP fixtures.
     FileOps_ProviderCapabilityMatrix supports -NonInteractive through private providers and task controls.
