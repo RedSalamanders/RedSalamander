@@ -874,8 +874,13 @@ x64-/arm64- prefix mapping). A different triplet is a different package ABI hash
 change, and after a change of installation or default major.minor, rebuilds the packages; vcpkg's binary cache then
 serves any root whose triplet text is identical. The functions live in `Tools/Modules/Build/VcpkgInstallSafety.psm1` and
 keep the contract of DxUi's `Tools/VisualStudio.psm1` and `Tools/VcpkgTriplet.psm1`, a documented consumer interface of
-the pinned library. They are not imported, because this installer runs before the DxUi checkout is restored (the Ghostty
-ARM64 workflow installs first); a parity test compares both implementations whenever the pinned checkout is restored.
+the pinned library. The Ghostty ARM64 workflow installs before the DxUi checkout is restored. A parity test compares
+both implementations whenever the pinned checkout is restored.
+
+The pinned CI engine constructs the manifest install arguments. The product keeps vcpkg's default buildtrees,
+packages and downloads locations and supplies the platform's staging root and compiler-pinned triplet overlay.
+ARM64 also supplies the checked-in port overlay. The product preflight owns the explicit registry option and
+retains the selected baseline and executable identity checks before passing that option to vcpkg.
 Public build.ps1 consumes the selected platform's already prepared canonical tree. It checks
 the required include, library and runtime directories and verifies both Git pins through
 Initialize-RSVcpkgToolContext. Missing inputs report the pinned preparation command.

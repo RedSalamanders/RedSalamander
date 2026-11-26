@@ -53,10 +53,10 @@ Describe 'Vcpkg install safety helper' {
         $source | Should Not Match '& \$vcpkgExePath\s+install'
         $source | Should Match '\[string\]\$VcpkgRoot\s*=\s*\$null'
         $source | Should Match 'foreach \(\$requiredDirectory in @\(''ports'', ''versions''\)\)'
-        $source | Should Match '\$vcpkgArguments\.Add\("--vcpkg-root=\$vcpkgRootPath"\)'
+        $source | Should Match '-RegistryRoot \$vcpkgRootPath\)'
         $source | Should Match 'Assert-RSVcpkgManifestVersionConstraintsAvailable[\s\S]*?-RegistryRoot \$vcpkgRegistryRoot'
         $source.IndexOf('Assert-RSVcpkgManifestVersionConstraintsAvailable') | Should BeLessThan $source.IndexOf('$sharedDependencyLocks =')
-        $source | Should Match '-Arguments \$vcpkgArguments\.ToArray\(\)'
+        $source | Should Match '-Arguments \$vcpkgArguments'
         $source | Should Match '\$installBaseRoot\s*=.*\.build\\vcpkg_installed'
         $source | Should Match '\$platformScopeName\s*=\s*\(Get-RSVcpkgCoordinationPlatform -TripletName \$triplet\)\.ToLowerInvariant\(\)'
         $source | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$installBaseRoot -Child \$platformScopeName'
@@ -407,12 +407,12 @@ Describe 'Vcpkg default MSVC toolset pin' {
         # The overlay is written and passed for each triplet in the install loop, from the selected vcpkg root's own triplet.
         $loopStart = $source.IndexOf('foreach ($triplet in $tripletsToInstall) {')
         $overlay = $source.IndexOf('Update-RSVcpkgOverlayTriplet')
-        $arguments = $source.IndexOf('$vcpkgArguments = [System.Collections.Generic.List[string]]::new()')
+        $arguments = $source.IndexOf('$vcpkgArguments = @(Get-RSVcpkgInstallArguments')
         $loopStart | Should BeGreaterThan 0
         $overlay | Should BeGreaterThan $loopStart
         $overlay | Should BeLessThan $arguments
         $source | Should Match 'Resolve-RSVcpkgStockTripletPath -RegistryRoot \$vcpkgRegistryRoot -Triplet \$triplet'
-        $source | Should Match '"--overlay-triplets=\$\(\$tripletOverlay\.Directory\)"'
+        $source | Should Match '-OverlayTriplets \$tripletOverlay\.Directory'
         $source | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$tripletOverlayRoot -Child \$platformScopeName'
         $source | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$repoRoot -Child "\.build\\vcpkg-triplets"'
         # The governed custom-triplet rules stay in force.
@@ -771,9 +771,31 @@ Describe 'Hosted vcpkg install parity' {
         $workflow | Should Match '(?s)- name: Install dependencies.*?\$platform = ''\$\{\{ inputs\.platform \}\}''.*?vcpkg-install\.ps1 -Platform \$platform .*?-VcpkgRoot \$env:VCPKG_REGISTRY_ROOT -ReuseCurrent'
         $workflow | Should Not Match '--x-install-root|Normalize vcpkg install root'
         $source = Get-Content -LiteralPath (Join-Path $repoRoot 'vcpkg-install.ps1') -Raw
-        $source | Should Match '--overlay-triplets'
-        $source | Should Match '(?s)if \(\$triplet -like ''arm64-\*''\) \{.*?--overlay-ports'
+        $source | Should Match 'Get-RSVcpkgInstallArguments'
         $source | Should Match 'throw "vcpkg install failed for triplet'
+    }
+
+    It 'selects the shared staging arguments for each platform and preserves an explicit registry' {
+        $fixture = New-RSTemporaryVcpkgInstallSafetyRoot
+        $root = Join-Path $fixture 'product checkout'
+        $tripletOverlay = Join-Path $root '.build/overlay triplets'
+        $installRoot = Join-Path $root '.build/staging output'
+        $portOverlay = Join-Path $root 'Build/vcpkg-ports'
+        $registry = Join-Path $fixture 'independent registry'
+        foreach ($directory in @($tripletOverlay, $portOverlay, $registry)) {
+            [void][IO.Directory]::CreateDirectory($directory)
+        }
+        [IO.File]::WriteAllText((Join-Path $root 'vcpkg.json'), '{}')
+        $options = @{ ProjectRoot = $root; InstallRoot = $installRoot; OverlayTriplets = $tripletOverlay }
+        $expected = @('install', '--triplet=x64-fixture_custom', "--x-manifest-root=$root",
+            "--x-install-root=$installRoot", "--overlay-triplets=$tripletOverlay")
+        $actual = @(Get-RSVcpkgInstallArguments @options -Triplet 'x64-fixture_custom')
+        ($actual -join [char]0) | Should BeExactly ($expected -join [char]0)
+        $expected[1] = '--triplet=arm64-windows'
+        $expected += @("--overlay-ports=$portOverlay", "--vcpkg-root=$registry")
+        $actual = @(Get-RSVcpkgInstallArguments @options -Triplet 'arm64-windows' -RegistryRoot $registry)
+        ($actual -join [char]0) | Should BeExactly ($expected -join [char]0)
+        [IO.Directory]::Exists($installRoot) | Should Be $false
     }
 
     It 'invalidates the hosted dependency cache when the overlays or their helper change' {

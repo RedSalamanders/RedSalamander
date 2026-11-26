@@ -476,6 +476,35 @@ function Resolve-RSVcpkgEngineModule([string] $Name) {
     Resolve-CiPinnedEngineModule -ProjectRoot $root -Name $Name
 }
 
+function Get-RSVcpkgInstallArguments {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ProjectRoot,
+        [Parameter(Mandatory)][string]$Triplet,
+        [Parameter(Mandatory)][string]$InstallRoot,
+        [Parameter(Mandatory)][string]$OverlayTriplets,
+        [string]$RegistryRoot
+    )
+
+    Import-Module (Resolve-RSVcpkgEngineModule VcpkgInstall.psm1) -Scope Local
+    $installOptions = @{
+        ProjectRoot = $ProjectRoot
+        Triplet = $Triplet
+        InstallRoot = $InstallRoot
+        OverlayTriplets = $OverlayTriplets
+        UseDefaultStorage = $true
+    }
+    if ($Triplet -like 'arm64-*') {
+        $installOptions.OverlayPorts = Join-Path $ProjectRoot 'Build/vcpkg-ports'
+    }
+    $installArguments = @(Get-CiVcpkgManifestInstallArguments @installOptions)
+    if ($RegistryRoot) {
+        # The caller already checks the supported explicit registry and selected baseline.
+        $installArguments += "--vcpkg-root=$RegistryRoot"
+    }
+    return $installArguments
+}
+
 function Get-RSVcpkgDefaultToolset {
     <#
     .SYNOPSIS
@@ -825,6 +854,7 @@ Export-ModuleMember -Function @(
     'Get-RSVcpkgFileSha256Hex',
     'Merge-RSVcpkgTripletSafe',
     'Get-RSVcpkgVisualStudioInstallation',
+    'Get-RSVcpkgInstallArguments',
     'Get-RSVcpkgDefaultToolset',
     'Get-RSVcpkgOverlayTripletText',
     'Resolve-RSVcpkgStockTripletPath',
