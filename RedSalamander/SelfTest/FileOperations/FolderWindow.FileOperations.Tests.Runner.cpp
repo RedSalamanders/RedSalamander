@@ -11223,7 +11223,7 @@ using TickResult = std::optional<bool>;
     // Keep one real Local Copy in Stopping at the conflict metadata barrier.
     {
         SetFileOpsConflictMetadataPauseForSelfTest(true, static_cast<ULONGLONG>(SelfTest::Scale(15s).count()));
-        auto releaseMetadata = wil::scope_exit([]() noexcept
+        auto releaseMetadata      = wil::scope_exit([]() noexcept
         {
             ReleaseFileOpsConflictMetadataPauseForSelfTest();
             SetFileOpsConflictMetadataPauseForSelfTest(false, 0u);
@@ -11240,10 +11240,11 @@ using TickResult = std::optional<bool>;
                                                                0u,
                                                                State::ExecutionMode::PerItem,
                                                                false,
-                                                               folder->GetFileSystem(FolderWindow::Pane::Right)).value_or(0u);
+                                                               folder->GetFileSystem(FolderWindow::Pane::Right))
+                                        .value_or(0u);
         if (stoppingId == 0u)
             return reject(L"the Stopping cadence Copy was not admitted");
-        const auto blocked = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept {
+        const auto blocked       = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept {
             return HasFileOpsConflictMetadataPauseEnteredForSelfTest();
         }, {.timeout = SelfTest::Scale(5s), .operationName = L"Stopping cadence Copy metadata gate"});
         auto* const stoppingTask = operations->FindTask(stoppingId);
@@ -11259,18 +11260,17 @@ using TickResult = std::optional<bool>;
         if (! measure(L"engine-stopping", 1200ms, before, after))
             return reject(L"the Stopping measurement pump failed");
         const uint64_t samples = after.popup.rateUpdates - before.popup.rateUpdates;
-        const bool stable = HasFileOpsConflictMetadataPauseEnteredForSelfTest() &&
-                            DebugGetFileOperationsPopupTaskSnapshot(popup, stoppingId, stoppingAfter) && ! stoppingAfter.finished &&
-                            stoppingAfter.statusKind == TaskSnapshot::StatusKind::Stopping && stoppingAfter.completedBytes == stoppingBefore.completedBytes &&
-                            stoppingAfter.currentSourcePath == stoppingBefore.currentSourcePath &&
-                            stoppingAfter.currentDestinationPath == stoppingBefore.currentDestinationPath && after.popup.timerIntervalMs == 100u && samples >= 6u;
+        const bool stable =
+            HasFileOpsConflictMetadataPauseEnteredForSelfTest() && DebugGetFileOperationsPopupTaskSnapshot(popup, stoppingId, stoppingAfter) &&
+            ! stoppingAfter.finished && stoppingAfter.statusKind == TaskSnapshot::StatusKind::Stopping &&
+            stoppingAfter.completedBytes == stoppingBefore.completedBytes && stoppingAfter.currentSourcePath == stoppingBefore.currentSourcePath &&
+            stoppingAfter.currentDestinationPath == stoppingBefore.currentDestinationPath && after.popup.timerIntervalMs == 100u && samples >= 6u;
         Debug::Perf::EmitValue(L"FileOps.PopupCadence.StoppingSamples", samples, stable ? S_OK : E_FAIL);
         if (! stable)
             fail(L"the held Local Copy did not keep its Stopping state and active sampling cadence");
         releaseMetadata.reset();
-        const auto retired = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
-            return ! operations->FindTask(stoppingId);
-        }, {.timeout = SelfTest::Scale(5s), .operationName = L"Stopping cadence Copy retires"});
+        const auto retired = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept { return ! operations->FindTask(stoppingId); },
+                                                                           {.timeout = SelfTest::Scale(5s), .operationName = L"Stopping cadence Copy retires"});
         if (! retired.conditionMet)
             return reject(retired.timeoutDiagnostic);
         operations->DismissCompletedTask(stoppingId);
