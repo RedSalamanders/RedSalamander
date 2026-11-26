@@ -1,1 +1,0 @@
-- Verify the actual host credential prompt and continued popup sampling with a running Copy peer.

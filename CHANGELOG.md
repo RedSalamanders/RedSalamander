@@ -4,6 +4,21 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Measure active popup sampling with a Local Copy held in Stopping and record the matched Release heap comparison.
+- Describe Change Case discovery and the shared scheduled Rename execution and results in the guides.
+- Verify the actual host credential prompt and continued popup sampling with a running Copy peer.
+- Restore the Change Case documentation capture through the guarded gallery entry point. The capture uses the production prompt and closes it after taking the screenshot.
+- Clarify ZIP and 7z Pack, ZIP Unpack, and background archive processing in the User Guide.
+- RedMonitor owns its settings profile and exposes **File > Open Settings File**. RedSalamander Preferences now edits only its own settings, including the existing Advanced file link.
+- Run the changelog commands from the pinned shared CI engine (convergence CV-5-02). `Tools/Test-Changelog.ps1`,
+  `Fold-Changelog.ps1`, `Submit-ChangelogFold.ps1`, `Test-ChangelogWorkflow.ps1` and the new `Release-Changelog.ps1`
+  are now copies of the engine's shims (`Templates/Project/Tools` at `f965c79`): the same names and parameters, running
+  the engine implementation in `.ci-engine`, and refusing with one message when that checkout is missing, at another
+  commit or changed. `Tools/Modules/Documentation/Changelog.psm1` is removed; the engine implementation keeps this
+  repository's refusal of two pending fragments with the same text and adds DxUi's checks (a Git error while reading
+  the base fails `-Base`; a reused fold branch must be the exact fold; the exact release transition is accepted). The
+  scoped-testing fixture gets its own manifest and `.ci-engine` clone; the tool inventory, the normative-consistency
+  anchors and `Specs/Core/Core_Changes.md` follow. Tooling-only; native runtime coverage is unchanged.
 - Document the fixed queued destination and available ZIP and 7z Pack options.
 - Disable Batch Rename and Change Case on providers without scheduled Rename support and explain direct shortcut refusals in the pane.
 - Verify live Samba Copy and Move for both folder and individual-file selections.
