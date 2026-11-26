@@ -38,5 +38,27 @@ and `artifacts/selftest/last_run/run-all-tests-results-v1.json` with case-level 
 and SHA-256 `f7b64eb443c034e04616fd2040a5b60c4211aed5da07ab7fb580237c980d4e7b`.
 Both are under the archived run in `C:/RedSalamander.Perf/evidence/completed-runs`.
 
-The four desktop entries remain pending. The governed rebuild and non-interactive PrePush
-are running on the final focused source. Hosted x64 and ARM64 acceptance is tracked separately.
+The earlier attempt to refresh PrePush was interrupted during its build when the test-fixture
+correction became necessary. The next attempt recorded the artifact attestation block in
+`20261126T182948Z-70848-84971f3d49204699b1c77072615f7086`. The pinned x64 dependency
+repair and full x64 Release rebuild then passed with zero warnings and errors. PrePush accepted
+receipt `ae81cdaaa43a746e9f342988c98157a314f6ad20e107fa129f40baaab6d11eb7`.
+Run `20261126T183940Z-47540-d7fc757cdfcb4c6db9285c919d3e9c23` is executing on frozen `4aa1629a5`.
+The four desktop entries remain pending.
+
+## Build-tooling baseline integration
+
+Main advanced to `50a3be9e1` while the frozen Release run was active. The new baseline retired
+the PR workflow metadata query. On `546c7aaa8`, the documentation suite passed 31 checks and
+the harness source suite reported 243 passes and one obsolete query assertion. Run
+`20261126T184116Z-60540-cf5179d8b3d54c359b2c492a268e6ce5` preserves that failure.
+Its result SHA-256 is `f0015ad03aff8f1504de48766a9212913b35c5b58f3700f9d3a1cc03497eae8e`.
+
+The correction removed the retired query from the shared-helper catalog and the source test.
+The test still verifies that each retained Git transport sets no-window and redirection before
+process start and rejects a failing control. Exact integrated source `4386c570c97303ac79217c5f8a6aee98bce4f332`
+passed 31 documentation checks and 244 harness source checks with zero failures and skips in
+`20261126T184342Z-56024-cb5f53e672c54e2988751c4782618458`. Result SHA-256
+`28674761a9f3192d5599eb3f41e3d7676025a680df80b077fd3fccd9031b582c`.
+The guidance, inventory and changelog validators passed with the pinned CI engine. Native
+qualification on the new baseline still requires its own result.
