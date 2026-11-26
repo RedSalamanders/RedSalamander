@@ -1318,6 +1318,12 @@ The `FileOps.PopupCadence.CredentialWait` event in `FileOps_PopupIdleCadence` me
 task's two observer transitions between real rate samples. The case checks nested waits,
 status and the new rate window while the test provider holds the task at a transfer barrier.
 The peer ETA and taskbar projection check uses the same aggregate builder as the running popup.
+The same case opens the real host password prompt with an invented in-memory
+profile under the activation blocker. While the prompt waits, the exact held
+Copy shows Awaiting Credentials and its peer continues to receive popup ticks.
+The owned timer requests Cancel and verifies the wait clears without a secret.
+`FileOps.PopupCadence.HostCredentialPrompt` records elapsed time, observer
+transitions and peer sampling ticks for this controlled host interaction.
 
 The no-activation `FileOps_ReviewRemediationContracts` selection compares explicit per-item
 Recycle and normal Find and Viewer admission on equivalent same-parent Local batches. It verifies

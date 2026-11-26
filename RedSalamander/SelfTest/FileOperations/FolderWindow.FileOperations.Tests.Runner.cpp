@@ -76,6 +76,7 @@
 #include "Common.Tests.SandboxPath.h"
 #include "Common.Tests.WindowActivationGuard.h"
 #include "CompareDirectoriesWindow.h"
+#include "ConnectionCredentialPromptDialog.h"
 #include "ConnectionProfileUtils.h"
 #include "ContentDigest.h"
 #include "DirectoryInfoCache.h"
@@ -11353,6 +11354,124 @@ using TickResult = std::optional<bool>;
                 static_cast<unsigned>(active.statusKind),
                 work(popupWork),
                 after.popup.timerIntervalMs));
+        }
+        // Exercise the host's actual modal wait with an invented profile. The
+        // guarded popup timer checks the two live tasks and dismisses only this prompt.
+        {
+            struct CredentialPromptProbe final
+            {
+                State* operations          = nullptr;
+                HWND owner                 = nullptr;
+                HWND foreground            = nullptr;
+                uint64_t waitingId         = 0u;
+                uint64_t activeId          = 0u;
+                ULONGLONG firstObservation = 0u;
+                uint64_t initialTicks      = 0u;
+                uint64_t ticks             = 0u;
+                bool observed              = false;
+                bool closed                = false;
+
+                static void NoteWait(void* context, bool waiting) noexcept
+                {
+                    // A timed-out fixture worker can retire while the modal loop pumps.
+                    const auto* probe = static_cast<const CredentialPromptProbe*>(context);
+                    if (Task* const task = probe->operations->FindTask(probe->waitingId))
+                        Task::OnCredentialWait(task, waiting);
+                }
+
+                static void CALLBACK Observe(HWND popup, UINT, UINT_PTR timer, DWORD) noexcept
+                {
+                    auto* probe       = static_cast<CredentialPromptProbe*>(GetPropW(popup, L"RedSalamander.FileOpsCredentialCadence"));
+                    const HWND prompt = GetConnectionCredentialPromptDialogHandle();
+                    if (! probe || ! prompt || GetWindow(prompt, GW_OWNER) != probe->owner || GetWindowThreadProcessId(prompt, nullptr) != GetCurrentThreadId())
+                        return;
+
+                    TaskSnapshot waiting{}, active{};
+                    PopupTelemetryDebugSnapshot telemetry{};
+                    const bool waitingWithPeer = (GetWindowLongPtrW(prompt, GWL_EXSTYLE) & WS_EX_NOACTIVATE) != 0 &&
+                                                 GetForegroundWindow() == probe->foreground &&
+                                                 DebugGetFileOperationsPopupTaskSnapshot(popup, probe->waitingId, waiting) &&
+                                                 DebugGetFileOperationsPopupTaskSnapshot(popup, probe->activeId, active) &&
+                                                 DebugGetFileOperationsPopupTelemetrySnapshot(popup, telemetry) && waiting.waitingForCredentials &&
+                                                 waiting.statusKind == TaskSnapshot::StatusKind::AwaitingCredentials && ! active.waitingForCredentials &&
+                                                 active.statusKind == TaskSnapshot::StatusKind::Running;
+                    const ULONGLONG now        = GetTickCount64();
+                    if (probe->firstObservation == 0u)
+                    {
+                        probe->firstObservation = now;
+                        probe->initialTicks     = telemetry.timerTicks;
+                    }
+                    if (waitingWithPeer && now - probe->firstObservation < 700u)
+                        return;
+
+                    probe->ticks    = telemetry.timerTicks >= probe->initialTicks ? telemetry.timerTicks - probe->initialTicks : 0u;
+                    probe->observed = waitingWithPeer && probe->ticks >= 3u && telemetry.timerIntervalMs == 100u;
+                    KillTimer(popup, timer);
+                    probe->closed = PostMessageW(prompt, WM_CLOSE, 0, 0) != FALSE;
+                }
+            };
+
+            Task* const awaiting = operations->FindTask(waitingId);
+            wil::com_ptr<IHostConnections> hostConnections;
+            if (! awaiting || FAILED(GetHostServices()->QueryInterface(IID_PPV_ARGS(hostConnections.put()))) || ! hostConnections)
+                return reject(L"the owned credential prompt fixture could not bind its task and host");
+
+            using namespace Common::Settings;
+            auto savedConnections         = g_settings.connections;
+            const auto restoreConnections = wil::scope_exit([&]() noexcept { g_settings.connections = std::move(savedConnections); });
+            if (! g_settings.connections)
+                g_settings.connections.emplace();
+            ConnectionProfile profile{};
+            if (FAILED(CreateConnectionProfileId(profile.id)))
+                return reject(L"the credential prompt fixture could not allocate a private profile ID");
+            const std::wstring name = MakeUniqueConnectionProfileName(L"File Operations cadence");
+            profile.name            = name;
+            profile.pluginId        = kPluginIdFtp;
+            profile.host            = L"127.0.0.1";
+            profile.userName        = L"fixture";
+            g_settings.connections->items.push_back(std::move(profile));
+
+            CredentialPromptProbe probe{
+                .operations = operations, .owner = state.mainWindow, .foreground = GetForegroundWindow(), .waitingId = waitingId, .activeId = activeId};
+            constexpr wchar_t property[] = L"RedSalamander.FileOpsCredentialCadence";
+            if (! SetPropW(popup, property, &probe))
+                return reject(L"the owned credential prompt fixture could not bind its popup observation");
+            const UINT_PTR timer   = SetTimer(popup, reinterpret_cast<UINT_PTR>(&probe), 50u, &CredentialPromptProbe::Observe);
+            const auto retireProbe = wil::scope_exit([&]() noexcept
+            {
+                if (timer)
+                    KillTimer(popup, timer);
+                RemovePropW(popup, property);
+            });
+            if (! timer)
+                return reject(L"the owned credential prompt fixture could not observe the modal wait");
+
+            const uint64_t initialGeneration = awaiting->_rateSamplingStateGeneration.load(std::memory_order_acquire);
+            const auto promptStart           = std::chrono::steady_clock::now();
+            wil::unique_cotaskmem_string secret;
+            HRESULT promptHr = E_FAIL;
+            {
+                const ScopedHostCredentialWaitObserver observer({&probe, &CredentialPromptProbe::NoteWait});
+                promptHr = hostConnections->PromptForConnectionSecret(name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, state.mainWindow, secret.put());
+            }
+            Task* const resolvedTask   = operations->FindTask(waitingId);
+            const uint64_t transitions = resolvedTask ? resolvedTask->_rateSamplingStateGeneration.load(std::memory_order_acquire) - initialGeneration : 0u;
+            const bool passed = resolvedTask && ! resolvedTask->IsWaitingForCredentials() && transitions == 2u && probe.observed && probe.closed &&
+                                promptHr == S_FALSE && ! secret && ! GetConnectionCredentialPromptDialogHandle() && GetForegroundWindow() == probe.foreground;
+            Debug::Perf::Emit(L"FileOps.PopupCadence.HostCredentialPrompt",
+                              L"cancel-owned-profile",
+                              Debug::Perf::ElapsedUs(promptStart),
+                              transitions,
+                              probe.ticks,
+                              passed ? S_OK : E_FAIL);
+            if (! passed)
+                fail(std::format(L"the owned host credential prompt wait failed: held={} transitions={} observed={} closed={} ticks={} hr=0x{:08X}",
+                                 resolvedTask != nullptr,
+                                 transitions,
+                                 probe.observed,
+                                 probe.closed,
+                                 probe.ticks,
+                                 static_cast<unsigned long>(promptHr)));
         }
         ReleaseFileOpsLiveOutputPublishedPauseForSelfTest();
         const auto bothRetired     = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
