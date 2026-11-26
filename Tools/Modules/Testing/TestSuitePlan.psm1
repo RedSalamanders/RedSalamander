@@ -164,7 +164,8 @@ function Get-RSTestRunPlan {
              $CaseFilter -ceq 'FileOps_SmbExactRenameProvider' -or
              $CaseFilter -ceq 'FileOps_SmbCorroboratedRenameProvider' -or
              $CaseFilter -ceq 'C0_CurlCommittedMutationResponseLost' -or
-             $CaseFilter -ceq 'Delete_IdentityLessPinnedTreeChangedEntry') -and
+             $CaseFilter -ceq 'Delete_IdentityLessPinnedTreeChangedEntry' -or
+             $CaseFilter -ceq 'Delete_IdentityLessPinnedTreeArchiveWriter') -and
             [string]::IsNullOrEmpty($SelfTestFlakyProofCase) -and
             [string]::IsNullOrEmpty($SelfTestOrderProofCase)
         $ownedProductGallery = $Suite -eq 'Commands' -and $CaseFilter -ceq 'cmd_product_documentation_gallery' -and
@@ -172,7 +173,8 @@ function Get-RSTestRunPlan {
         $ownedDirectCommandsCase = $Suite -eq 'Commands' -and
             ($CaseFilter -ceq 'cmd_directory_cache_invalidation_during_enumeration_is_retained' -or
              $CaseFilter -ceq 'folderView_drop_integrity_guards' -or
-             $CaseFilter -ceq 'cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation') -and
+             $CaseFilter -ceq 'cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation' -or
+             $CaseFilter -ceq 'cmd_pane_batchRename_admission_worker_owned_cancellable') -and
             [string]::IsNullOrEmpty($SelfTestFlakyProofCase) -and [string]::IsNullOrEmpty($SelfTestOrderProofCase)
         $ownedCommandsNoActivation = $ownedProductGallery -or $ownedDirectCommandsCase
         $allowsActivation = ($selfTest.Name -eq 'Commands' -and -not $ownedCommandsNoActivation) -or

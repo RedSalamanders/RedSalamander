@@ -221,6 +221,11 @@ input and answers the archive cleanup question within the test. The case verifie
 Unpack collision skip preserves the selected archive and its existing destination, and that
 Pack keeps the originals when a link is omitted from the archive.
 
+The exact Commands case `cmd_pane_batchRename_admission_worker_owned_cancellable` uses the same
+no-activation admission. It opens Batch Rename on the guarded UI thread, starts its worker through
+an owned test hook and posts a close message to the window. It verifies worker admission, cancellation and
+teardown using owned provider fixtures.
+
 Before opening any fixture, bind `LOCALAPPDATA`, `TEMP` and `TMP` to marked
 capture scratch through the canonical `ScopedEnvironmentVariable` helper. Refuse
 capture if that isolation fails, and restore all original environment states.
@@ -1196,11 +1201,12 @@ the same synchronous reporter and counter path as the pointer overload.
   `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage`,
   `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof`, `R0fGraph_FakeGraphReadWriteCreateRenameRecycle`,
   `Phase16_RemoteOneDrivePersonalInlineRename`, or
-  `Delete_IdentityLessPinnedTreeChangedEntry` case filter and no flaky/order proof injection.
+  `Delete_IdentityLessPinnedTreeChangedEntry` or `Delete_IdentityLessPinnedTreeArchiveWriter` case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
   copies and, for progress witnesses, owned HWND WGC capture;
   the Local direct-API witness uses owned filesystem data and callback controls, including its joined worker;
-  the identity-less Delete witness uses owned sandbox data and submits owned task decisions directly;
+  the identity-less Delete witnesses use owned sandbox data and submit task decisions directly. The archive writer
+  also submits and awaits a real parallel Pack in the pinned tree before it releases the Delete;
   the added storage/route witnesses use owned sandbox data and the same activation blocker;
   the Curl reply-loss case runs the owned loopback FTP endpoint through a joined worker with no UI;
   the repeated non-clipboard Copy and Move cases use owned task controls and sandbox files under the activation blocker;
