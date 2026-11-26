@@ -35,9 +35,9 @@ the published hash and review metadata. Human whole-frame privacy review remains
 
 ## Product scenario captures
 
-The [Visual Tour](../VisualTour.md) links 45 additional native frames: 26 workspace,
-Search, Preferences, plugin, connection and palette scenes; eight actual viewer
-examples; and thirteen Space lifecycle/workspace states. The [gallery index](product-scenarios.provenance.json)
+The [Visual Tour](../VisualTour.md) links native captures of the workspace, Search,
+Preferences, plugins, connections, the Command Palette, viewers and Space. The
+[gallery index](product-scenarios.provenance.json)
 binds every image to adjacent build/scenario/DPI/hash metadata. Captures use private
 default settings, generated content, fixed synthetic metadata and the existing fake
 MTP picker. No real search, account connection or device enumeration is admitted.
