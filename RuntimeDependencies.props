@@ -265,6 +265,23 @@
       <Source>$(RSVcpkgRuntimeBinDir)yyjson.dll</Source><OutputName>yyjson.dll</OutputName><Required>true</Required>
     </RSRuntimeDependency>
 
+    <RSRuntimeDependency Include="viewerweb-highlightjs-license">
+      <Projects>ViewerWeb</Projects><Flavor>Any</Flavor><Platform>Any</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>Plugins\ViewerWeb\ThirdParty\highlightjs.LICENSE.txt</Source><OutputName>Licenses\ViewerWeb\highlightjs.LICENSE.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="viewerweb-jsoneditor-license">
+      <Projects>ViewerWeb</Projects><Flavor>Any</Flavor><Platform>Any</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>Plugins\ViewerWeb\ThirdParty\jsoneditor.LICENSE.txt</Source><OutputName>Licenses\ViewerWeb\jsoneditor.LICENSE.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="viewerweb-jsoneditor-notice">
+      <Projects>ViewerWeb</Projects><Flavor>Any</Flavor><Platform>Any</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>Plugins\ViewerWeb\ThirdParty\jsoneditor.NOTICE.txt</Source><OutputName>Licenses\ViewerWeb\jsoneditor.NOTICE.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="viewerweb-markdown-it-license">
+      <Projects>ViewerWeb</Projects><Flavor>Any</Flavor><Platform>Any</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>Plugins\ViewerWeb\ThirdParty\markdown-it.LICENSE.txt</Source><OutputName>Licenses\ViewerWeb\markdown-it.LICENSE.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+
     <RSRuntimeDependency Include="webview2-debug">
       <Projects>ViewerWeb</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
       <Source>debug\bin\WebView2Loader.dll</Source><OutputName>WebView2Loader.dll</OutputName><Required>true</Required>

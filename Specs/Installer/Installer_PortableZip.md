@@ -25,6 +25,8 @@ This specification defines the fail-closed portable ZIP contract implemented by
 The ZIP contains the shipping launchers and applications, root runtime DLLs, `Plugins\`, `Lang\`, `Themes\`, the
 settings schema, license, third-party notices (`THIRD-PARTY-NOTICES.md`), and portable README. Build/link artifacts and the package-smoke test executable are not
 shipped. The Microsoft Visual C++ runtime for the target architecture is bundled app-locally.
+The runtime manifest stages the ViewerWeb license and NOTICE files under `Plugins/Licenses/ViewerWeb/`.
+The clean-extraction smoke requires all four files.
 
 Before compression, packaging validates the build output through `Tools/Modules/Packaging/RuntimeDependencies.psm1`. A missing
 required runtime dependency or retained obsolete dependency aborts packaging and names the offending path.

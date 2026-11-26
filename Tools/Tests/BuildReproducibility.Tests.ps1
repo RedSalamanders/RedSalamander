@@ -83,6 +83,27 @@ function New-RSFakePortablePackageTree {
     }
 }
 
+Describe 'ViewerWeb packaged notices' {
+    It 'requires every vendored license and NOTICE on the two package architectures' {
+        $noticeNames = @('highlightjs.LICENSE.txt', 'jsoneditor.LICENSE.txt', 'jsoneditor.NOTICE.txt', 'markdown-it.LICENSE.txt')
+        foreach ($platform in 'x64', 'ARM64') {
+            $manifest = Get-RSRuntimeDependencyManifest -RepoRoot $repoRoot -Configuration Release -Platform $platform
+            foreach ($name in $noticeNames) {
+                $expectedSource = "Plugins\ViewerWeb\ThirdParty\$name"
+                $expectedOutput = "Licenses\ViewerWeb\$name"
+                $match = @($manifest.Dependencies | Where-Object OutputName -eq $expectedOutput)
+                $match.Count | Should Be 1
+                $match[0].Projects | Should Be 'ViewerWeb'
+                $match[0].Required | Should Be $true
+                $match[0].Source | Should Be $expectedSource
+                $match[0].SourceRoot | Should Be 'RepoRoot'
+                $match[0].OutputRoot | Should Be 'Plugins'
+                Test-Path -LiteralPath (Join-Path $repoRoot $expectedSource) -PathType Leaf | Should Be $true
+            }
+        }
+    }
+}
+
 Describe 'Declarative runtime dependency graph' {
     It 'uses one complete manifest for every supported flavor and platform' {
         [xml]$document = Get-Content -LiteralPath (Join-Path $repoRoot 'RuntimeDependencies.props') -Raw
