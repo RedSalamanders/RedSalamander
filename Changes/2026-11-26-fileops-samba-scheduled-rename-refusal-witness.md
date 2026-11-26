@@ -1,0 +1,1 @@
+- Verify that scheduled Rename leaves the source and unrelated files untouched when an SMB endpoint lacks exact file identity.
