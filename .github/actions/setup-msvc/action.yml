@@ -7,6 +7,21 @@ inputs:
 runs:
   using: composite
   steps:
+    - id: engine
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $project = Get-Content -LiteralPath (Join-Path $env:GITHUB_WORKSPACE '.ci/project.json') -Raw | ConvertFrom-Json
+        if ($project.engine.repository -cne 'RedSalamanders/.github' -or $project.engine.ref -cnotmatch '^[a-f0-9]{40}$') {
+          throw 'Invalid shared CI engine pin in .ci/project.json.'
+        }
+        "ref=$($project.engine.ref)" >> $env:GITHUB_OUTPUT
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: RedSalamanders/.github
+        ref: ${{ steps.engine.outputs.ref }}
+        path: .ci-engine
+        persist-credentials: false
     - shell: pwsh
       env:
         MSVC_SETUP_PLATFORM: ${{ inputs.platform }}

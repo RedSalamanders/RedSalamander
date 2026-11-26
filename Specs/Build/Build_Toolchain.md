@@ -105,7 +105,8 @@ Organization CI routing and artifact promotion are owned by [Build_UnifiedCI.md]
 
 RedMonitor is an independent project. RedSalamander vendors only Client.h and its MIT notice under
 ThirdParty/RedMonitor; Dependencies/RedMonitor.lock.json records the exact upstream commit, API and
-file hashes. Ordinary builds run local-only verification and add the public include directory. The
+file hashes and a separate immutable pin for the producer's client commands. Ordinary builds verify
+both command hashes before invoking the local verifier and adding the public include directory. The
 explicit Tools/Update-RedMonitorClient.ps1 command fetches only those two files. The compatibility
 Tools/Restore-RedMonitor.ps1 entrypoint now verifies that local client and rejects viewer requests.
 
@@ -865,7 +866,7 @@ download; a missing or malformed file fails and names the file and the repair. F
 `.build\vcpkg-triplets\<platform>\<triplet>.cmake`: the selected vcpkg root's own triplet (`triplets\`, then
 `triplets\community\`) copied unchanged in its own line endings, then `set(VCPKG_VISUAL_STUDIO_PATH ...)` and
 `set(VCPKG_PLATFORM_TOOLSET_VERSION "<major.minor>")`, rewritten only when its bytes change. It passes
-`--overlay-triplets=<that directory>` to `vcpkg install`. The custom-triplet rules above are unchanged (leaf names only,
+`--overlay-triplets=<that directory>` to `vcpkg install`. The pinned CI engine supplies default toolset verification and overlay text generation. RedSalamander retains installation selection, the original overlay header, and publication under its dependency lock. The custom-triplet rules above are unchanged (leaf names only,
 x64-/arm64- prefix mapping). A different triplet is a different package ABI hash, so the first install after this
 change, and after a change of installation or default major.minor, rebuilds the packages; vcpkg's binary cache then
 serves any root whose triplet text is identical. The functions live in `Tools/Modules/Build/VcpkgInstallSafety.psm1` and
@@ -1105,7 +1106,7 @@ LTO is scoped to each final EXE/DLL and does not guarantee reduced size or impro
 
 ### CI toolchain preparation and audit evidence
 
-Active Windows compilation/tooling workflows use the local setup-msvc composite action. It reads RequiredMsvcToolsVersion, verifies the discovered default compiler, linker, ASan target libraries, SDK and x64 LLVM scanner tools, and provisions Visual Studio 2026 Insiders only on GitHub-hosted runners when necessary. The Microsoft-signed GUI bootstrapper runs under RUNNER_TEMP through the canonical contained streaming-process helper, with a 45-minute bound and retained stdout/stderr logs. The action waits for its actual exit, accepts only 0 or 3010, then re-verifies every required tool; a shell-global LASTEXITCODE is not installer-completion evidence. Existing installations are retained. A channel that no longer supplies 14.52 fails rather than accepting another compiler. Local -VerifyOnly is read-only; automatic local installation is refused. Hosted provisioning requires an actual successful CI receipt; local verification/refusal controls alone do not qualify it.
+The product-specific Windows workflows use the local setup-msvc composite action. It checks out the engine at the project pin before the build and receipt checks. Its setup script reads RequiredMsvcToolsVersion, verifies the discovered default compiler, linker, ASan target libraries, SDK and x64 LLVM scanner tools, and provisions Visual Studio 2026 Insiders only on GitHub-hosted runners when necessary. The Microsoft-signed GUI bootstrapper runs under RUNNER_TEMP through the canonical contained streaming-process helper, with a 45-minute bound and retained stdout/stderr logs. The action waits for its actual exit, accepts only 0 or 3010, then re-verifies every required tool; a shell-global LASTEXITCODE is not installer-completion evidence. Existing installations are retained. A channel that no longer supplies 14.52 fails rather than accepting another compiler. Local -VerifyOnly is read-only; automatic local installation is refused. Hosted provisioning requires an actual successful CI receipt; local verification/refusal controls alone do not qualify it.
 
 [Full evaluated settings and differences](../../Measurements/Toolchain/2026-10-23-msvc1452/Settings.md) include both platform/configuration matrices and exact per-file metadata. [Microsoft installation guidance](https://learn.microsoft.com/en-us/cpp/overview/acquire-msvc) documents channel-specific acquisition. The published [runner image inventory](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-VS2026-Readme.md) does not establish that the required toolset is installed; runtime versions alone are also not compiler proof.
 

@@ -68,7 +68,8 @@ Review the affected plan first, then use the relevant governed checks:
 Invoke-Pester -Script .\Tools\Tests\ResourceLocalizationContracts.Tests.ps1
 Invoke-Pester -Script .\Tools\Tests\TestHarnessSourceContracts.Tests.ps1
 .\Test-Changes.ps1 -Explain
-.\Test-Changes.ps1 -Suite Commands -CaseFilter <focused-case>
+# Set $focusedCase to a registered Commands case name or prefix.
+.\Test-Changes.ps1 -Suite Commands -CaseFilter $focusedCase
 ```
 
 Run schema coverage and broader affected suites when the page changes shared shell, scrolling, theming, focus, or commit behavior. The runner owns sandbox/evidence setup. A focus-taking case remains pending until agreement to the time and explicit Interactive execution; do not bypass that boundary with a direct executable launch.

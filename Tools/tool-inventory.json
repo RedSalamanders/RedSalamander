@@ -2273,6 +2273,30 @@
       "replacement": null
     },
     {
+      "path": "Tools/Modules/Build/RedMonitorClientTools.psm1",
+      "kind": "module",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Checks the producer tooling pin and both script hashes before loading a client command.",
+      "usage": "Import from the RedMonitor client compatibility commands.",
+      "usedBy": [
+        "Tools/Verify-RedMonitorClient.ps1",
+        "Tools/Update-RedMonitorClient.ps1"
+      ],
+      "prerequisites": [
+        "Vendored RedMonitor tooling and lock"
+      ],
+      "sideEffects": [],
+      "outputs": [
+        "Verified command script block"
+      ],
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "tests": [
+        "Tools/Tests/RedMonitorConsumption.Tests.ps1"
+      ],
+      "replacement": null
+    },
+    {
       "path": "Tools/Modules/Build/VcpkgToolIdentity.psm1",
       "kind": "module",
       "visibility": "internal",
@@ -5119,7 +5143,7 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Verify exactly the local pinned client header and MIT notice without Git or network.",
+      "purpose": "Verify the pinned local client tooling, header, and MIT notice without Git or network.",
       "usage": "See command help and the RedMonitor integration contract.",
       "usedBy": [
         "Directory.Build.targets",

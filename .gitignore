@@ -10,6 +10,9 @@
 /.ci-engine/
 /.changelog-fold.lock
 /.changelog-*.tmp
+# Personal harness state: each person's local agent settings and locks (RedHome convergence A-17).
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
 # End of the common block.
 
 # Visual Studio user/cache files
