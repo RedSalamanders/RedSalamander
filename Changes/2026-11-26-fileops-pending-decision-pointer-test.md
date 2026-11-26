@@ -1,0 +1,1 @@
+- Resolve the exact focused pending-decision disclosure after repaint in the File Operations pointer test.

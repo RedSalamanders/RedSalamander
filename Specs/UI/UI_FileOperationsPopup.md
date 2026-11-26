@@ -2916,9 +2916,11 @@ its focus; a saved shorter popup viewport must not make a journey depend on its
 predecessors. Reuse the bounded exact-task scrolling lookup, then retain the
 native focus, default/cancel, task identity, unresolved-choice and route checks.
 Record visibility before reveal and resolution/focus HRESULTs for diagnosis.
-A disclosure retained for offscreen keyboard focus can still expose its provider;
-provider existence is insufficient. The bounded reveal must verify a nonzero UIA
-rectangle before returning that disclosure for the real input routes.
+A disclosure retained for offscreen keyboard focus can still expose its provider.
+The bounded reveal must verify a nonzero UIA rectangle before returning that
+disclosure for the real input routes. For pointer coverage, repeat the exact reveal
+after the focus repaint and verify the same retained focus in the painted viewport.
+Send the click only to the measured point inside the owned popup.
 
 A hosted focus transaction MUST update the published task/generation's default
 and Escape bindings before that focus is observable to the caller, including UIA
