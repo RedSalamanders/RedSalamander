@@ -38,12 +38,12 @@ at forbidden old drive-root paths.
 
 ## Skills Reference
 
-Detailed patterns and guidelines are available as Agent Skills in `.agents/skills/`:
+Use RedHome's shared `native-build` package for build, restore and packaging. Use `test-evidence` for testing and performance validation.
+
+The table lists RedSalamander's local skills.
 
 | Skill | Description |
 |-------|-------------|
-| [cpp-build](.agents/skills/cpp-build/SKILL.md) | Build system, `build.ps1` usage, project structure |
-| [perf-validation](.agents/skills/perf-validation/SKILL.md) | Mandatory perf-first workflow: instrumentation, selftests, archived runs, and before/after evidence for new features and optimizations |
 | [direct2d-rendering](.agents/skills/direct2d-rendering/SKILL.md) | Direct2D/DirectWrite graphics patterns |
 | [icon-cache](.agents/skills/icon-cache/SKILL.md) | Shell icon management via IconCache |
 | [win32-wndproc](.agents/skills/win32-wndproc/SKILL.md) | Window procedure and message handling |
@@ -67,7 +67,7 @@ Any new feature, hot-path change, or optimization that can affect responsiveness
 - deterministic selftest coverage,
 - archived perf evidence under `Specs/TestRuns/`
 
-from the beginning. Do not defer perf validation to a later cleanup pass. See [perf-validation skill](.agents/skills/perf-validation/SKILL.md) and `Specs/Testing/Testing_PerformanceValidation.md`.
+from the beginning. Follow RedHome's `test-evidence` performance workflow and RedSalamander's [performance validation contract](Specs/Testing/Testing_PerformanceValidation.md).
 
 ### Spec Closeout is Mandatory
 
@@ -181,14 +181,13 @@ paths with thin compatibility shims when they may have external consumers.
 
 ## Architecture
 
-The solution layout (about 21 core projects plus about 90 localization satellite projects), project dependencies, key
-components, the plugin factory entry point, and output locations are in the
-[cpp-build skill](.agents/skills/cpp-build/SKILL.md#solution-layout).
+The RedSalamander section of `../RedHome/.agents/skills/native-build/references/repository-facts.md` describes
+the solution layout, project dependencies, components, plugin factory entry point and output locations.
 [Plugins_PluginAPI.md](Specs/Plugins/Plugins_PluginAPI.md) owns the plugin ABI.
 
 ## Build
 
-Use `build.ps1` for command-line builds. See [cpp-build skill](.agents/skills/cpp-build/SKILL.md) for details.
+Use `build.ps1` for command-line builds. The [build toolchain contract](Specs/Build/Build_Toolchain.md) owns RedSalamander's build rules.
 
 ```powershell
 .\build.ps1                              # Build all (Debug)
