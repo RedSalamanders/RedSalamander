@@ -1,0 +1,1 @@
+- Verify that File Operations keeps the active progress cadence when another Copy waits for credentials.
