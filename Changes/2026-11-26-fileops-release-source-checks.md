@@ -1,1 +1,1 @@
-- Reconcile published gallery and source checks with Monitor retirement, typed Graph upload validation and Preferences focus coverage.
+- Reconcile Release source checks with Monitor retirement, typed Graph upload validation, Preferences focus coverage and the hidden live Rename fixture.

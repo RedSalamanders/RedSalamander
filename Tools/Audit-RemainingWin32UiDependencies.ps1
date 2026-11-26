@@ -261,10 +261,10 @@ $allowedResidualDependencies = @(
     @{
         Category      = 'Native visible control creation'
         Path          = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
-        LinePattern   = 'CreateWindowExW\(0,\s*L"STATIC",\s*L"Owned (?:completion teardown fixture|Create Folder check|Rename fixture|Graph test)",\s*WS_POPUP,\s*0,\s*0,\s*640,\s*480,\s*nullptr,\s*nullptr,\s*GetModuleHandleW\(nullptr\),\s*nullptr\)\)'
+        LinePattern   = 'CreateWindowExW\(0,\s*L"STATIC",\s*L"Owned (?:completion teardown fixture|Create Folder check|Rename fixture|Graph test|remote Rename test)",\s*WS_POPUP,\s*0,\s*0,\s*640,\s*480,\s*nullptr,\s*nullptr,\s*GetModuleHandleW\(nullptr\),\s*nullptr\)\)'
         Visibility    = 'test-only hidden FolderWindow owner'
         Owner         = 'Private File Operations FolderWindow self-tests'
-        Reason        = 'The four hidden popup HWNDs are parents for private FolderWindow teardown, Create Folder, Rename, and Graph fixtures; the exact calls omit WS_VISIBLE.'
+        Reason        = 'These hidden popup HWNDs are parents for private FolderWindow teardown, Create Folder, Rename, Graph, and remote Rename fixtures. The exact calls omit WS_VISIBLE.'
         ExitCondition = 'Remove each title when its private FolderWindow fixture no longer needs a real HWND parent.'
     },
     @{
