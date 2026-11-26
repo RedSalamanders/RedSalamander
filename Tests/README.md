@@ -621,6 +621,9 @@ The supplied-review safety cases use `ProductUiTests` (directory decoding and de
 `-Suite FileOps -CaseFilter FileOps_ReviewRemediationContracts -NonInteractive` (parent pinning and typed prerequisite results),
 `-Suite FileOps -CaseFilter FileOps_ClearCompletedScope -NonInteractive` (painted clean results, retained problems and interrupted-Move recovery),
 and exact noninteractive `FileOps_SmallFileCopyCost` / `FileOps_CrossRootLocalCopy` selections.
+`-Suite FileOps -CaseFilter FileOps_SmbMixedMove -NonInteractive` uses the registered SMB fixture
+and a Local sandbox to verify one Native and one Managed source in a single Move. Exact SMB identity
+is an environment prerequisite. The check verifies both destination payloads and removes its empty SMB child.
 The exact `FileOps_DeferredExitRefusesNewWork` case verifies rejection of Create Directory and
 other ingress commands after an accepted close. It submits commands against owned windows without
 activation and uses message-only stand-ins to observe close resumption.
