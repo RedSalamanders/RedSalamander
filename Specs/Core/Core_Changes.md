@@ -21,9 +21,10 @@ folds and never edits `CHANGELOG.md`, so parallel changes never conflict on the 
 integration owner runs `Tools/Submit-ChangelogFold.ps1`, which folds the default branch's fragments in a pull
 request of its own; merge it before the next fold. Existing release notes remain in place.
 
-In this repository, `Test-Changes.ps1` runs `Tools/Test-Changelog.ps1` first in every run except `-Explain`, with
-`-Base origin/main` (or its `-BaseRef`) in PrePush; `Tools/Run-AllTests.ps1` runs it in its tooling lane; the Pester
-suite `Tools/Tests/Changelog.Tests.ps1` runs `Tools/Test-ChangelogWorkflow.ps1` in the marked test sandbox; and the
+In this repository, `test.ps1` runs `Tools/Test-Changelog.ps1` before execution. PrePush passes
+`-Base origin/main` or its explicit `-BaseRef`. `Test-Changes.ps1` forwards existing arguments to `test.ps1`.
+`-Explain` only produces the test plan. `Tools/Run-AllTests.ps1` runs the validator in its tooling lane.
+The Pester suite `Tools/Tests/Changelog.Tests.ps1` runs `Tools/Test-ChangelogWorkflow.ps1` in the marked test sandbox. The
 compiler-free PR checks pass the immutable PR base SHA to `Tools/Invoke-ProjectCi.ps1 -Phase Static`, which runs it
 with `-Base <base SHA>`. The behavior suite also proves that these shims equal the pinned engine's templates and that
 the PrePush runner checks the changelog first. This tooling-only workflow does not establish native runtime,
