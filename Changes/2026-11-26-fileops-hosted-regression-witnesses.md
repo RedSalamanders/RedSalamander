@@ -1,0 +1,1 @@
+- Corrected the File Operations regression checks for queued Pack publication, retained archive cleanup and duplicate Batch Rename identities.

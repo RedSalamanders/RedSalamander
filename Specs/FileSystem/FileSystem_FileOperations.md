@@ -500,7 +500,8 @@ choice, and completion/progress endpoints. The worker owns path capabilities, pr
 destination derivation, no-follow ingress binding, duplicate-object rejection, one identity-domain
 proof, dependency/cycle construction, validation, and atomic immutable-plan publication. Failure or
 cancellation during this phase completes the task with no plan and no mutation; live pane navigation
-cannot retarget the captured request.
+cannot retarget the captured request. Two paths bound to one physical object reject the complete
+plan with `E_INVALIDARG` (`invalid-rename`) before the schedule can run.
 
 After plan publication and before the first rename mutation, the worker rebinds every changed source
 and checks every unrelated final namespace slot once. A missing/replaced source, an occupied unrelated

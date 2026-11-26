@@ -5718,8 +5718,10 @@ Specs\TestRuns\local_scratch
         $commands | Should Match 'ValidateArchiveOutputOutsideSelectedSources\(selectedPaths,\s*archivePath\.value\(\)\)'
         $commands | Should Match 'sourceIsDirectory[\s\S]{0,220}IsSameOrDescendantNormalizedWindowsPath'
         $commands | Should Match 'IDS_MSG_ARCHIVE_OUTPUT_INSIDE_SOURCE'
-        $commands | Should Match 'if\s*\(FAILED\(result\.hr\)\)[\s\S]{0,1600}if\s*\(deleteSourcesAfterPack\)'
-        ($commands -replace '\s+', ' ') | Should Match 'deleteRequest\.operation\s*=\s*FILESYSTEM_DELETE\s*;\s*deleteRequest\.origin\s*=\s*FolderView::FileOperationRequest::Origin::PackCleanup[\s\S]{0,320}StartFileOperationFromFolderView\(pane,\s*std::move\(deleteRequest\),\s*exactCleanup\)'
+        $compactCommands = $commands -replace '\s+', ' '
+        $compactCommands | Should Match 'if \(! completed\.published\) \{.{0,700}return; \} .{0,460}if \(request\.deleteAfter\)'
+        $compactCommands | Should Match 'if \(event\.hr != S_OK \|\| completed\.hr != S_OK \|\| ! exactCleanup \|\| ! publishedArchive \|\|.{0,1040}return; \} FolderView::FileOperationRequest deleteRequest'
+        $compactCommands | Should Match 'deleteRequest\.operation = FILESYSTEM_DELETE; deleteRequest\.origin = FolderView::FileOperationRequest::Origin::PackCleanup.{0,670}cleanup\.publishedArchive = std::make_shared<const wil::unique_hfile>\(std::move\(publishedArchive\)\);.{0,120}StartFileOperationFromFolderView\(pane, std::move\(deleteRequest\), &cleanup\)'
         $commands | Should Not Match 'DeletePackedSources\('
     }
 
