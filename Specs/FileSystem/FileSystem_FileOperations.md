@@ -1029,6 +1029,11 @@ roots retain the producer's I/O policy so a serial metadata prepass cannot delay
 Only the drive class is cached during this probe; file counts/sizes are always fresh. Other providers retain their
 own listing/metadata and cancellation/session policy. Folder traversal is still single-pass.
 
+The 4,097-file Local counting witness holds the test worker after every selected leaf closes
+discovery and before any transfer starts. It checks the live totals, repeats a report, changes
+its byte count, requests cancellation while held and requires an empty destination. Record the
+metadata timing before the hold.
+
 The metadata pass runs off the UI thread inside the task's synchronous-I/O cancellation watch and
 checks pause, cancellation and Skip counting at each item. Its state is O(selected roots), allocated
 only for eligible Copy/Move tasks. Closing its leaf scopes grants no publication, overwrite, read

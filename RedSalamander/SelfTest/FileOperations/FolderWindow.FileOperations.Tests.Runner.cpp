@@ -14792,13 +14792,19 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
             return false;
         paths.push_back(file);
     }
+    SetFileOpsSelectedLeafDiscoveryPublishedPauseForSelfTest(true);
+    const auto disarm                     = wil::scope_exit([]() noexcept
+    {
+        ReleaseFileOpsSelectedLeafDiscoveryPublishedPauseForSelfTest();
+        SetFileOpsSelectedLeafDiscoveryPublishedPauseForSelfTest(false);
+    });
     bool counted                          = false;
     bool correctLiveTotals                = false;
     bool duplicateDidNotGrow              = false;
     bool changedMetadataWithdrewCertainty = false;
     const auto observe                    = [&](FolderWindow::FileOperationState::Task& task) noexcept
     {
-        if (counted || ! task._discoveryClosed.load(std::memory_order_acquire))
+        if (counted || ! HasFileOpsSelectedLeafDiscoveryPublishedPauseEnteredForSelfTest() || ! task._discoveryClosed.load(std::memory_order_acquire))
             return;
         counted           = true;
         correctLiveTotals = task._discoveredFileCount.load(std::memory_order_acquire) == kEmptyFiles + 1u &&
@@ -14822,17 +14828,17 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         changedMetadataWithdrewCertainty = SUCCEEDED(changed) && ! task._discoveredBytesKnown.load(std::memory_order_acquire) &&
                                            task._discoveryClosed.load(std::memory_order_acquire) &&
                                            task._discoveredTotalBytes.load(std::memory_order_acquire) == kPayloadBytes;
+        task.RequestCancel();
+        ReleaseFileOpsSelectedLeafDiscoveryPublishedPauseForSelfTest();
     };
-    const auto info = scope.Run(FILESYSTEM_COPY, state.fsLocal, std::move(paths), destination, 512u * 1024u, observe, [&]() noexcept { return counted; });
+    const auto info = scope.Run(FILESYSTEM_COPY, state.fsLocal, std::move(paths), destination, 512u * 1024u, observe);
     if (! info.has_value())
         return false;
     std::vector<std::wstring> sourceEntries;
     std::vector<std::wstring> destinationEntries;
-    const bool sourceIntact = CollectRelativeTreeForSelfTest(source, sourceEntries) && sourceEntries.size() == kEmptyFiles + 1u &&
-                              FileSizeEquals(source / L"000-payload.bin", kPayloadBytes);
-    const bool destinationClean =
-        CollectRelativeTreeForSelfTest(destination, destinationEntries) &&
-        std::ranges::none_of(destinationEntries, [](const std::wstring& entry) noexcept { return IsOperationArtifactEntryForSelfTest(entry); });
+    const bool sourceIntact     = CollectRelativeTreeForSelfTest(source, sourceEntries) && sourceEntries.size() == kEmptyFiles + 1u &&
+                                  FileSizeEquals(source / L"000-payload.bin", kPayloadBytes);
+    const bool destinationClean = CollectRelativeTreeForSelfTest(destination, destinationEntries) && destinationEntries.empty();
     const bool passed        = counted && correctLiveTotals && duplicateDidNotGrow && changedMetadataWithdrewCertainty &&
                                info->hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) && info->discoveryDurationUs <= 2'000'000u &&
                                info->discoveryBytesCompletedWhileOpen == 0u && info->discoveryGrowthAfterCloseCount == 0u && sourceIntact && destinationClean;
