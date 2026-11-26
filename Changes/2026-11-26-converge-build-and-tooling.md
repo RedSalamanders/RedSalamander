@@ -3,3 +3,4 @@
   - Verify the pinned RedMonitor SDK commands before checking or updating the vendored client.
   - Keep the native PrePush obligation local.
   - Reuse default MSVC toolset discovery and triplet rendering from the pinned engine.
+  - Align agent guidance and editor discovery and add the product capability record.

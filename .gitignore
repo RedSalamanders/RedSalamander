@@ -68,8 +68,7 @@ node_modules/
 /RedSalamanderMonitor.exe
 /RedSalamander/payload.json
 
-# Editor/agent local state
-.claude/settings.local.json
+# Editor and agent local state
 .omc
 .gitnexus
 
