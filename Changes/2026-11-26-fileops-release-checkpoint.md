@@ -1,0 +1,1 @@
+- Record the passing I66 non-interactive x64 Release PrePush and the remaining desktop, live-provider, archive and hosted native gates in the shared checklist.
