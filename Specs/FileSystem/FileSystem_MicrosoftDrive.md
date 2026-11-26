@@ -74,13 +74,15 @@ Refresh tokens are stored through the host secret API as `refreshToken` when the
 - Graph-authorized requests disable automatic redirects. Supporting a sovereign Microsoft Graph cloud requires an
   explicit configured-origin policy and matching deterministic tests; it must not be enabled through a broad suffix
   match.
-- An upload-session `uploadUrl` is a distinct preauthenticated credential. The current global-cloud policy accepts
-  only HTTPS/default-port URLs on `*.up.1drv.com` or `*.sharepoint.com`, rejects userinfo and fragments, disables
-  automatic redirects, and never attaches the Graph bearer token. The opaque URL must be sent unchanged after
-  validation.
+- An upload-session `uploadUrl` is a distinct preauthenticated credential. The global-cloud policy accepts
+  HTTPS/default-port URLs on `up.1drv.com` and `sharepoint.com` and their subdomains. OneDrive Personal also accepts
+  the exact `my.microsoftpersonalcontent.com` origin when returned by the authenticated Graph session request.
+  Validation rejects userinfo and fragments. Upload requests disable automatic redirects, omit the Graph bearer token
+  and use the validated opaque URL unchanged. [Graph upload sessions](https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0)
 - Diagnostics never serialize request-header blocks or raw request URLs. They emit the method, a redacted target
   class (`graph-api`, `oauth-authority`, `preauthenticated-upload`, or external), status/request ID when available,
-  byte counts, and HRESULT. Query values from Graph continuations and upload-session URLs are never logged.
+  byte counts, and HRESULT. The known-size upload failure metric includes the failed stage, HTTP status when available
+  and HRESULT. Query values from Graph continuations and upload-session URLs are never logged.
 - Transient access/refresh tokens, authorization-header storage, parsed opaque URLs, upload-session response bodies,
   and retained continuation strings are securely cleared where their current in-memory representation permits.
 
@@ -154,7 +156,10 @@ Behavior notes:
 - Metadata requests use Graph item lookup with a small `$select` set.
 - `GetItemProperties` returns structured properties for both files and folders using all Microsoft Graph item metadata the plugin has available, including general identity/path/type data, drive/remote identifiers, timestamps, facets, hashes, and size for files. Missing Graph fields are omitted rather than reported as placeholder values.
 - File reads resolve `@microsoft.graph.downloadUrl` and then use ranged HTTP reads against that download URL.
-- Writes stage data into a local temporary file first. The provider uses the Common delete-on-close reservation helper with the `rsm` prefix; a failed reopen deletes the reservation, and normal close removes the staged pathname through the WIL-owned handle.
+- A known nonempty size supplied through `IFileWriterExpectedSize` releases the temporary reservation before the first Write.
+  The writer streams through an upload session. Other writes stage data into a local temporary file. The provider uses
+  the Common delete-on-close reservation helper with the `rsm` prefix. A failed reopen deletes the reservation, and normal
+  close removes the staged pathname through the WIL-owned handle.
   - Up to 250 MiB: simple upload (`/content`)
   - Above 250 MiB: upload session with chunked PUTs
 - Every upload-session `202 Accepted` response must contain valid `nextExpectedRanges`. The writer resumes from
