@@ -6,6 +6,8 @@
 
 ## Implementation checklist
 
+- [x] Restore the Change Case documentation gallery and recheck Files-menu admission on x64 Release. Both exact cases passed without activation. The gallery recorded all 45 scenarios and captured the production Change Case prompt. The old failure and remaining native gates are recorded alongside the passes. [Gallery and admission evidence](../../TestRuns/4cb089111a23/Commands/2026-11-26_150252_change_case_gallery/README.md)
+
 **Delivery checkpoint (2026-11-26).** The worker, Files-menu, SMB, archive and progress deliveries below are merged. [PR #320](https://github.com/RedSalamanders/RedSalamander/pull/320) merged the shared R0e admission repair at `02b212062`. The plan stays open for native x64 and ARM64 Release qualification, the remaining live providers, the full walkthrough, actual credential waits and the remaining Stopping measurement.
 
 - [x] Repair R0e validation for the exact Batch Rename witness. Focused Pester run `20261126T102400Z-47644-5cf79fb848d64d1daba52f58efefb7f9` passed all 20 checks, including the source-mutation controls and the injected archive failure. The revised witness runs before the timer. Paired diagnostics still require matching reviewed fixture projections. [R0e evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-26_112400_r0e_rename_fixture/README.md)
