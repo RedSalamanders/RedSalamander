@@ -7538,11 +7538,17 @@ HRESULT MicrosoftDriveFileWriter::InitializeStreamingUpload() noexcept
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     }
 
+    const auto reportFailure = [](std::wstring_view stage, HRESULT failure, DWORD httpStatus = 0u) noexcept
+    {
+        Debug::Perf::Emit(L"FileOps.MicrosoftDrive.UploadSessionFailure", stage, 0u, httpStatus, 0u, failure);
+        return failure;
+    };
+
     DriveContext context{};
     HRESULT hr = BuildDriveContext(*_fileSystem, _destinationPath, context);
     if (FAILED(hr))
     {
-        return hr;
+        return reportFailure(L"drive context", hr);
     }
 
     const std::wstring normalizedPath = TrimTrailingSlashPreserveRoot(NormalizePluginPath(context.drivePath));
@@ -7562,7 +7568,7 @@ HRESULT MicrosoftDriveFileWriter::InitializeStreamingUpload() noexcept
         }
         if (! IsNotFoundStatus(hr))
         {
-            return hr;
+            return reportFailure(L"target probe", hr);
         }
     }
     if (_expectedReplacement.has_value())
@@ -7570,7 +7576,7 @@ HRESULT MicrosoftDriveFileWriter::InitializeStreamingUpload() noexcept
         hr = ResolveReplaceOccupant(context, normalizedPath);
         if (FAILED(hr))
         {
-            return hr;
+            return reportFailure(L"target revision", hr);
         }
     }
 
@@ -7578,7 +7584,7 @@ HRESULT MicrosoftDriveFileWriter::InitializeStreamingUpload() noexcept
     hr = BuildJsonBodyForUploadSession(allowOverwrite, bodyUtf8);
     if (FAILED(hr))
     {
-        return hr;
+        return reportFailure(L"session request body", hr);
     }
 
     HttpResponse sessionResponse{};
@@ -7592,17 +7598,17 @@ HRESULT MicrosoftDriveFileWriter::InitializeStreamingUpload() noexcept
         *_fileSystem, context, L"POST", BuildGraphCreateUploadSessionUrl(context, normalizedPath), bodyUtf8, sessionHeaders, false, sessionResponse);
     if (FAILED(hr))
     {
-        return hr;
+        return reportFailure(L"create session transport", hr);
     }
     if (sessionResponse.statusCode < 200u || sessionResponse.statusCode >= 300u)
     {
-        return HresultFromGraphError(sessionResponse.statusCode, sessionResponse.body);
+        return reportFailure(L"create session response", HresultFromGraphError(sessionResponse.statusCode, sessionResponse.body), sessionResponse.statusCode);
     }
 
     hr = ParseUploadUrl(sessionResponse.body, _uploadUrl);
     if (FAILED(hr))
     {
-        return hr;
+        return reportFailure(L"session URL validation", hr, sessionResponse.statusCode);
     }
 
     _streamSettings             = _fileSystem->SnapshotSettings();
@@ -7660,7 +7666,9 @@ HRESULT MicrosoftDriveFileWriter::FlushStreamingChunk() noexcept
         }
         if (uploadResponse.statusCode != 202u)
         {
-            return HresultFromGraphError(uploadResponse.statusCode, uploadResponse.body);
+            hr = HresultFromGraphError(uploadResponse.statusCode, uploadResponse.body);
+            Debug::Perf::Emit(L"FileOps.MicrosoftDrive.UploadSessionFailure", L"streaming chunk response", 0u, uploadResponse.statusCode, 0u, hr);
+            return hr;
         }
 
         uint64_t nextOffset = 0u;
