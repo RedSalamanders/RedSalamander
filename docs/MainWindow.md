@@ -134,7 +134,7 @@ Default unmodified function keys:
 | `F3` | View | Opens the primary viewer association for the focused file. |
 | `F4` | Edit | Opens the editor association for the focused file. |
 | `F5` | Copy | Copies the selection to the other pane. |
-| `F6` | Move/Rename | Moves the selection to the other pane, or renames when the command context requires it. |
+| `F6` | Move/Rename | Moves the selection into the other pane's current folder. |
 | `F7` | Make Directory | Creates a folder in the focused pane. |
 | `F8` | Delete | Deletes the selection using the Recycle Bin when supported. |
 | `F9` | User Menu | Opens configured external commands. |
