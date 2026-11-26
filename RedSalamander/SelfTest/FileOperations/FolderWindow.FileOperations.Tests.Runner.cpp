@@ -987,6 +987,7 @@ struct SelfTestState
         Phase16_RemoteFtpSandbox,
         Phase16_RemoteSftpSecret,
         Phase16_RemoteSftpSandbox,
+        Phase16_RemoteSftpInlineRename,
         Phase16_RemoteScpSecret,
         Phase16_RemoteScpSandbox,
         Phase16_RemoteImapSecret,
@@ -1639,6 +1640,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Phase16_RemoteFtpSandbox: return L"Phase16_RemoteFtpSandbox";
         case SelfTestState::Step::Phase16_RemoteSftpSecret: return L"Phase16_RemoteSftpSecret";
         case SelfTestState::Step::Phase16_RemoteSftpSandbox: return L"Phase16_RemoteSftpSandbox";
+        case SelfTestState::Step::Phase16_RemoteSftpInlineRename: return L"Phase16_RemoteSftpInlineRename";
         case SelfTestState::Step::Phase16_RemoteScpSecret: return L"Phase16_RemoteScpSecret";
         case SelfTestState::Step::Phase16_RemoteScpSandbox: return L"Phase16_RemoteScpSandbox";
         case SelfTestState::Step::Phase16_RemoteImapSecret: return L"Phase16_RemoteImapSecret";
@@ -2016,6 +2018,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::Phase16_RemoteFtpSandbox,                            // Phase 16 â€” remote sandbox root configuration (FTP)
     SelfTestState::Step::Phase16_RemoteSftpSecret,                            // Phase 16 â€” secure secret retrieval (SFTP)
     SelfTestState::Step::Phase16_RemoteSftpSandbox,                           // Phase 16 â€” remote sandbox root configuration (SFTP)
+    SelfTestState::Step::Phase16_RemoteSftpInlineRename,                      // Phase 16 - scheduled Rename in a dedicated SFTP test folder
     SelfTestState::Step::Phase16_RemoteScpSecret,                             // Phase 16 â€” secure secret retrieval (SCP)
     SelfTestState::Step::Phase16_RemoteScpSandbox,                            // Phase 16 â€” remote sandbox root configuration (SCP)
     SelfTestState::Step::Phase16_RemoteImapSecret,                            // Phase 16 â€” secure secret retrieval (IMAP)
@@ -2360,12 +2363,13 @@ constexpr std::array<SelfTestState::Step, 2> kFileOpsFamilyPhase15{{
     SelfTestState::Step::Phase15_FileSystem7zMountPathImpact,
 }};
 
-constexpr std::array<SelfTestState::Step, 20> kFileOpsFamilyPhase16{{
+constexpr std::array<SelfTestState::Step, 21> kFileOpsFamilyPhase16{{
     SelfTestState::Step::Phase16_RemoteWatchContractExposure,
     SelfTestState::Step::Phase16_RemoteFtpSecret,
     SelfTestState::Step::Phase16_RemoteFtpSandbox,
     SelfTestState::Step::Phase16_RemoteSftpSecret,
     SelfTestState::Step::Phase16_RemoteSftpSandbox,
+    SelfTestState::Step::Phase16_RemoteSftpInlineRename,
     SelfTestState::Step::Phase16_RemoteScpSecret,
     SelfTestState::Step::Phase16_RemoteScpSandbox,
     SelfTestState::Step::Phase16_RemoteImapSecret,
@@ -15059,9 +15063,10 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     return true;
 }
 
-[[nodiscard]] HRESULT RunGraphInlineRenameForSelfTest(const wil::com_ptr<IFileSystem>& fileSystem,
-                                                      const std::filesystem::path& source,
-                                                      std::wstring_view destinationLeaf) noexcept
+[[nodiscard]] HRESULT RunRemoteInlineRenameForSelfTest(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                       std::wstring_view pluginId,
+                                                       const std::filesystem::path& source,
+                                                       std::wstring_view destinationLeaf) noexcept
 {
     RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
     if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
@@ -15069,7 +15074,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
 
     Common::Settings::Settings settings{};
     wil::unique_hwnd privateHost(
-        CreateWindowExW(0, L"STATIC", L"Owned Graph test", WS_POPUP, 0, 0, 640, 480, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));
+        CreateWindowExW(0, L"STATIC", L"Owned remote Rename test", WS_POPUP, 0, 0, 640, 480, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));
     FolderWindow owner;
     owner.SetSettings(&settings);
     constexpr auto pane = FolderWindow::Pane::Left;
@@ -15079,8 +15084,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     const PluginMetaData* metadata = nullptr;
     if (! information || information->GetMetaData(&metadata) != S_OK || ! metadata || ! metadata->shortId)
         return E_UNEXPECTED;
-    RETURN_IF_FAILED(
-        owner.SetFileSystemInstanceForPane(pane, fileSystem, std::wstring(kPluginIdOneDrivePersonal), metadata->shortId, L"graph-rename-selftest"));
+    RETURN_IF_FAILED(owner.SetFileSystemInstanceForPane(pane, fileSystem, std::wstring(pluginId), metadata->shortId, L"remote-rename-selftest"));
 
     auto* operations = owner.DebugGetFileOperationState();
     if (! operations)
@@ -15096,7 +15100,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         return FAILED(admitted) ? admitted : E_UNEXPECTED;
     const auto finished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
         return completion.has_value() && completion->taskId == id && operations->FindTask(id) == nullptr;
-    }, {.timeout = SelfTest::Scale(std::chrono::seconds(30)), .operationName = L"Graph inline Rename completion"});
+    }, {.timeout = SelfTest::Scale(std::chrono::seconds(30)), .operationName = L"Remote inline Rename completion"});
     if (! finished.conditionMet)
         return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
     if (completion->hr != S_OK || completion->itemOutcomes.size() != 1u)
@@ -15108,6 +15112,111 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         result.finalDestinationPath.filename().native() != destinationLeaf)
         return E_UNEXPECTED;
     return S_OK;
+}
+
+[[nodiscard]] HRESULT RunLiveSftpInlineRenameForSelfTest(const Common::Settings::ConnectionProfile& profile) noexcept
+{
+    RETURN_IF_FAILED(FileSystemPluginManager::GetInstance().EnablePlugin(kPluginIdSftp, g_settings));
+    const auto* entry = FindLoadedPluginEntry(kPluginIdSftp);
+    if (! entry || ! entry->fileSystem)
+        return E_UNEXPECTED;
+
+    const auto fs          = entry->fileSystem;
+    const auto io          = fs.try_query<IFileSystemIO>();
+    const auto directories = fs.try_query<IFileSystemDirectoryOperations>();
+    const auto probed      = fs.try_query<IFileSystemProbedRename>();
+    if (! io || ! directories || ! probed)
+        return E_NOINTERFACE;
+
+    const auto isPlainDirectory = [&](const std::wstring& providerPath) noexcept
+    {
+        unsigned long attributes = 0u;
+        return io->GetAttributes(providerPath.c_str(), &attributes) == S_OK && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u &&
+               (attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0u;
+    };
+    const auto configuredRoot = MakeConnectionPathForSelfTest(profile.name, NormalizePluginPathForSelfTest(profile.initialPath));
+    if (configuredRoot.empty() || ! isPlainDirectory(configuredRoot))
+        return E_UNEXPECTED;
+
+    const std::wstring guid = NewGuidString();
+    if (guid.empty())
+        return E_UNEXPECTED;
+    const std::wstring root =
+        MakeConnectionPathForSelfTest(profile.name, JoinPluginPathForSelfTest(profile.initialPath, std::format(L"fileops-selftest-sftp-rename-{}", guid)));
+    if (root.empty())
+        return E_INVALIDARG;
+    const HRESULT created = directories->CreateDirectory(root.c_str());
+    if (created != S_OK)
+        return FAILED(created) ? created : E_UNEXPECTED;
+    AppendLog(std::format(L"Live SFTP Rename created owned fixture {}.", guid));
+
+    const auto notFound = [&](const std::filesystem::path& path) noexcept
+    {
+        unsigned long facts = 0u;
+        const HRESULT hr    = io->GetAttributes(ToPluginPathText(path).c_str(), &facts);
+        return hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
+    };
+    const auto hasBytes = [&](const std::filesystem::path& path, std::string_view expected) noexcept
+    {
+        unsigned long attributes = 0u;
+        if (io->GetAttributes(ToPluginPathText(path).c_str(), &attributes) != S_OK ||
+            (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u)
+            return false;
+        std::string actual;
+        return ReadFileTextFsIo(io, path, actual) && actual == expected;
+    };
+
+    const std::filesystem::path parent(root);
+    const auto original      = parent / L"before.txt";
+    const auto occupant      = parent / L"occupied.txt";
+    const auto renamed       = parent / L"renamed.txt";
+    const auto fileBytes     = std::format("owned live SFTP source {}", Common::Strings::Utf8FromUtf16StrictOrEmpty(guid));
+    const auto occupiedBytes = std::format("owned live SFTP occupant {}", Common::Strings::Utf8FromUtf16StrictOrEmpty(guid));
+    const auto started       = std::chrono::steady_clock::now();
+    const HRESULT result     = [&]() noexcept -> HRESULT
+    {
+        if (! WriteFileTextFsIo(io, original, fileBytes) || ! WriteFileTextFsIo(io, occupant, occupiedBytes))
+            return E_FAIL;
+        wil::com_ptr<IFileSystemProbedRenameSource> source;
+        const HRESULT captured = probed->CaptureProbedRenameSource(ToPluginPathText(original).c_str(), nullptr, source.put());
+        if (captured != S_OK || ! source)
+            return FAILED(captured) ? captured : E_UNEXPECTED;
+        FileSystemCorroboratedRenameResult refusal{};
+        const HRESULT collision = source->RenameToFreeSibling(L"occupied.txt", nullptr, &refusal);
+        if (collision != HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || refusal.mutationAttempted != FALSE || refusal.mutation.outcomeKnown != TRUE ||
+            refusal.mutation.mutationCommitted != FALSE || refusal.mutation.originalStillPresent != TRUE || ! hasBytes(original, fileBytes) ||
+            ! hasBytes(occupant, occupiedBytes))
+            return E_UNEXPECTED;
+        source.reset();
+
+        const HRESULT renamedHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdSftp, original, L"renamed.txt");
+        if (renamedHr != S_OK)
+            return FAILED(renamedHr) ? renamedHr : E_UNEXPECTED;
+        return notFound(original) && hasBytes(renamed, fileBytes) && hasBytes(occupant, occupiedBytes) ? S_OK : E_UNEXPECTED;
+    }();
+
+    // SFTP deletes by name. Verify each exact payload in the fresh parent and use
+    // nonrecursive removal so unexpected files prevent parent removal.
+    if (! isPlainDirectory(configuredRoot) || ! isPlainDirectory(root))
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    for (const auto& [path, bytes] : {std::pair{original, std::string_view(fileBytes)},
+                                      std::pair{renamed, std::string_view(fileBytes)},
+                                      std::pair{occupant, std::string_view(occupiedBytes)}})
+    {
+        if (notFound(path))
+            continue;
+        if (! hasBytes(path, bytes))
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        const HRESULT removed = fs->DeleteItem(ToPluginPathText(path).c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+        if (removed != S_OK || ! notFound(path))
+            return FAILED(removed) ? removed : E_UNEXPECTED;
+    }
+    const HRESULT removed = fs->DeleteItem(root.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+    if (removed != S_OK || ! notFound(parent))
+        return FAILED(removed) ? removed : E_UNEXPECTED;
+
+    Debug::Perf::Emit(L"FileOps.SelfTest.SftpInlineRenameUs", L"owned live file and collision", Debug::Perf::ElapsedUs(started), 1u, 1u, result);
+    return result;
 }
 
 [[nodiscard]] HRESULT RunLiveOneDrivePersonalInlineRenameForSelfTest(const Common::Settings::ConnectionProfile& profile) noexcept
@@ -15181,15 +15290,15 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
             return reject(L"occupied-name refusal did not keep both files before dispatch", collision);
         source.reset();
 
-        const HRESULT fileHr = RunGraphInlineRenameForSelfTest(fs, original, L"renamed.txt");
+        const HRESULT fileHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdOneDrivePersonal, original, L"renamed.txt");
         if (fileHr != S_OK || ! notFound(original) || ! hasBytes(renamed, fileBytes) || ! hasBytes(occupant, occupantBytes))
             return reject(L"host file Rename did not prove a free sibling and its exact bytes", fileHr);
 
-        const HRESULT caseHr = RunGraphInlineRenameForSelfTest(fs, renamed, L"Renamed.txt");
+        const HRESULT caseHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdOneDrivePersonal, renamed, L"Renamed.txt");
         if (caseHr != S_OK || ! hasBytes(parent / L"Renamed.txt", fileBytes))
             return reject(L"host case-only Rename did not prove the requested spelling and bytes", caseHr);
 
-        const HRESULT folderHr = RunGraphInlineRenameForSelfTest(fs, folder, L"folder-after");
+        const HRESULT folderHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdOneDrivePersonal, folder, L"folder-after");
         if (folderHr != S_OK || ! notFound(folder) || ! hasBytes(renamedFolder / L"inside.txt", fileBytes))
             return reject(L"host folder Rename did not prove publication and preserved contents", folderHr);
         return S_OK;
