@@ -14234,11 +14234,12 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     for (const std::wstring_view extension : {std::wstring_view(L"zip"), std::wstring_view(L"7z")})
     {
-        const auto retainedArchive       = outputRoot / std::format(L"folders-retained.{}", extension);
-        auto folderCleanupOptions        = packOptions;
-        folderCleanupOptions.archivePath = retainedArchive;
-        folderCleanupOptions.deleteAfter = true;
-        const auto promptCount           = HostGetTestPromptRequestCount();
+        const auto retainedArchive           = outputRoot / std::format(L"folders-retained.{}", extension);
+        auto folderCleanupOptions            = packOptions;
+        folderCleanupOptions.archivePath     = retainedArchive;
+        folderCleanupOptions.deleteAfter     = true;
+        folderCleanupOptions.packerExtension = extension;
+        const auto promptCount               = HostGetTestPromptRequestCount();
         g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(folderCleanupOptions);
         const bool dispatched = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack");
         const auto retained   = waitForArchiveResult();
