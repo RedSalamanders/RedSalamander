@@ -1,0 +1,1 @@
+- Adopt the shared native build profile reference in the root development guidance.
