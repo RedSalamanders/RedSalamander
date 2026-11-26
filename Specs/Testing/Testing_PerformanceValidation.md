@@ -2635,6 +2635,13 @@ the preparation clock restarts before execution. Compare the existing
 `FileOps.PopupCadence.Counters` rows for matching running, paused, prompting, queued and idle
 fixtures. `FileOps.Admission.TaskLayoutBytes` tracks the per-task storage cost.
 
+The `engine-stopping` window in `FileOps_PopupIdleCadence` holds a real Local
+Copy at the conflict metadata barrier after requesting cancellation. The task
+must stay unfinished with the same paths and completed bytes at the 100 ms
+cadence. Use `FileOps.PopupCadence.Counters` for the window and timer counts,
+and `FileOps.PopupCadence.StoppingSamples` for the rate-update count. Compare
+allocations only for matching rate-update events inside the recorded window.
+
 `FileOps_PopupIdleCadence` also selects the opposite Queue/Parallel footer mode on an idle,
 non-activating application owner, flushes pending writes, and creates a second owner from the saved
 settings. It restores the original saved and live modes before measuring cadence. Capture
