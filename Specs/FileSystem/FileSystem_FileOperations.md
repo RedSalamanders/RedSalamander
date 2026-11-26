@@ -2134,6 +2134,8 @@ Local provider offers it for a binding provider (D-7.3); providers without bindi
 Pack and Unpack delete-after-success submit ordinary exact `DeletePlan` tasks after the archive
 contract succeeds. On an identity-less location they refuse cleanup and keep the sources.
 
+Pack offers stored ZIP and 7z. Unpack accepts ZIP input and uses the 7-Zip decoder as a fallback when the stored ZIP reader reports unsupported input.
+
 After the Pack options and any exact cleanup confirmation, Pack enters the File Operations scheduler with its captured
 Local provider instance, sources, format and archive target. Preparation qualifies the source and publication scopes.
 The worker inventories and encodes the selection. The task can pause between work checkpoints and can cancel before
