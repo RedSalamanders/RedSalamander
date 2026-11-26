@@ -26,3 +26,21 @@ The File Operations native result SHA-256 is
 `c59c83d62332b64752c83e60354b938c67f2958da2111f90147a7c942fbec6ad`.
 The native results are under `artifacts/selftest/last_run` in the completed-run archives.
 The full desktop suites and hosted native platform gates remain open.
+
+## Hosted x64 diagnostic
+
+The [manual x64 Full run](https://github.com/RedSalamanders/RedSalamander/actions/runs/45841032537)
+tested `27ee7c01991154fe5f662f1eada984146a768b36`. Its main native run
+`20261126T162853Z-3084-677b79a846a94111acf8cd619ed03f4a` recorded 3,061 passes, one failure
+and 69 skips. The pending-decision pointer and Start now cases both passed in the original broad
+suites. Their case times were 3,506 ms and 860 ms.
+
+The failed case was `FileOps_SelectionShapeLocal`. Its six concurrency scenarios passed. In
+the later 4,097-file counting check, the totals, repeated callback, changed-metadata result,
+source contents and destination-stage cleanup all met the assertions. The cancellation result
+was `ERROR_PARTIAL_COPY`, where the fixture requires `ERROR_CANCELLED`. That failure is
+tracked independently in the plan.
+
+The downloaded artifacts are preserved in the governed import
+`20261126T194318Z-72732-5a8d8276a4a0493f892f7d99cb64d5a4`. The hosted v1 report
+SHA-256 is `6025f4ab1bea5db7613a229b20595a263e37ff1aec9b65b8eb5c5f13ee4d9716`.
