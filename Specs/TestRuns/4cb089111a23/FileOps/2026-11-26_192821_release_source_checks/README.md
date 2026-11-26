@@ -60,5 +60,24 @@ process start and rejects a failing control. Exact integrated source `4386c570c9
 passed 31 documentation checks and 244 harness source checks with zero failures and skips in
 `20261126T184342Z-56024-cb5f53e672c54e2988751c4782618458`. Result SHA-256
 `28674761a9f3192d5599eb3f41e3d7676025a680df80b077fd3fccd9031b582c`.
-The guidance, inventory and changelog validators passed with the pinned CI engine. Native
-qualification on the new baseline still requires its own result.
+The guidance, inventory and changelog validators passed with the pinned CI engine.
+
+## Integrated x64 Release checks
+
+Exact publication source `1611a908605776c33098dca960f9477f4c4d1217` built test-enabled x64 Release
+with zero warnings and errors. The executable matched receipt
+`4549337f2a4ba851cfb6f4e834d7d3db4b3237a6ce4ad69730faab38438733fd`.
+
+| Run | Scope | Result |
+| --- | --- | --- |
+| `20261126T184751Z-75016-c486200f75d2405fa18e9549084d8d6f` | Before the native build | Scoped Testing passed 5 and Build Console passed 17. Runner Plan passed 129 and failed the native inventory prerequisite because the Release executable was absent. |
+| `20261126T185909Z-59660-6585735c09c04c5cbb274a5678194976` | Receipt-verified runner suites | Scoped Testing passed 5, Runner Plan passed 130, and Build Console passed 17. Zero failures and skips. |
+| `20261126T190037Z-61500-e5e926b7308e451e963d30ffb1a776e3` | Live single-item SFTP Rename | Passed 3/0/0 without activation. Three renames and one occupied-name refusal passed, and the fresh fixture was removed. |
+
+The verified runner result SHA-256 is
+`5241c77690c4d41efe1fd91d8a38a1505011c32df38c357a9adf57ab72aeeda1`.
+The SFTP launcher report SHA-256 is
+`2f0af837ffb53a77358c1553abad69a4a177ec67fd5b992762a746f33f38f182`.
+The isolated Hello-off SFTP settings retired and the installed settings digest matched.
+The earlier [SFTP record](../2026-11-26_190427_sftp_inline_rename/README.md) describes the execution scope.
+Hosted x64 and ARM64 and the remaining desktop and live-provider gates are still open.
