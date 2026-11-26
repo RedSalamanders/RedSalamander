@@ -178,21 +178,6 @@ Describe 'Visible native audit contracts' {
         }
         $unclassifiedAudit.Succeeded | Should Be $false
         $unclassifiedAudit.Error.Exception.Message | Should Match '1 unallowed finding'
-
-        $remoteRenameFixture = Join-Path $fixture 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
-        [void][IO.Directory]::CreateDirectory((Split-Path $remoteRenameFixture))
-        $hiddenRemoteRename = 'CreateWindowExW(0, L"STATIC", L"Owned remote Rename test", WS_POPUP, 0, 0, 640, 480, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));'
-        [IO.File]::WriteAllText($remoteRenameFixture, $hiddenRemoteRename)
-        $classifiedRemoteRename = @(& (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') -RepoRoot $fixture |
-                Where-Object Path -eq 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp')
-        $classifiedRemoteRename.Count | Should Be 1
-        $classifiedRemoteRename[0].Allowed | Should Be $true
-
-        [IO.File]::WriteAllText($remoteRenameFixture, $hiddenRemoteRename.Replace('WS_POPUP', 'WS_POPUP | WS_VISIBLE'))
-        $visibleRemoteRename = @(& (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') -RepoRoot $fixture |
-                Where-Object Path -eq 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp')
-        $visibleRemoteRename.Count | Should Be 1
-        $visibleRemoteRename[0].Allowed | Should Be $false
         $unclassifiedAudit.Error.ScriptStackTrace | Should Match 'Audit-RemainingWin32UiDependencies\.ps1'
 
         # Exercise the other scanner consumers from the same checkout-under-.build.
@@ -242,7 +227,8 @@ Describe 'Visible native audit contracts' {
             @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'; Title = 'Owned completion teardown fixture' },
             @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'; Title = 'Owned Create Folder check' },
             @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'; Title = 'Owned Rename fixture' },
-            @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'; Title = 'Owned Graph test' }
+            @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'; Title = 'Owned Graph test' },
+            @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'; Title = 'Owned remote Rename test' }
         )
         foreach ($definition in $definitions) {
             $path = Join-Path $fixture $definition.Path
