@@ -6,7 +6,7 @@
 
 ## Implementation checklist
 
-**Delivery checkpoint (2026-11-25).** Mixed Move and transactional Pack publication have merged. The approved Cut/Paste, F7 source guard and Delete-after-Copy checks passed. The archive worker builds, live-provider gates, and hosted native Release remain open.
+**Delivery checkpoint (2026-11-26).** Pack and Unpack are on the File Operations worker, with focused Release cancellation and dialog evidence. Exact Windows SMB scheduled Batch Rename and Change Case passed and merged in [PR #311](https://github.com/RedSalamanders/RedSalamander/pull/311). The hosted regression and menu checks, the broader Release verdict, the live-provider gates, and exact Pack directory cleanup remain open.
 
 - [x] Merge typed Recycle routing in [PR #249](https://github.com/RedSalamanders/RedSalamander/pull/249) at `e103ebcfe`. The exact x64 Debug mixed-selection and Move cases passed. Live remote Recycle coverage remains open.
 - [x] Merge Create Folder admission in [PR #252](https://github.com/RedSalamanders/RedSalamander/pull/252) at `ccdab5fe5`. The exact no-activation x64 Debug case passed, including submission after exit consent while a name prompt was open.
