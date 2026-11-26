@@ -14,7 +14,7 @@ checks use the exact clean external pin through the shared resolver, never a rem
 
 The default uses local merge-base changes plus staged, unstaged and untracked work. Read the explanation before a large run. Unknown code/build inputs widen coverage. Selected work is partial evidence. PrePush keeps the full native obligation local. GitHub PR checks are compiler-free.
 
-Native test files use `Scope.Tests.Something.h/.cpp`; register new active files in `native-test-files.json`. `test-scopes.json` owns standalone scope/PR metadata. Shared-library or runtime byte changes conservatively invalidate local standalone reuse. No consumer dependency pin changes are part of this workflow.
+Native test files use `Scope.Tests.Something.h/.cpp`; register new active files in `native-test-files.json`. `Tools/validation-impact.json` owns affected selection through the canonical run plan. Shared-library or runtime byte changes conservatively invalidate local standalone reuse. No consumer dependency pin changes are part of this workflow.
 
 For independent resource investigations, force fresh execution and retain paired fixture/build provenance. Timing, native ARM64, real devices, IME/assistive technology and foreground input remain separate qualification requirements. These commands do not manufacture those claims.
 

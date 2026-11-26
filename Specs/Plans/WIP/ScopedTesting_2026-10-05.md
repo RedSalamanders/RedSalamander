@@ -8,7 +8,7 @@ Owner: [current validation contract](../../Testing/Testing_ValidationEvidence.md
 
 ## Shared planner migration
 
-The 26 November tooling batch keeps native PrePush coverage local and introduces the pinned validator entry points.
+The 26 November tooling batch keeps native PrePush coverage local, retires the old delegation machinery and version 1 scope manifest, and introduces the pinned validators.
 The next part implements the RedSalamander adapter in the [shared scoped-testing design](https://github.com/RedSalamanders/.github/blob/74673c5ef71e880ece602709949d3b614c903d57/Specs/Plans/WIP/SharedProjectTooling_2026-11-18.md#t4-design-one-planner-one-runner-per-repository-data-for-the-owners-review).
 
 1. Add the canonical root `test.ps1` adapter around `Tools/Run-AllTests.ps1`. Use the same profile and build number
@@ -23,8 +23,7 @@ The next part implements the RedSalamander adapter in the [shared scoped-testing
    native reuse disabled until the receipt review verifies source, binary, profile and environment parity.
 4. Switch normal affected, full and pre-push calls to the engine shim. Keep the existing focused suite, case filter,
    Commands family, interactive, alternate-volume, explicit evidence root and exact Resume paths available through
-   the compatibility adapter. Remove the retired PR delegation code and version 1 manifest together with their last
-   callers. Preserve incomplete-coverage and failure exit categories in the compatibility path.
+   the compatibility adapter. Preserve incomplete-coverage and failure exit categories in the compatibility path.
 5. Prove selected native execution, failure reporting, build-only ARM64 on x64, and exact Resume through the normal
    entry points. Compare x64 and native ARM64 behavior in the same combined tooling qualification. Run focus-taking
    work only in the separately authorized desktop boundary.
@@ -37,7 +36,7 @@ Everyday iteration selects affected scopes from committed changes since the merg
 
 Reuse only successful local evidence for identical source/dependency closure, executable/runtime bytes, architecture, configuration, runner arguments and environment. Invalidate before execution; publish only after success and an unchanged post-run identity. Corrupt/missing evidence executes again. Explicit force runs, performance investigations and environment-dependent/manual acceptance remain available.
 
-Before a PR push, full coverage is required across local and CI execution. Delegate only the identical scopes/configuration that the enabled PR workflow actually runs. A nightly gate is not a PR gate. A base/merge-tree change, configuration difference or modified runner invalidates equivalence. Keep main/release acceptance distinct from PR feedback.
+Before a PR push, retain the full local native obligation. Pull request checks provide compiler-free feedback. Main and release acceptance use their own admitted sources and profiles.
 
 ## Review evidence
 

@@ -866,7 +866,7 @@ download; a missing or malformed file fails and names the file and the repair. F
 `.build\vcpkg-triplets\<platform>\<triplet>.cmake`: the selected vcpkg root's own triplet (`triplets\`, then
 `triplets\community\`) copied unchanged in its own line endings, then `set(VCPKG_VISUAL_STUDIO_PATH ...)` and
 `set(VCPKG_PLATFORM_TOOLSET_VERSION "<major.minor>")`, rewritten only when its bytes change. It passes
-`--overlay-triplets=<that directory>` to `vcpkg install`. The pinned CI engine supplies default toolset verification and overlay text generation. RedSalamander retains installation selection, the original overlay header, and publication under its dependency lock. The custom-triplet rules above are unchanged (leaf names only,
+`--overlay-triplets=<that directory>` to `vcpkg install`. The pinned CI engine checks the default toolset and atomically publishes the overlay and its referenced local companions. RedSalamander owns installation selection, the original overlay header, the dependency lock, and the restore inputs that bind each published file. The custom-triplet rules above are unchanged (leaf names only,
 x64-/arm64- prefix mapping). A different triplet is a different package ABI hash, so the first install after this
 change, and after a change of installation or default major.minor, rebuilds the packages; vcpkg's binary cache then
 serves any root whose triplet text is identical. The functions live in `Tools/Modules/Build/VcpkgInstallSafety.psm1` and

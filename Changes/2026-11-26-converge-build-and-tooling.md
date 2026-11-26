@@ -1,6 +1,6 @@
 - Adopt the pinned shared build console and compiler-free tooling for RedSalamander.
   - Validate guidance and inventories from the same entry point as pull request CI.
   - Verify the pinned RedMonitor SDK commands before checking or updating the vendored client.
-  - Keep the native PrePush obligation local.
-  - Reuse default MSVC toolset discovery and triplet rendering from the pinned engine.
+  - Keep the native PrePush obligation local and retire the old PR delegation code.
+  - Reuse default MSVC toolset discovery and atomically publish pinned vcpkg overlay files through the shared engine.
   - Align agent guidance and editor discovery and add the product capability record.

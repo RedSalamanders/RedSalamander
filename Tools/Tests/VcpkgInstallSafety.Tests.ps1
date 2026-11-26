@@ -338,9 +338,9 @@ Describe 'Vcpkg default MSVC toolset pin' {
             New-Item -ItemType Directory -Path (Split-Path -Parent $stock) -Force | Out-Null
             [System.IO.File]::WriteAllText($stock, "set(VCPKG_TARGET_ARCHITECTURE arm64)`r`n")
             $toolset = [pscustomobject]@{ Installation = 'C:\VS'; MajorMinor = '14.51' }
-            $output = Join-Path $root 'overlay\arm64'
+            $output = Join-Path $root '.build\overlay\arm64'
 
-            $first = Update-RSVcpkgOverlayTriplet -StockTripletPath $stock -Toolset $toolset -OutputDirectory $output
+            $first = Update-RSVcpkgOverlayTriplet -ProjectRoot $root -StockTripletPath $stock -Toolset $toolset -OutputDirectory $output
             $first.Changed | Should Be $true
             $first.Triplet | Should Be 'arm64-windows'
             $first.Directory | Should Be $output
@@ -349,18 +349,29 @@ Describe 'Vcpkg default MSVC toolset pin' {
             $written = [datetime]::new(2020, 1, 2, 3, 4, 5, [System.DateTimeKind]::Utc)
             [System.IO.File]::SetLastWriteTimeUtc($first.Path, $written)
 
-            $second = Update-RSVcpkgOverlayTriplet -StockTripletPath $stock -Toolset $toolset -OutputDirectory $output
+            $second = Update-RSVcpkgOverlayTriplet -ProjectRoot $root -StockTripletPath $stock -Toolset $toolset -OutputDirectory $output
             $second.Changed | Should Be $false
             (Get-Item -LiteralPath $second.Path).LastWriteTimeUtc | Should Be $written
 
             # A patch update of the default toolset keeps the major.minor pin, so it changes nothing; a minor update does.
-            (Update-RSVcpkgOverlayTriplet -StockTripletPath $stock -Toolset ([pscustomobject]@{ Installation = 'C:\VS'; MajorMinor = '14.51' }) -OutputDirectory $output).Changed | Should Be $false
-            $third = Update-RSVcpkgOverlayTriplet -StockTripletPath $stock -Toolset ([pscustomobject]@{ Installation = 'C:\VS'; MajorMinor = '14.52' }) -OutputDirectory $output
+            (Update-RSVcpkgOverlayTriplet -ProjectRoot $root -StockTripletPath $stock -Toolset ([pscustomobject]@{ Installation = 'C:\VS'; MajorMinor = '14.51' }) -OutputDirectory $output).Changed | Should Be $false
+            $third = Update-RSVcpkgOverlayTriplet -ProjectRoot $root -StockTripletPath $stock -Toolset ([pscustomobject]@{ Installation = 'C:\VS'; MajorMinor = '14.52' }) -OutputDirectory $output
             $third.Changed | Should Be $true
             [System.IO.File]::ReadAllText($third.Path) | Should Match 'set\(VCPKG_PLATFORM_TOOLSET_VERSION "14\.52"\)'
             # The stock triplet itself is never modified.
             [System.IO.File]::ReadAllText($stock) | Should Be "set(VCPKG_TARGET_ARCHITECTURE arm64)`r`n"
-            { Update-RSVcpkgOverlayTriplet -StockTripletPath (Join-Path $root 'absent.cmake') -Toolset $toolset -OutputDirectory $output } | Should Throw 'does not exist'
+            { Update-RSVcpkgOverlayTriplet -ProjectRoot $root -StockTripletPath (Join-Path $root 'absent.cmake') -Toolset $toolset -OutputDirectory $output } | Should Throw 'does not exist'
+
+            $companion = Join-Path (Split-Path -Parent $stock) 'companion.cmake'
+            [IO.File]::WriteAllText($companion, 'set(OWNED 1)')
+            [IO.File]::WriteAllText($stock, 'include("${CMAKE_CURRENT_LIST_DIR}/companion.cmake")')
+            $withCompanion = Update-RSVcpkgOverlayTriplet -ProjectRoot $root -StockTripletPath $stock -Toolset $toolset -OutputDirectory $output
+            $withCompanion.Companions | Should Be (Join-Path $output 'companion.cmake')
+            [IO.File]::ReadAllText($withCompanion.Companions[0]) | Should Be 'set(OWNED 1)'
+            [IO.File]::WriteAllText($companion, 'set(OWNED 2)')
+            $companionOnly = Update-RSVcpkgOverlayTriplet -ProjectRoot $root -StockTripletPath $stock -Toolset $toolset -OutputDirectory $output
+            $companionOnly.Changed | Should Be $true
+            [IO.File]::ReadAllText($withCompanion.Companions[0]) | Should Be 'set(OWNED 2)'
         } finally {
             Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
         }
@@ -447,7 +458,7 @@ Describe 'Vcpkg default MSVC toolset pin' {
                 New-Item -ItemType Directory -Path (Split-Path -Parent $stock) -Force | Out-Null
                 [System.IO.File]::WriteAllText($stock, $stockText)
                 $toolset = [pscustomobject]@{ Installation = 'C:\VS "x" $y'; MajorMinor = '14.51' }
-                $a = Update-RSVcpkgOverlayTriplet -StockTripletPath $stock -Toolset $toolset -OutputDirectory (Join-Path $root "ours$index")
+                $a = Update-RSVcpkgOverlayTriplet -ProjectRoot $root -StockTripletPath $stock -Toolset $toolset -OutputDirectory (Join-Path $root ".build\ours$index")
                 $b = Update-DxUiVcpkgOverlayTriplet -StockTripletPath $stock -Toolset $toolset -OutputDirectory (Join-Path $root "theirs$index")
                 (& $withoutComment $a.Path) | Should Be (& $withoutComment $b.Path)
             }

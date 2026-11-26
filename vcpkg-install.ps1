@@ -397,6 +397,7 @@ foreach ($triplet in $tripletsToInstall) {
     # Resolve the same compiler-pinned overlay for both the reuse check and vcpkg.
     $tripletOverlayDirectory = Resolve-RSVcpkgSafeChildPath -Root $tripletOverlayRoot -Child $platformScopeName -Description "triplet overlay directory"
     $tripletOverlay = Update-RSVcpkgOverlayTriplet `
+        -ProjectRoot $repoRoot `
         -StockTripletPath (Resolve-RSVcpkgStockTripletPath -RegistryRoot $vcpkgRegistryRoot -Triplet $triplet) `
         -Toolset $msvcToolset `
         -OutputDirectory $tripletOverlayDirectory
@@ -415,6 +416,7 @@ foreach ($triplet in $tripletsToInstall) {
         (Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1')
         (Join-Path $repoRoot '.ci/project.json')
         $tripletOverlay.Path
+        $tripletOverlay.Companions
         $vcpkgExePath
     )
     if ($triplet -like 'arm64-*') {

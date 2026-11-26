@@ -77,5 +77,4 @@ Export-ModuleMember -Function @(
     'Convert-RSTestRunSummaryToGitHubStepSummary',
     'Get-RSCommandsSelfTestFamilies',
     'Get-RSTestRunPlan'
-    'Get-RSPrDeferredTestPlan'
 )

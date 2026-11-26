@@ -542,25 +542,21 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate native test naming and verify reviewed candidate PR coverage against workflow/action/tooling execution closure and scheduled unchanged-source decisions. Private engine-independent no-window Git and optional workflow-metadata transports retain raw output, separate diagnostics and exact exit.",
+      "purpose": "Validate contextual native test naming and inventory membership. The Git query preserves repository-relative paths.",
       "usage": "Import from Test-Changes and its focused policy tests; canonical Startrail owns execution and evidence.",
       "usedBy": [
         "Test-Changes.ps1",
-        "Tools/Tests/ScopedTesting.Tests.ps1",
-        ".github/workflows/asan.yml",
-        ".github/workflows/nightly-ci.yml"
+        "Tools/Tests/ScopedTesting.Tests.ps1"
       ],
       "prerequisites": [
         "PowerShell 7",
         "Git"
       ],
       "sideEffects": [
-        "Read-only Git/GitHub scope discovery; canonical Startrail owns all execution receipts and source/artifact identities."
+        "Read-only Git and file inventory."
       ],
       "outputs": [
-        "Native naming findings",
-        "PR execution closure digest",
-        "PR delegation scopes"
+        "Native test count or naming and inventory diagnostics"
       ],
       "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
       "tests": [
