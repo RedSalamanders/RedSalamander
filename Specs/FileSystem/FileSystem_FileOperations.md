@@ -3999,7 +3999,8 @@ The File Operations selftest and provider-contract matrix cover:
   (`R0fSmb_LoopbackRecycleNeverDestroys`; the per-item verdict is also a FileSystem debug self-test).
   The exact `FileOps_SmbRecycleRefusal` witness uses a fresh file on the registered SMB endpoint and
   checks the Local provider's guarded Recycle admission, the exact-item refusal question, and byte
-  retention after Skip. The measured refusal applies to the tested endpoint;
+  retention after Skip. The Samba and Windows SMB evidence covers by-name and exact-identity consent respectively.
+  [Live x64 Release evidence](../TestRuns/4cb089111a23/FileOps/2026-11-26_182743_smb_recycle_refusal/README.md)
 - a Recycle the provider reports as destroyed (`COPYENGINE_E_RECYCLE_FORCE_NUKE`, committed removal)
   fails with `delete.recycle.destroyed` in both the per-item and BulkItems executors, without a
   permanent-delete prompt (`Phase10_RecycleDestroyedIsNeverRecycled`);

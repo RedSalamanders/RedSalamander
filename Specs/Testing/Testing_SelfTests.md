@@ -1226,8 +1226,8 @@ the same synchronous reporter and counter path as the pointer overload.
   reports a known non-commit on the share, offers one item-specific permanent-delete decision on the independently
   probed exact or by-name route and retains the same bytes
   after Skip. Cleanup verifies the file contents and removes only that file and its empty parent. A missing or
-  unreachable registration is an environment skip;
-  the provider capability matrix uses private providers, owned data and direct task controls;
+  unreachable registration is an environment skip.
+  The provider capability matrix uses private providers, owned data and direct task controls.
   its managed cleanup witness checks Retry for sharing, access and disk-full failures and verifies that a path-length failure offers Skip and Cancel;
   the exact cadence case uses a private nonactivating popup and preserves its existing
   foreground-preservation observations without acquiring foreground. It submits two independent Local Copies,
