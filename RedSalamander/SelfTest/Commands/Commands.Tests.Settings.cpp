@@ -11606,7 +11606,7 @@ constexpr auto kCommandSurfaceCoverage = std::to_array<CommandSurfaceCoverageEnt
     const auto originalPane = g_folderWindow.GetActivePane();
     const auto originalPath = g_folderWindow.GetCurrentPath(pane);
     const std::wstring originalPlugin(g_folderWindow.GetFileSystemPluginId(pane));
-    const auto restorePane = wil::scope_exit([&]() noexcept
+    const auto restorePane               = wil::scope_exit([&]() noexcept
     {
         g_folderWindow.DismissPaneAlertOverlay(pane);
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(pane, originalPlugin));
@@ -11625,7 +11625,7 @@ constexpr auto kCommandSurfaceCoverage = std::to_array<CommandSurfaceCoverageEnt
         bool expectedAvailability = true;
         for (const UINT command : kScheduledRenameCommands)
         {
-            const UINT flags = GetMenuState(filesMenu, command, MF_BYCOMMAND);
+            const UINT flags     = GetMenuState(filesMenu, command, MF_BYCOMMAND);
             expectedAvailability = expectedAvailability && flags != std::numeric_limits<UINT>::max() && ((flags & MF_GRAYED) == 0u) == enabled;
         }
         Debug::Perf::Emit(L"fileops.rename.files_menu_availability_us", plugin, Debug::Perf::ElapsedUs(started), 2u, 0u, expectedAvailability ? S_OK : E_FAIL);
@@ -19445,8 +19445,9 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"registry_integrity", [](CaseState& state) noexcept { return TestRegistryIntegrity(state); });
     SelfTest::RunCase(
         options, suite, L"command_surface_coverage_contract", [=](CaseState& state) noexcept { return TestCommandSurfaceCoverageContract(mainWindow, state); });
-    SelfTest::RunCase(
-        options, suite, L"main_menu_information_architecture", [mainWindow](CaseState& state) noexcept { return TestMainMenuInformationArchitecture(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"main_menu_information_architecture", [mainWindow](CaseState& state) noexcept {
+        return TestMainMenuInformationArchitecture(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"shortcut_defaults_mapping", [](CaseState& state) noexcept { return TestShortcutDefaultsMapping(state); });
     SelfTest::RunCase(options, suite, L"terminal_shortcut_defaults_and_physical_positions", [](CaseState& state) noexcept {
         return TestTerminalShortcutDefaultsAndPhysicalPositions(state);
