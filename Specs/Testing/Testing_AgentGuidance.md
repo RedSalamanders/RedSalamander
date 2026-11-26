@@ -38,7 +38,7 @@ process and desktop ownership. Historical repository paths are not the default c
 ## Validation and claims
 
 Run `./validate-skills.ps1` for guidance and `./validate-specs.ps1` for specification governance. Use `./validate.ps1` to run both and check the tool inventory without compiling or writing reports.
-The compiler-free pull request phase calls the same entry point after its changelog and surface audits. Guidance uses the
+The compiler-free pull request phase calls the same three checks through the engine's reviewed static command list after its changelog and surface audits. Guidance uses the
 engine pinned in `.ci/project.json`. The product preserves the human-managed note exclusion in [the specification index](../README.md).
 
 Metadata, package/reference checks, static signatures and task-level behavior are separate verdicts.

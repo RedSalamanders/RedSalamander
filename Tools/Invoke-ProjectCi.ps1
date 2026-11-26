@@ -107,7 +107,9 @@ if ($Phase -eq 'Static') {
     $baseCommit = Resolve-CiCommit $root $Base
     Run 'Tools/Test-Changelog.ps1' @('-Base',$baseCommit)
     foreach ($script in @('Tools/Verify-NoSubclassManager.ps1','Tools/Audit-ComctlReportSurfaces.ps1','Tools/Audit-VisibleNativeSurfaces.ps1')) { Run $script }
-    Run 'validate.ps1'
+    Run 'validate-skills.ps1'
+    Run 'Tools/Get-ToolInventory.ps1' @('-FailOnFindings','-Format','Json')
+    Run 'validate-specs.ps1'
     return
 }
 if ($Phase -ne 'Qualification') { $Configuration = 'Release' }
