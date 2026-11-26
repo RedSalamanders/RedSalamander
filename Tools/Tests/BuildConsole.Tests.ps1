@@ -13,7 +13,7 @@ Describe 'Build console fixture run lifetime' {
         # Exercise the real lifecycle around a sentinel/failing body; the original
         # end-to-end test above still executes every console/path assertion.
         $text=[IO.File]::ReadAllText($script:buildConsoleHelper)
-        $bodyStart=$text.IndexOf('Import-Module (Join-Path $Root ''Build/BuildConsole.psm1'')',[StringComparison]::Ordinal)
+        $bodyStart=$text.IndexOf('Import-Module (Join-Path $PSScriptRoot ''../../Build/BuildConsole.psm1'')',[StringComparison]::Ordinal)
         $bodyEnd=$text.IndexOf('} catch {$failure=$_} finally {',[StringComparison]::Ordinal)
         if($bodyStart -lt 0 -or $bodyEnd -le $bodyStart){throw 'BuildConsole lifecycle boundaries changed; review this test.'}
         $script:buildConsoleBoundary=[scriptblock]::Create($text.Substring(0,$bodyStart)+'& $script:buildConsoleLifecycleBody'+[Environment]::NewLine+$text.Substring($bodyEnd))
@@ -26,11 +26,10 @@ Describe 'Build console fixture run lifetime' {
         [void][IO.Directory]::CreateDirectory((Join-Path $fixture 'Tools'))
         [void][IO.Directory]::CreateDirectory((Join-Path $fixture 'Build'))
         Copy-Item -LiteralPath (Join-Path $script:buildConsoleRepo 'Tools/Modules') -Destination (Join-Path $fixture 'Tools/Modules') -Recurse
-        Copy-Item -LiteralPath (Join-Path $script:buildConsoleRepo 'Build/BuildConsole.psm1') -Destination (Join-Path $fixture 'Build/BuildConsole.psm1')
         Copy-Item -LiteralPath (Join-Path $script:buildConsoleRepo 'Tools/Modules/Build/DxUiPaths.psm1') -Destination (Join-Path $fixture 'Build/DxUiPaths.psm1')
         (Test-Path -LiteralPath (Join-Path $fixture 'Tools/Modules/Testing/TestRunPlan.Common.psm1')) | Should Be $true
-        # The fixture imports its copied module closure. Keep those copies out of
-        # the owning Pester session, where later InModuleScope calls resolve by name.
+        # The helper uses the repository's pinned console and the fixture's copied
+        # sandbox and DxUi modules. Isolate those copies from later InModuleScope calls.
         $fixturePowerShell=(Get-Process -Id $PID -ErrorAction Stop).Path
         [string]::IsNullOrWhiteSpace($fixturePowerShell) | Should Be $false
         $arguments=@('-NoLogo','-NoProfile','-NonInteractive','-File',$script:buildConsoleHelper,'-Root',$fixture)
@@ -48,7 +47,6 @@ Describe 'Build console fixture run lifetime' {
     It 'preserves explicit scratch compatibility without borrowing an invalid run id' {
         $fixture=Join-Path $TestDrive 'explicit-fixture'
         [void][IO.Directory]::CreateDirectory((Join-Path $fixture 'Build'))
-        Copy-Item -LiteralPath (Join-Path $script:buildConsoleRepo 'Build/BuildConsole.psm1') -Destination (Join-Path $fixture 'Build/BuildConsole.psm1')
         Copy-Item -LiteralPath (Join-Path $script:buildConsoleRepo 'Tools/Modules/Build/DxUiPaths.psm1') -Destination (Join-Path $fixture 'Build/DxUiPaths.psm1')
         $previous=$env:REDSALAMANDER_TEST_RUN_ID
         try {

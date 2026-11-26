@@ -1,12 +1,10 @@
 <#
 .SYNOPSIS
-Runs the governed affected plan or the local portion of a full PR gate.
+Runs the governed affected plan or full local validation.
 .DESCRIPTION
 Reuses Run-AllTests impact, receipts and explicit exact Resume. Default iteration is
-Affected. PrePush defers only entries whose complete portable contracts match Suite PR
-in the enabled GitHub workflow with reviewed candidate bytes and its complete repository-owned
-workflow/action/tooling execution digest. Missing or changed dependencies keep work local.
-Nightly/weekly coverage is never delegated.
+Affected. PrePush keeps all native obligations local because the PR gate runs
+compiler-free checks.
 .PARAMETER Mode
 Affected (default), Full, or PrePush.
 .PARAMETER BaseRef
@@ -40,7 +38,7 @@ Optional governed Commands family; valid with Suite Commands.
 .OUTPUTS
 Canonical evidence under the marked sandbox. Exit 2 is successful selected work with
 incomplete repository coverage; failures and invalid/blocked/corrupt evidence retain
-the canonical runner's other exit categories. PrePush never reports a full pass.
+the canonical runner's other exit categories.
 .NOTES
 Requires PowerShell 7, Git, the native toolchain and a marked sandbox. Builds and tests
 through the canonical runner; no second evidence cache or desktop lease is introduced.
@@ -90,10 +88,7 @@ if ($Suite) {$arguments.Suite=$Suite;$arguments.ValidationMode='Fresh';$argument
 elseif ($CaseFilter -or $CommandsFamily) {throw 'CaseFilter and CommandsFamily require a focused Suite.'}
 if ($ResumeFrom) {$arguments.ValidationMode='Resume';$arguments.ResumeFrom=$ResumeFrom}
 if ($Mode -eq 'PrePush') {
-    $manifest=Read-ScopedTestManifest $PSScriptRoot
-    $covered=@(Get-ScopedPrCoverage $PSScriptRoot $manifest $Platform $Configuration)
-    if ('PR' -in $covered) {$arguments.DeferPrGate=$true;Write-Host 'PR-equivalent entries are delegated to GitHub. CI success remains pending.'}
-    else {Write-Host 'PR equivalence could not be verified; full local obligations remain selected.'}
+    Write-Host 'PrePush selects the full local obligation. GitHub PR checks are compiler-free.'
 }
 if ($Explain) {$arguments.ExplainPlan=$true}
 & (Join-Path $PSScriptRoot 'Tools/Run-AllTests.ps1') @arguments

@@ -184,9 +184,7 @@
     Run ID or run-directory path beneath X:\RedSalamander.Perf\evidence\runs used by Resume.
 
 .PARAMETER DeferPrGate
-    With unfiltered Fresh Full, defers entries with contracts identical to Suite PR to
-    the forthcoming verified PR workflow. Coverage remains filtered, NOT_EVALUATED.
-    A remainder containing only later interactive entries executes normally with no cheap entries.
+    Retired. Use the local Test-Changes.ps1 -Mode PrePush entry point.
 
 .PARAMETER NonInteractive
     Omits entries that require the person's desktop; omitted acceptance remains pending.
@@ -294,8 +292,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-if ($DeferPrGate -and ($Suite -ne 'Full' -or $ValidationMode -ne 'Fresh' -or $CaseFilter -or $CommandsFamily)) {
-    throw 'DeferPrGate requires unfiltered Fresh Full; it never contributes reusable Full evidence.'
+if ($DeferPrGate) {
+    throw 'DeferPrGate is retired. Use Test-Changes.ps1 -Mode PrePush for the full local obligation.'
 }
 if ($NonInteractive -and $ValidationMode -eq 'Resume') { throw 'NonInteractive cannot alter the coverage of an exact Full Resume.' }
 
@@ -1444,17 +1442,12 @@ if ($ExplainPlan) {
             -ShuffleSeed $SelfTestShuffleSeed -PerfBudgetPath $PerfBudgetPath `
             -RequirePerfBudgets:$RequirePerfBudgets -SelfTestFlakyProofCase $SelfTestFlakyProofCase `
             -SelfTestOrderProofCase $SelfTestOrderProofCase)
-    if ($DeferPrGate) {
-        $explainPr = @(Get-RSTestRunPlan -Suite PR -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration `
-            -RedSalamanderExePath $expectedExeFullPath -TimeoutMultiplier $TimeoutMultiplier -FailFast:$FailFast)
-        $explainEntries = @(Get-RSPrDeferredTestPlan -FullPlan $explainEntries -PrPlan $explainPr -RepoRoot $repoRoot)
-    }
-    if ($NonInteractive) {
+        if ($NonInteractive) {
         $explainPending = @($explainEntries | Where-Object RequiresInteractiveDesktop)
         $explainEntries = @($explainEntries | Where-Object { -not $_.RequiresInteractiveDesktop })
         Write-Host "PENDING_INTERACTIVE ($($explainPending.Count)): $(@($explainPending | ForEach-Object Name) -join ', ')"
     }
-    $coverageScope = if ($DeferPrGate -or $NonInteractive -or -not [string]::IsNullOrWhiteSpace($CaseFilter)) {
+    $coverageScope = if ($NonInteractive -or -not [string]::IsNullOrWhiteSpace($CaseFilter)) {
         'filtered'
     } elseif (-not [string]::IsNullOrWhiteSpace($CommandsFamily) -or $Suite -in @('Compare', 'Commands', 'FileOps')) {
         'family'
@@ -1804,13 +1797,6 @@ if ($useAffectedSelectedBuild) {
     }
     $testPlan = @($testPlan | Where-Object { $_.Id -in $affectedBuild.EntryIds })
 }
-if ($DeferPrGate) {
-    $prPlan = @(Get-RSTestRunPlan -Suite PR -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration `
-        -RedSalamanderExePath $exeFullPath -TimeoutMultiplier $TimeoutMultiplier -FailFast:$FailFast)
-    $before = $testPlan.Count
-    $testPlan = @(Get-RSPrDeferredTestPlan -FullPlan $testPlan -PrPlan $prPlan -RepoRoot $repoRoot)
-    Write-Host "DEFERRED_CI: $($before - $testPlan.Count) exact PR entry contracts; GitHub success remains pending."
-}
 if ($NonInteractive) {
     $interactivePending = @($testPlan | Where-Object RequiresInteractiveDesktop)
     $testPlan = @($testPlan | Where-Object { -not $_.RequiresInteractiveDesktop })
@@ -1841,7 +1827,7 @@ if ($Suite -in @('PR', 'CI', 'Full') -and
     Write-Host 'BLOCKED ATTESTATION: the verified receipt does not contain the complete selected executable/plugin test plan closure.' -ForegroundColor Red
     exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
 }
-$validationCoverageScope = if ($useAffectedSelectedBuild -or $DeferPrGate -or $NonInteractive -or -not [string]::IsNullOrWhiteSpace($CaseFilter)) {
+$validationCoverageScope = if ($useAffectedSelectedBuild -or $NonInteractive -or -not [string]::IsNullOrWhiteSpace($CaseFilter)) {
     'filtered'
 } elseif (-not [string]::IsNullOrWhiteSpace($CommandsFamily) -or $Suite -in @('Compare', 'Commands', 'FileOps')) {
     'family'

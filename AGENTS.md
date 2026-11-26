@@ -1,10 +1,10 @@
-# RedSalamander C++ Development Guidelines
+# RedSalamander development guidance
 
 ## Project Overview
 
 **RedSalamander** is a Windows-native file manager and monitoring application built in MSVC `stdcpplatest` mode. It features dual-pane file management, plugin-based virtual file systems, advanced text visualization with Direct2D/DirectWrite rendering, and real-time debugging via ETW (Event Tracing for Windows).
 
-## Project Requirements
+## Requirements
 
 - **Platform**: Windows 11 build 22000.2600 minimum
 - **Language Standard**: `stdcpplatest` (latest MSVC mode)
@@ -28,19 +28,20 @@ preserves useful evidence/recovery data, checks process use, repairs live juncti
 verifies preservation before removal. Never follow junctions during cleanup or leave compatibility junctions
 at forbidden old drive-root paths.
 
-## Canonical Agent Guidance
+## Canonical guidance
 
 - `AGENTS.md` (this file) is the canonical agent guidance for this repository. `CLAUDE.md` and `.github/copilot-instructions.md` are thin pointers to it; do not let them accumulate divergent content.
 - Project skills live in `.agents/skills/` (one directory per skill; table below), the skill folder of every RedSalamanders repository. Cross-repository C++, WIL, `yyjson`, localization, audit (`improve`), and `spec-workflow` skills live in the sibling `RedHome` repository.
-- Shared skill index: `../RedHome/AGENTS.md`; packages: `../RedHome/.agents/skills/`. If `../RedHome` is missing, clone https://github.com/RedSalamanders/RedHome.git to that path. This repository's guidance and domain specs own product behavior and validation.
 - Every project skill, including the crash-forensics meta-skill (`red-salamander-crash-forensics`), lives only in `.agents/skills/` with `name` and `description` front matter; do not create copies under `.claude/`, `.github/skills/` or other tool-specific directories.
 - Agent/skill authority, package/example integrity, compatibility routes and truthful evaluation are governed by [Testing_AgentGuidance.md](Specs/Testing/Testing_AgentGuidance.md). Keep mutable machine facts and delivery history with their owners rather than copying them into instructions.
 
-## Skills Reference
+## Skills
+
+Shared skill index: `../RedHome/AGENTS.md`; packages: `../RedHome/.agents/skills/`. If `../RedHome` is missing, clone https://github.com/RedSalamanders/RedHome.git to that path. This repository's guidance and domain specs own product behavior and validation.
 
 Use RedHome's shared `native-build` package for build, restore and packaging. Use `test-evidence` for testing and performance validation.
 
-The table lists RedSalamander's local skills.
+### Skills Reference
 
 | Skill | Description |
 |-------|-------------|
@@ -139,7 +140,7 @@ paths with thin compatibility shims when they may have external consumers.
 - **COM ownership:** never store owning raw COM interface pointers (no manual `Release()`); use `wil::com_ptr<T>` for members and locals.
 - **COM ref-counting:** never do `obj->AddRef(); ptr.attach(obj);` (two-step hazard); prefer `ptr = obj;` / `wil::com_ptr<T> ptr = obj;`.
 - **`wil::unique_hwnd` ownership:** never call `DestroyWindow(_hWnd.get())` on a `wil::unique_hwnd` owner; use `_hWnd.reset()` (or `.release()` only when transferring ownership explicitly).
-- **Cross-thread `PostMessageW` payloads:** post with `PostMessagePayload(...)` and receive with `TakeMessagePayload<T>(hwnd, message, lParam)`; never post `payload.release()` or a raw `new`. A nonzero `lParam` is an opaque token, never a pointer, and a null take is stale input to ignore. Receiving windows call `InitPostedPayloadWindow(hwnd)` on create and `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`. The [async-threading skill](.agents/skills/async-threading/SKILL.md#hwnd-teardown-and-posted-payloads) owns the token, argument-capture, and drain rules and the review checklist for every UI-host cross-thread change.
+- **Cross-thread `PostMessageW` payloads:** post with `PostMessagePayload(...)` and receive with `TakeMessagePayload<T>(hwnd, message, lParam)`; never post `payload.release()` or a raw `new`. A nonzero `lParam` is an opaque token, never a pointer, and a null take is stale input to ignore. Receiving windows call `InitPostedPayloadWindow(hwnd)` on create and `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`. The async-threading skill owns the token, argument-capture, and drain rules and the review checklist for every UI-host cross-thread change.
 - **IconCache COM contract:** `IconCache::Initialize(...)` stays UI-thread/STA responsibility; any worker thread calling `IconCache::ExtractSystemIcon()` must initialize COM as MTA (`wil::CoInitializeEx(COINIT_MULTITHREADED)`).
 - **MTP/WPD worker contract:** portable-device workers must initialize COM as MTA before using WPD, serialize each device session, honor watchdog/cancel/quarantine teardown, and keep `GetCapabilities()` honest for read-only, writable, invalid-profile, and disconnected states.
 - **File-action IDs:** treat viewer/editor/user-menu action IDs as stable but case-insensitive identifiers. Uniqueness and lookup are case-insensitive, IDs that differ only by case are invalid duplicates, and parameterized command dispatch or association resolution must never require exact casing.
@@ -147,7 +148,7 @@ paths with thin compatibility shims when they may have external consumers.
 - **Thread-safety:** never read/write shared non-atomic state without a lock (or use `std::atomic` with correct memory ordering).
 - **Exceptions / `catch (...)`:** `catch (...)` is **FORBIDDEN**. If exception handling is mandatory at an ABI boundary (`noexcept` methods, Win32 callbacks, thread entrypoints), catch only explicitly named exception types and add a short comment explaining why catching is required there and what the fallback is. Prefer non-throwing APIs (e.g. `std::filesystem` overloads with `std::error_code`). If you catch-and-fail, log once with `Debug::Error(...)`; if you catch-and-continue, document the fallback (avoid empty catch without an explanation). Treat `std::bad_alloc` as fatal (`std::terminate()`), and never let it be swallowed by a broader `catch (const std::exception&)`.
 - **Detached threads:** avoid `std::thread(...).detach()` in plugin DLLs; prefer `TrySubmitThreadpoolCallback` or `std::jthread` + `stop_token`. If detach is unavoidable, pin module lifetime with `AcquireModuleReferenceFromAddress(...)` and make thread start exception-safe (especially in `noexcept` code).
-- **Threadpool module pins:** a plugin threadpool callback that owns an `AcquireModuleReferenceFromAddress(...)` handle MUST transfer it at callback entry with `FreeLibraryWhenCallbackReturns(instance, pin.release())`. Destroying the last `wil::unique_hmodule` inside the callback can unmap the callback's own code before it returns.
+- **Threadpool module pins:** a plugin threadpool callback that owns an `AcquireModuleReferenceFromAddress(...)` handle MUST transfer it at callback entry with `TransferModulePinToCallbackReturn(instance, pin)`. Destroying the last `wil::unique_hmodule` inside the callback can unmap the callback's own code before it returns.
 - **Plugin unload quiet point:** stop producers → request shutdown/cancel → stop posting payload messages → `SetCallback(nullptr, nullptr)` → release instances → unload module only when no callbacks can still run.
 
 ### Modern C++
@@ -226,7 +227,17 @@ When working with this codebase:
 
 ## Scoped testing policy (2026-10-05)
 
-The user's accepted workflow replaces unconditional full-test iteration. Use `Test-Changes.ps1 -Explain` and the affected default while editing; use `-Mode PrePush` to account for full local/PR coverage without duplicate identical obligations. A forthcoming enabled CI gate is pending acceptance, never an already passed result. Explicit Full remains available. Active native test files use `Scope.Tests.Something.h/.cpp` and the native file inventory. Follow [Specs/Testing/Testing_ValidationEvidence.md](Specs/Testing/Testing_ValidationEvidence.md) and [the test guide](Tests/README.md). Focus-taking work requires agreement to the time; no scoped pass closes that gate. Build/runtime/platform qualification still applies to changed behavior, with exact prior evidence reusable only under the owning contract.
+Use `Test-Changes.ps1 -Explain` and the affected default while editing. Use `-Mode PrePush` for the full local
+obligation and explicit Full to request canonical Full acceptance. Pull request checks are compiler-free. Active native
+test files use `Scope.Tests.Something.h/.cpp` and the native file inventory. Reuse exact prior evidence only under
+[the validation contract](Specs/Testing/Testing_ValidationEvidence.md) and follow [the test guide](Tests/README.md).
+
+## Interactive desktop tests
+
+Tests that take foreground focus, the cursor or the clipboard require agreement from the person at the desktop for
+that time and the canonical interactive lease. Follow the documented desktop boundaries and restore focus only when
+the fixture still owns it. Keep the hosted and manual acceptance scenarios explicit in
+[the self-test contract](Specs/Testing/Testing_SelfTests.md).
 
 ## Changes workflow
 
@@ -238,6 +249,8 @@ folded on `main` after merge by `Tools/Submit-ChangelogFold.ps1`, which opens a 
 that is not an exact fold of fragments already on `main`. Validation is read-only.
 
 ## Shared native build policy (2026-10-28)
+
+The [shared native build profiles](https://github.com/RedSalamanders/.github/blob/e513a50b3aea60d86f41054188537fb7b418bac6/Specs/NativeBuildProfiles.md) define the common six-profile baseline and product exceptions.
 
 Use /Wall with /WX disabled in every first-party profile. A build is accepted
 only with zero warnings and zero errors; fix actionable diagnostics rather than

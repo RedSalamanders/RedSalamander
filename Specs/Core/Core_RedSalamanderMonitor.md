@@ -11,10 +11,11 @@ moved to RedMonitor.
 - The viewer, model, listener, rendering, resources and native viewer tests are owned by
   [RedSalamanders/RedMonitor](https://github.com/RedSalamanders/RedMonitor).
   RedSalamander vendors only ThirdParty/RedMonitor/include/RedMonitor/Client.h and its MIT notice.
-  Dependencies/RedMonitor.lock.json records the exact upstream commit, API and SHA-256 values.
-  Tools/Verify-RedMonitorClient.ps1 performs local-only verification; explicit
-  Tools/Update-RedMonitorClient.ps1 -Commit FULL_SHA updates the two files and lock together.
-  The former Restore-RedMonitor command is a read-only compatibility verifier.
+  `Dependencies/RedMonitor.lock.json` records the exact client commit, API, and SHA-256 values. Its separate tooling
+  pin binds the commands in `Dependencies/RedMonitorClientTools` to the SDK publisher's manifest.
+  `Verify-RedMonitorClient.ps1` checks the tool and client hashes locally. The explicit
+  `Update-RedMonitorClient.ps1 -Commit FULL_SHA` updates the two client files and their runtime pin.
+  Existing commands under `Tools/` remain available, including the read-only `Tools/Restore-RedMonitor.ps1` verifier.
 - There are no viewer/test/satellite projects in this solution. Builds, tests and portable ZIPs never
   clone, compile, stage or require a viewer. The ZIP carries only the client MIT notice; stale old
   viewer executables/satellites must not enter the package. The independent RedMonitor Release ZIP owns
