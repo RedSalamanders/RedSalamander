@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Document ownership of prototype and tool guidance, and align the root callback exception rule with the existing typed handling and fatal allocation policy.
 - Organize the RedSalamander specification catalog under the common authority, workflow, domain, and validation headings. Keep the plan-history and pinned-path rules in the catalog.
 - Share the vcpkg manifest arguments with the pinned CI engine while keeping the existing storage, ARM64 port overlay, custom triplets and explicit registry option.
   Focused parity and installer safety fixtures pass. The native qualification operator owns clean restore.
