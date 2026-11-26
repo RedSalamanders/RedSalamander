@@ -3996,7 +3996,10 @@ The File Operations selftest and provider-contract matrix cover:
 - Recycle on a location without a Recycle Bin (the loopback administrative-share alias of the
   sandbox): a file, a folder, and a sibling batch are each kept as a known non-commit, and the host
   asks for exact-item permanent-delete consent instead of reporting a Recycle
-  (`R0fSmb_LoopbackRecycleNeverDestroys`; the per-item verdict is also a FileSystem debug self-test);
+  (`R0fSmb_LoopbackRecycleNeverDestroys`; the per-item verdict is also a FileSystem debug self-test).
+  The exact `FileOps_SmbRecycleRefusal` witness uses a fresh file on the registered SMB endpoint and
+  checks the Local provider's guarded Recycle admission, the exact-item refusal question, and byte
+  retention after Skip. The measured refusal applies to the tested endpoint;
 - a Recycle the provider reports as destroyed (`COPYENGINE_E_RECYCLE_FORCE_NUKE`, committed removal)
   fails with `delete.recycle.destroyed` in both the per-item and BulkItems executors, without a
   permanent-delete prompt (`Phase10_RecycleDestroyedIsNeverRecycled`);

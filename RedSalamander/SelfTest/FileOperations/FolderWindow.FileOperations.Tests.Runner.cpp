@@ -1031,6 +1031,7 @@ struct SelfTestState
         FileOps_SelectionShapeSmb,
         FileOps_SmbExactRenameProvider,
         FileOps_SmbCorroboratedRenameProvider,
+        FileOps_SmbRecycleRefusal,
         Cleanup_RestorePluginConfig,
         Done,
         Failed,
@@ -1683,6 +1684,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::FileOps_SelectionShapeSmb: return L"FileOps_SelectionShapeSmb";
         case SelfTestState::Step::FileOps_SmbExactRenameProvider: return L"FileOps_SmbExactRenameProvider";
         case SelfTestState::Step::FileOps_SmbCorroboratedRenameProvider: return L"FileOps_SmbCorroboratedRenameProvider";
+        case SelfTestState::Step::FileOps_SmbRecycleRefusal: return L"FileOps_SmbRecycleRefusal";
         case SelfTestState::Step::Cleanup_RestorePluginConfig: return L"Cleanup_RestorePluginConfig";
         case SelfTestState::Step::Done: return L"Done";
         case SelfTestState::Step::Failed: return L"Failed";
@@ -1875,6 +1877,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::FileOps_SelectionShapeSmb,
     SelfTestState::Step::FileOps_SmbExactRenameProvider,
     SelfTestState::Step::FileOps_SmbCorroboratedRenameProvider,
+    SelfTestState::Step::FileOps_SmbRecycleRefusal,
     SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns, // R0f-SMB - a wedged synchronous provider call returns on cancel
     SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete,       // R0f-SMB - read/write/create/rename/delete on a loopback share
     SelfTestState::Step::R0fSmb_LoopbackRecycleNeverDestroys,        // R0f-SMB - Recycle on a share keeps every item and asks before permanent delete
@@ -2249,6 +2252,7 @@ constexpr std::array<SelfTestState::Step, 5> kFileOpsFamilyR1dPreparing{{
 constexpr std::array kFileOpsFamilyR0fSmbContainment{
     SelfTestState::Step::FileOps_SmbExactRenameProvider,
     SelfTestState::Step::FileOps_SmbCorroboratedRenameProvider,
+    SelfTestState::Step::FileOps_SmbRecycleRefusal,
     SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns,
     SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete,
     SelfTestState::Step::R0fSmb_LoopbackRecycleNeverDestroys,
@@ -14101,6 +14105,140 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
     return smbRootText;
 }
 
+[[nodiscard]] bool RunFileOpsSmbRecycleRefusalChecks(SelfTestState& state, std::wstring& unavailableReason) noexcept
+{
+    using Task        = FolderWindow::FileOperationState::Task;
+    const auto reject = [](std::wstring_view reason) noexcept
+    {
+        AppendLog(std::format(L"SMB Recycle: {}", reason));
+        return false;
+    };
+    const auto registeredRoot = ResolveSmbSelfTestRootForSelfTest(unavailableReason);
+    if (! registeredRoot.has_value())
+        return true;
+
+    const std::filesystem::path root(registeredRoot.value());
+    const auto isOrdinaryDirectory = [](const std::filesystem::path& path) noexcept
+    {
+        const DWORD attributes = GetFileAttributesW(path.c_str());
+        return attributes != INVALID_FILE_ATTRIBUTES && (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == FILE_ATTRIBUTE_DIRECTORY;
+    };
+    if (! isOrdinaryDirectory(root))
+        return reject(L"registered root must be an ordinary directory");
+
+    auto* const operations = TryGetFileOps(TryGetFolderWindow(state.mainWindow));
+    wil::com_ptr<IFileSystemIO> io;
+    if (! operations || operations->HasActiveOperations() || ! state.fsLocal || ! state.fsLocal.try_query_to(io.put()))
+        return reject(L"Local provider or quiet task owner is unavailable");
+
+    RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
+    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
+        return reject(L"no-activation guard is unavailable");
+
+    const auto fixture = root / std::format(L"recycle-refusal-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    if (! CreateDirectoryW(fixture.c_str(), nullptr))
+        return reject(std::format(L"could not create an exclusive fixture child (error {})", GetLastError()));
+    AppendLog(std::format(L"SMB Recycle fixture: {}", fixture.filename().native()));
+    const auto source                       = fixture / L"retain.txt";
+    constexpr std::string_view kSourceBytes = "I66 live SMB Recycle refusal witness";
+    uint64_t taskId                         = 0u;
+    bool fixtureRemoved                     = false;
+    const auto release                      = wil::scope_exit([&]() noexcept
+    {
+        if (taskId != 0u && CancelOutstandingSelfTestOperations(operations))
+        {
+            operations->DismissCompletedTask(taskId);
+            operations->DebugRemoveDiagnosticsForTask(taskId);
+            state.completedTasks.erase(taskId);
+        }
+        if (! fixtureRemoved)
+            AppendLog(std::format(L"SMB Recycle retained fixture {}", fixture.filename().native()));
+    });
+    if (! SelfTest::WriteTextFile(source, kSourceBytes))
+        return reject(L"could not write the owned file");
+
+    const auto sourceRetained = [&]() noexcept
+    {
+        const DWORD attributes = GetFileAttributesW(source.c_str());
+        std::string bytes;
+        return attributes != INVALID_FILE_ATTRIBUTES && (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == 0u &&
+               ReadFileTextFsIo(io, source, bytes) && bytes == kSourceBytes;
+    };
+
+    const auto started      = std::chrono::steady_clock::now();
+    const HRESULT admission = operations->AdmitOperation(FILESYSTEM_DELETE,
+                                                         FolderWindow::Pane::Left,
+                                                         std::nullopt,
+                                                         state.fsLocal,
+                                                         {source},
+                                                         {},
+                                                         FILESYSTEM_FLAG_USE_RECYCLE_BIN,
+                                                         false,
+                                                         0u,
+                                                         FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                         false,
+                                                         nullptr,
+                                                         &taskId);
+    if (admission != S_OK || taskId == 0u)
+        return reject(std::format(L"Delete admission returned 0x{:08X}", static_cast<uint32_t>(admission)));
+
+    std::optional<Task::ConflictPromptState> prompt;
+    const auto waiting = RedSalamander::TestSupport::PumpMessagesUntil(
+        [&]() noexcept
+    {
+        prompt = TryGetConflictPromptCopy(operations->FindTask(taskId));
+        return (prompt.has_value() && prompt.value().buttonsPublishable) || state.completedTasks.contains(taskId);
+    },
+        {.timeout = SelfTest::Scale(std::chrono::seconds(20)), .operationName = L"SMB Recycle refusal"});
+    auto* const task     = operations->FindTask(taskId);
+    const auto plans     = task ? task->LoadPlans() : nullptr;
+    const auto* deletion = plans && plans->size() == 1u ? std::get_if<FileOperations::DeletePlan>(&plans->front()) : nullptr;
+    if (! waiting.conditionMet || ! task || ! deletion || deletion->mode != FileOperations::DeleteMode::Recycle || ! prompt.has_value())
+    {
+        const auto completed = state.completedTasks.find(taskId);
+        const HRESULT result = completed == state.completedTasks.end() ? E_PENDING : completed->second.hr;
+        return reject(std::format(L"the guarded Recycle did not reach exact-item consent (task result 0x{:08X})", static_cast<uint32_t>(result)));
+    }
+    const auto& question = prompt.value();
+    if (! question.buttonsPublishable || ! question.deferredConsent || question.bucket != Task::ConflictBucket::RecycleFailed ||
+        question.status != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || question.sourceItemIndex != 0u || question.sourcePath != source.native() ||
+        ! PromptHasAction(question, Task::ConflictAction::PermanentDelete) || ! PromptHasAction(question, Task::ConflictAction::Skip) || ! sourceRetained())
+        return reject(L"the Shell refusal must keep the original bytes and offer consent for just that item");
+
+    const auto decisionUs = Debug::Perf::ElapsedUs(started);
+    if (! task->SubmitConflictDecision(question.generation, Task::ConflictAction::Skip, false))
+        return reject(L"Skip did not accept the exact consent generation");
+    const auto done = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return state.completedTasks.contains(taskId) && ! operations->HasActiveOperations();
+    }, {.timeout = SelfTest::Scale(std::chrono::seconds(20)), .operationName = L"SMB Recycle Skip completion"});
+    if (! done.conditionMet)
+        return reject(L"the Recycle task did not settle after Skip");
+    const auto& completed = state.completedTasks.at(taskId);
+    const auto& items     = completed.sourceItemResults;
+    if (completed.hr != S_FALSE || completed.conflictPromptCount != 1u || items.size() != 1u || ! items.front().has_value() ||
+        items.front().value().completion != FileOperations::ItemCompletion::Skipped ||
+        items.front().value().sourceDisposition != FileOperations::SourceDisposition::Retained || ! sourceRetained())
+        return reject(std::format(L"Skip must preserve the original and report one skipped item (hr=0x{:08X}, prompts={})",
+                                  static_cast<uint32_t>(completed.hr),
+                                  completed.conflictPromptCount));
+
+    // Only retire this fresh file and its now-empty parent, after rechecking the
+    // parent types and the file's contents. Failed observations keep the fixture.
+    if (! isOrdinaryDirectory(root) || ! isOrdinaryDirectory(fixture) || ! sourceRetained() || ! DeleteFileW(source.c_str()) ||
+        ! RemoveDirectoryW(fixture.c_str()))
+        return reject(L"could not retire the verified fixture nonrecursively");
+    const DWORD fixtureAttributes = GetFileAttributesW(fixture.c_str());
+    const DWORD fixtureError      = fixtureAttributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
+    fixtureRemoved                = fixtureError == ERROR_FILE_NOT_FOUND || fixtureError == ERROR_PATH_NOT_FOUND;
+    if (! fixtureRemoved)
+        return reject(L"the fixture's absence could not be confirmed");
+
+    Debug::Perf::Emit(L"FileOps.SelfTest.SmbRecycleRefusal", L"exact-item consent and Skip", decisionUs, completed.conflictPromptCount, 1u, question.status);
+    AppendLog(std::format(L"SMB Recycle: known non-commit, one exact-item question, original bytes retained on Skip, fixture removed ({} us to consent).",
+                          decisionUs));
+    return true;
+}
+
 // The nested fixture of the SMB cases: four folder levels with files at every level, an empty folder and a folder of
 // 300 small files. Each folder gets its own last-write time in 2001 once its contents exist, so a folder whose basic
 // information was not restored after its children were copied shows the copy time instead.
@@ -18764,6 +18902,25 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             if (! RunFileOpsSmbCorroboratedRenameChecks(state, unavailableReason))
             {
                 Fail(L"The live SMB corroborated Rename controls failed. See the File Operations trace.");
+                return true;
+            }
+            RecordCurrentPhase(state,
+                               unavailableReason.empty() ? SelfTest::SelfTestCaseResult::Status::passed : SelfTest::SelfTestCaseResult::Status::skipped,
+                               unavailableReason);
+            NextStep(state, SelfTestState::Step::FileOps_SmbRecycleRefusal);
+            return false;
+        }
+        case SelfTestState::Step::FileOps_SmbRecycleRefusal:
+        {
+            static bool active = false;
+            if (active || ! TryGetFolderWindow(state.mainWindow))
+                return false;
+            active            = true;
+            const auto finish = wil::scope_exit([]() noexcept { active = false; });
+            std::wstring unavailableReason;
+            if (! RunFileOpsSmbRecycleRefusalChecks(state, unavailableReason))
+            {
+                Fail(L"The registered SMB Recycle refusal failed. See the File Operations trace.");
                 return true;
             }
             RecordCurrentPhase(state,
