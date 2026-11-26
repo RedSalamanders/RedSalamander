@@ -6,6 +6,29 @@ Owner: [current validation contract](../../Testing/Testing_ValidationEvidence.md
 
 2026-10-30 hosted cutover: [I55](../Done/CI_OrganizationStandardization_2026-10-29.md) owns the common compiler-free PR policy and post-merge native batching. All five scoped manifests declare zero native PR coverage with reviewed execution-contract digests. A future main batch cannot satisfy pre-merge delegation. Local naming, reuse, affected/Full qualification and interactive obligations remain with this owner. The original review evidence below is historical, not the current workflow inventory.
 
+## Shared planner migration
+
+The 26 November tooling batch keeps native PrePush coverage local and introduces the pinned validator entry points.
+The next part implements the RedSalamander adapter in the [shared scoped-testing design](https://github.com/RedSalamanders/.github/blob/74673c5ef71e880ece602709949d3b614c903d57/Specs/Plans/WIP/SharedProjectTooling_2026-11-18.md#t4-design-one-planner-one-runner-per-repository-data-for-the-owners-review).
+
+1. Add the canonical root `test.ps1` adapter around `Tools/Run-AllTests.ps1`. Use the same profile and build number
+   as the shared runner's test-enabled build. Preserve VS and vcpkg selection, the marked external evidence root and
+   native architecture checks.
+2. Translate `Tools/validation-impact.json` to version 2 scope data. Map every current standalone and in-product
+   obligation, and route full selection through the current canonical Full plan. Compare new selections against the
+   current plan for source edits, staged and unstaged edits, additions, deletions, renames across scope boundaries,
+   dependency changes, prose and unclassified inputs. A wider selection requires a documented reason.
+3. Project a named scope result to the shared report shape only after the canonical runner proves the selected work.
+   Keep the external archive authoritative for failure details, build attestations and exact Full Resume. Keep shared
+   native reuse disabled until the receipt review verifies source, binary, profile and environment parity.
+4. Switch normal affected, full and pre-push calls to the engine shim. Keep the existing focused suite, case filter,
+   Commands family, interactive, alternate-volume, explicit evidence root and exact Resume paths available through
+   the compatibility adapter. Remove the retired PR delegation code and version 1 manifest together with their last
+   callers. Preserve incomplete-coverage and failure exit categories in the compatibility path.
+5. Prove selected native execution, failure reporting, build-only ARM64 on x64, and exact Resume through the normal
+   entry points. Compare x64 and native ARM64 behavior in the same combined tooling qualification. Run focus-taking
+   work only in the separately authorized desktop boundary.
+
 ## Accepted request
 
 All active native test sources and helpers use `Scope.Tests.Something.h/.cpp`; Scope identifies the component and Something the scenario, runner, fixture, or helper. Migrate project entries, includes, inventories, tooling and current documentation together. Immutable historical evidence and imported/external source are not active test files.
