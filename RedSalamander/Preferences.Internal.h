@@ -44,11 +44,9 @@ enum class PrefCategory : int
     HotPaths,
     FileOperations,
     UserMenu,
-    Monitor,
 };
 
-inline constexpr size_t kPrefCategoryCount                  = static_cast<size_t>(PrefCategory::Monitor) + 1u;
-inline constexpr std::wstring_view kPreferencesMonitorAppId = L"RedSalamanderMonitor";
+inline constexpr size_t kPrefCategoryCount = static_cast<size_t>(PrefCategory::UserMenu) + 1u;
 
 [[nodiscard]] constexpr size_t PrefCategoryIndex(const PrefCategory category) noexcept
 {
@@ -144,32 +142,6 @@ inline constexpr int kLargeComboWidthDip  = 180;
 } // namespace PrefsLayoutConstants
 
 void PrefsReorderPanelChildren(DxUi::Panel* root, std::span<DxUi::Control* const> orderedControls);
-
-// Monitor filter mask bits for the Monitor Preferences page.
-enum class MonitorFilterBit : uint32_t
-{
-    Text    = 0x01u,
-    Error   = 0x02u,
-    Warning = 0x04u,
-    Info    = 0x08u,
-    Perf    = 0x10u,
-    Debug   = 0x20u,
-};
-
-[[nodiscard]] inline constexpr uint32_t operator|(MonitorFilterBit a, MonitorFilterBit b) noexcept
-{
-    return static_cast<uint32_t>(a) | static_cast<uint32_t>(b);
-}
-
-[[nodiscard]] inline constexpr uint32_t operator|(uint32_t a, MonitorFilterBit b) noexcept
-{
-    return a | static_cast<uint32_t>(b);
-}
-
-[[nodiscard]] inline constexpr bool HasFlag(uint32_t mask, MonitorFilterBit bit) noexcept
-{
-    return (mask & static_cast<uint32_t>(bit)) != 0;
-}
 
 struct ThemeComboItem
 {
@@ -303,8 +275,6 @@ struct PreferencesDialogState
     // Settings Management
     Common::Settings::Settings baselineSettings;
     Common::Settings::Settings workingSettings;
-    Common::Settings::Settings monitorBaselineSettings;
-    Common::Settings::Settings workingMonitorSettings;
 
     bool dirty                   = false;
     bool appliedOnce             = false;
@@ -632,12 +602,6 @@ struct FolderPanePreferences
 [[nodiscard]] Common::Settings::FoldersSettings* EnsureWorkingFoldersSettings(Common::Settings::Settings& settings) noexcept;
 [[nodiscard]] Common::Settings::FolderPane* EnsureWorkingFolderPane(Common::Settings::Settings& settings, std::wstring_view slot) noexcept;
 } // namespace PrefsFolders
-
-namespace PrefsMonitor
-{
-[[nodiscard]] const Common::Settings::MonitorSettings& GetMonitorSettingsOrDefault(const Common::Settings::Settings& settings) noexcept;
-[[nodiscard]] Common::Settings::MonitorSettings* EnsureWorkingMonitorSettings(Common::Settings::Settings& settings) noexcept;
-} // namespace PrefsMonitor
 
 namespace PrefsCache
 {

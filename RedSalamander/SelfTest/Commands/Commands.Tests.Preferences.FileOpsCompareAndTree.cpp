@@ -1033,388 +1033,6 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestPreferencesDialogMonitorFilterPresetCustomMaskLiveDxInteraction(HWND mainWindow, CaseState& state) noexcept
-{
-    using namespace std::chrono_literals;
-
-    if (! mainWindow || IsWindow(mainWindow) == FALSE)
-    {
-        state.Require(false, L"Main window handle invalid.");
-        return false;
-    }
-
-    const Common::Settings::Settings baselineSettings = g_settings;
-    const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
-
-    if (const HWND existing = GetPreferencesDialogHandle(); existing && IsWindow(existing) != FALSE)
-    {
-        PostMessageW(existing, WM_CLOSE, 0, 0);
-        state.Require(WaitForWindowClosed(existing, SelfTest::Scale(2000ms)),
-                      L"Existing Preferences window did not close before Monitor filter-preset validation.");
-    }
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    ScopedSettingsArtifactBackup mainSettingsBackup;
-    state.Require(mainSettingsBackup.Capture(L"RedSalamander"), L"Failed to back up the main settings artifacts for Monitor ownership validation.");
-    ScopedSettingsArtifactBackup monitorSettingsBackup;
-    state.Require(monitorSettingsBackup.Capture(kPreferencesMonitorAppId),
-                  L"Failed to back up the monitor settings artifacts for Monitor ownership validation.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    Common::Settings::Settings monitorSeed{};
-    const HRESULT monitorLoadHr = Common::Settings::TryLoadSettingsNoRecovery(kPreferencesMonitorAppId, monitorSeed);
-    state.Require(
-        monitorLoadHr == S_OK || monitorLoadHr == S_FALSE,
-        std::format(L"Failed to load the RedSalamanderMonitor settings baseline before seeding: 0x{:08X}.", static_cast<unsigned long>(monitorLoadHr)));
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-    monitorSeed.monitor                = Common::Settings::MonitorSettings{};
-    monitorSeed.monitor->filter.preset = Common::Settings::MonitorFilterPreset::ErrorsOnly;
-    monitorSeed.monitor->filter.mask   = static_cast<uint32_t>(MonitorFilterBit::Error);
-    const HRESULT monitorSeedHr        = SettingsHotReload::SaveSettingsAndSchema(kPreferencesMonitorAppId, monitorSeed);
-    state.Require(SUCCEEDED(monitorSeedHr),
-                  std::format(L"Failed to seed RedSalamanderMonitor settings before Monitor filter-preset validation: 0x{:08X}.",
-                              static_cast<unsigned long>(monitorSeedHr)));
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    Common::Settings::Settings seededSettings = baselineSettings;
-    seededSettings.monitor                    = Common::Settings::MonitorSettings{};
-    seededSettings.monitor->filter.preset     = Common::Settings::MonitorFilterPreset::AllTypes;
-    seededSettings.monitor->filter.mask       = 0u;
-    g_settings                                = seededSettings;
-
-    const auto waitForPreferencesWindow = [&]() noexcept
-    { return WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms)); };
-
-    const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
-    {
-        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
-        while (std::chrono::steady_clock::now() < deadline)
-        {
-            PumpPendingMessages();
-            outSnapshot = {};
-            if (DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot))
-            {
-                return true;
-            }
-
-            std::this_thread::sleep_for(20ms);
-        }
-
-        outSnapshot = {};
-        return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
-    };
-
-    const auto navigateToMonitorPage = [&](HWND targetPrefs, PreferencesDebugSnapshot& outSnapshot) noexcept
-    {
-        const HWND treeHost = GetDlgItem(targetPrefs, IDC_PREFS_CATEGORY_LIST);
-        state.Require(treeHost != nullptr && IsWindow(treeHost) != FALSE, L"Preferences category host control missing for Monitor filter-preset validation.");
-        if (! treeHost || IsWindow(treeHost) == FALSE)
-        {
-            return false;
-        }
-
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      L"Failed to focus the Preferences category host for Monitor filter-preset validation.");
-        PumpPendingMessages();
-
-        state.Require(DebugSelectPreferencesCategory(kPrefCategoryMonitor), L"Preferences did not accept debug selection of the Monitor page.");
-        PumpPendingMessages();
-
-        state.Require(waitForSnapshot(
-                          [](const PreferencesDebugSnapshot& value) noexcept
-        {
-            return value.currentCategory == kPrefCategoryMonitor && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
-                   value.visibleCurrentPageChildWindowCount <= 1u && value.currentPageRenderedDxHostCount <= 1u &&
-                   value.currentPageDxHostResizeFailureCount == 0u;
-        },
-                          outSnapshot),
-                      L"Preferences Monitor page did not settle before filter-preset validation.");
-        return state.failure.empty();
-    };
-
-    const auto getActivePage = [&]() noexcept { return DebugGetPreferencesActivePageHandle(); };
-    const auto getShellHost  = [&]() noexcept { return DebugGetPreferencesShellHostHandle(); };
-
-    const auto focusVisibleDescendantByName = [&](HWND hwnd, CONTROLTYPEID expectedControlType, std::wstring_view expectedName) noexcept
-    {
-        wil::com_ptr<IUIAutomationElement> element;
-        if (! FindMatchingVisibleDescendantElement(hwnd, expectedControlType, expectedName, element.put()) || ! element)
-        {
-            return false;
-        }
-
-        return SUCCEEDED(element->SetFocus());
-    };
-
-    const auto waitForComboValue = [&](std::wstring_view expectedName, std::wstring_view expectedValue) noexcept
-    {
-        PreferencesDebugSnapshot comboSnapshot{};
-        return waitForSnapshot(
-            [&](const PreferencesDebugSnapshot& value) noexcept
-        {
-            const HWND activePage = getActivePage();
-            const auto valueState = CollectVisibleDescendantControlValueStateByName(activePage, UIA_ComboBoxControlTypeId, expectedName);
-            return value.currentCategory == kPrefCategoryMonitor && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
-                   value.visibleCurrentPageChildWindowCount <= 1u && value.currentPageRenderedDxHostCount <= 1u &&
-                   value.currentPageDxHostResizeFailureCount == 0u && valueState.has_value() && valueState->value == expectedValue;
-        },
-            comboSnapshot);
-    };
-
-    const auto waitForNoMaskEdit = [&](std::wstring_view expectedName) noexcept
-    {
-        PreferencesDebugSnapshot noMaskSnapshot{};
-        return waitForSnapshot(
-            [&](const PreferencesDebugSnapshot& value) noexcept
-        {
-            const HWND activePage = getActivePage();
-            const auto valueState = CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, expectedName);
-            return value.currentCategory == kPrefCategoryMonitor && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
-                   value.visibleCurrentPageChildWindowCount <= 1u && value.currentPageRenderedDxHostCount <= 1u &&
-                   value.currentPageDxHostResizeFailureCount == 0u && ! valueState.has_value();
-        },
-            noMaskSnapshot);
-    };
-
-    const auto waitForToggleState = [&](std::wstring_view expectedName, const ToggleState expectedState) noexcept
-    {
-        PreferencesDebugSnapshot toggleSnapshot{};
-        return waitForSnapshot(
-            [&](const PreferencesDebugSnapshot& value) noexcept
-        {
-            const HWND activePage  = getActivePage();
-            const auto toggleState = CollectVisibleDescendantTogglePatternStateByName(activePage, expectedName);
-            return value.currentCategory == kPrefCategoryMonitor && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
-                   value.visibleCurrentPageChildWindowCount <= 1u && value.currentPageRenderedDxHostCount <= 1u &&
-                   value.currentPageDxHostResizeFailureCount == 0u && toggleState.has_value() && toggleState->toggleState == expectedState;
-        },
-            toggleSnapshot);
-    };
-
-    auto prefs = HWND{};
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
-    prefs = waitForPreferencesWindow();
-    state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not open for Monitor filter-preset validation.");
-    if (! prefs || IsWindow(prefs) == FALSE)
-    {
-        return false;
-    }
-
-    const auto closeWindow = wil::scope_exit([&]() noexcept
-    {
-        if (IsWindow(prefs) != FALSE)
-        {
-            PostMessageW(prefs, WM_CLOSE, 0, 0);
-            static_cast<void>(WaitForWindowClosed(prefs, SelfTest::Scale(2000ms)));
-        }
-    });
-
-    PreferencesDebugSnapshot snapshot{};
-    if (! navigateToMonitorPage(prefs, snapshot))
-    {
-        return false;
-    }
-
-    const std::wstring comboName        = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_PRESET);
-    const std::wstring customText       = LoadStringResource(nullptr, IDS_PREFS_ADV_FILTER_CUSTOM);
-    const std::wstring initialText      = LoadStringResource(nullptr, IDS_PREFS_ADV_FILTER_ERRORS_ONLY);
-    const std::wstring maskName         = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_MASK);
-    const std::wstring textToggleName   = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_TEXT);
-    const std::wstring errorToggleName  = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_ERROR);
-    const std::wstring cancelButtonText = LoadStringResource(nullptr, IDS_BTN_CANCEL);
-    state.Require(! comboName.empty() && ! customText.empty() && ! initialText.empty() && ! maskName.empty() && ! textToggleName.empty() &&
-                      ! errorToggleName.empty() && ! cancelButtonText.empty(),
-                  L"Preferences Monitor filter preset captions should resolve.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    state.Require(waitForComboValue(comboName, initialText), L"Preferences Monitor filter preset combo did not settle to the seeded non-custom baseline.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    state.Require(waitForNoMaskEdit(maskName), L"Preferences Monitor should not expose a numeric filter mask edit for the seeded baseline.");
-    state.Require(waitForToggleState(textToggleName, ToggleState_Off), L"Preferences Monitor Text filter toggle did not reflect the seeded baseline.");
-    state.Require(waitForToggleState(errorToggleName, ToggleState_On), L"Preferences Monitor Error filter toggle did not reflect the seeded baseline.");
-
-    state.Require(focusVisibleDescendantByName(getActivePage(), UIA_ComboBoxControlTypeId, comboName) || DebugSelectPreferencesMonitorFilterPreset(initialText),
-                  L"Preferences Monitor filter preset combo did not accept focus before switching to Custom.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    const HWND activePage = getActivePage();
-    SendMessageW(activePage, WM_KEYDOWN, VK_HOME, 0);
-    SendMessageW(activePage, WM_KEYUP, VK_HOME, 0);
-    PumpPendingMessages();
-    if (! waitForComboValue(comboName, customText))
-    {
-        state.Require(DebugSelectPreferencesMonitorFilterPreset(customText),
-                      L"Preferences Monitor filter preset combo did not switch to Custom via keyboard routing or debug fallback.");
-        if (! state.failure.empty())
-        {
-            return false;
-        }
-    }
-
-    state.Require(waitForComboValue(comboName, customText), L"Preferences Monitor filter preset combo did not settle to Custom.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    state.Require(waitForNoMaskEdit(maskName), L"Preferences Monitor should not expose a numeric filter mask edit after switching to Custom.");
-    state.Require(ToggleVisibleDescendantByNameWithMessagePump(getActivePage(), textToggleName, L"Preferences Monitor initial custom Text toggle"),
-                  L"Preferences Monitor Text filter toggle did not accept live UIA TogglePattern mutation.");
-    state.Require(waitForToggleState(textToggleName, ToggleState_On), L"Preferences Monitor Text filter toggle did not settle after live mutation.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    if (! InvokeVisibleDescendantByNameWithMessagePump(
-            getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Monitor filter-preset shell Cancel invoke"))
-    {
-        state.Require(DebugCancelPreferencesDialog(),
-                      L"Preferences shell Cancel action did not expose a visible DX button during Monitor filter-preset validation.");
-        if (! state.failure.empty())
-        {
-            return false;
-        }
-    }
-    state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
-                  L"Preferences window did not close after canceling the Monitor filter-preset validation.");
-    prefs = nullptr;
-
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
-    prefs = waitForPreferencesWindow();
-    state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not reopen for Monitor filter-preset restoration validation.");
-    if (! prefs || IsWindow(prefs) == FALSE)
-    {
-        return false;
-    }
-
-    if (! navigateToMonitorPage(prefs, snapshot))
-    {
-        return false;
-    }
-
-    state.Require(waitForComboValue(comboName, initialText),
-                  L"Preferences shell Cancel action did not restore the Monitor filter preset after custom toggle editing.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    state.Require(waitForNoMaskEdit(maskName), L"Preferences Monitor should not expose a numeric filter mask edit after restoring the seeded preset.");
-    state.Require(waitForToggleState(textToggleName, ToggleState_Off),
-                  L"Preferences shell Cancel action did not restore the Monitor Text filter toggle after custom editing.");
-    state.Require(waitForToggleState(errorToggleName, ToggleState_On),
-                  L"Preferences shell Cancel action did not restore the Monitor Error filter toggle after custom editing.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    state.Require(DebugSelectPreferencesMonitorFilterPreset(customText),
-                  L"Preferences Monitor filter preset combo did not accept debug switch to Custom before Apply validation.");
-    state.Require(waitForComboValue(comboName, customText), L"Preferences Monitor filter preset combo did not settle to Custom before Apply validation.");
-    state.Require(waitForNoMaskEdit(maskName), L"Preferences Monitor should not expose a numeric filter mask edit before Apply validation.");
-    state.Require(ToggleVisibleDescendantByNameWithMessagePump(getActivePage(), textToggleName, L"Preferences Monitor Apply custom Text toggle"),
-                  L"Preferences Monitor Text filter toggle did not accept the custom value before Apply validation.");
-    state.Require(waitForToggleState(textToggleName, ToggleState_On),
-                  L"Preferences Monitor Text filter toggle did not settle to the custom value before Apply validation.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    state.Require(PostMessageW(prefs, WM_COMMAND, MAKEWPARAM(IDC_PREFS_APPLY, 0), 0) != FALSE,
-                  L"Failed to post the Apply command during Monitor settings ownership validation.");
-    PumpPendingMessages();
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    constexpr uint32_t expectedEditedMask  = static_cast<uint32_t>(MonitorFilterBit::Text) | static_cast<uint32_t>(MonitorFilterBit::Error);
-    const auto waitForSavedMonitorSettings = [&]() noexcept
-    {
-        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
-        while (std::chrono::steady_clock::now() < deadline)
-        {
-            PumpPendingMessages();
-
-            Common::Settings::Settings loadedMonitorSettings{};
-            const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(kPreferencesMonitorAppId, loadedMonitorSettings);
-            if (loadHr == S_OK && loadedMonitorSettings.monitor.has_value() &&
-                loadedMonitorSettings.monitor->filter.preset == Common::Settings::MonitorFilterPreset::Custom &&
-                loadedMonitorSettings.monitor->filter.mask == expectedEditedMask)
-            {
-                return true;
-            }
-
-            std::this_thread::sleep_for(20ms);
-        }
-
-        Common::Settings::Settings loadedMonitorSettings{};
-        const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(kPreferencesMonitorAppId, loadedMonitorSettings);
-        return loadHr == S_OK && loadedMonitorSettings.monitor.has_value() &&
-               loadedMonitorSettings.monitor->filter.preset == Common::Settings::MonitorFilterPreset::Custom &&
-               loadedMonitorSettings.monitor->filter.mask == expectedEditedMask;
-    };
-
-    state.Require(waitForSavedMonitorSettings(),
-                  L"Preferences Apply did not write the edited Monitor filter preset and mask to RedSalamanderMonitor settings.");
-
-    Common::Settings::Settings loadedMainSettings{};
-    const HRESULT mainLoadHr = Common::Settings::TryLoadSettingsNoRecovery(L"RedSalamander", loadedMainSettings);
-    state.Require(mainLoadHr == S_OK,
-                  std::format(L"Failed to reload main settings after Monitor Apply ownership validation: 0x{:08X}.", static_cast<unsigned long>(mainLoadHr)));
-    if (mainLoadHr == S_OK)
-    {
-        state.Require(! loadedMainSettings.monitor.has_value(), L"Preferences Apply wrote Monitor settings into the main RedSalamander settings file.");
-    }
-    state.Require(! g_settings.monitor.has_value(), L"Preferences Apply kept Monitor settings in the main runtime settings object.");
-
-    const std::filesystem::path mainSchemaPath    = Common::Settings::GetSettingsSchemaPath(L"RedSalamander");
-    const std::filesystem::path monitorSchemaPath = Common::Settings::GetSettingsSchemaPath(kPreferencesMonitorAppId);
-    std::string mainSchemaJson;
-    std::string monitorSchemaJson;
-    state.Require(ReadSmallPreferencesSelfTestFile(mainSchemaPath, mainSchemaJson),
-                  std::format(L"Failed to read main settings schema after Monitor Apply ownership validation: {}.", mainSchemaPath.wstring()));
-    state.Require(ReadSmallPreferencesSelfTestFile(monitorSchemaPath, monitorSchemaJson),
-                  std::format(L"Failed to read monitor settings schema after Monitor Apply ownership validation: {}.", monitorSchemaPath.wstring()));
-    if (! mainSchemaJson.empty())
-    {
-        state.Require(mainSchemaJson.find("\"monitor\":") == std::string::npos,
-                      L"Main RedSalamander settings schema exposed the root Monitor settings property.");
-    }
-    if (! monitorSchemaJson.empty())
-    {
-        state.Require(monitorSchemaJson.find("\"monitor\":") != std::string::npos,
-                      L"RedSalamanderMonitor settings schema did not expose the root Monitor settings property.");
-    }
-
-    return state.failure.empty();
-}
-
 [[nodiscard]] bool TestPreferencesDialogFileOperationsTabTraversalLiveDxInteraction(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -5259,8 +4877,6 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return LoadStringResource(nullptr, IDS_PREFS_CAT_COMPARE_DIRECTORIES);
     if (snapshot.currentCategory == kPrefCategoryHotPaths)
         return LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS);
-    if (snapshot.currentCategory == kPrefCategoryMonitor)
-        return LoadStringResource(nullptr, IDS_PREFS_CAT_MONITOR);
     if (snapshot.currentCategory == kPrefCategoryAdvanced)
         return LoadStringResource(nullptr, IDS_PREFS_CAT_ADVANCED);
     return std::wstring{};
@@ -5312,7 +4928,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                        L"firstVisibleIndex={} treeScrollDip={} treeRender={} pageScroll={}/{} visibleChildren={} "
                        L"visibleCurrentPageChildren={} currentPageDxHosts={} pageResizeFailures={} shellResizeFailures={} "
                        L"categoryTreeResizeFailures={} focus={} categoryTree={} activePage={} shellHost={} "
-                       L"focusTargets(general={}, panes={}, hotPaths={}, advanced={}, monitor={}, compare={}, fileOps={}, themes={}, shell={})",
+                       L"focusTargets(general={}, panes={}, hotPaths={}, advanced={}, compare={}, fileOps={}, themes={}, shell={})",
                        capturedSnapshot ? L"yes" : L"no",
                        static_cast<int>(snapshot.currentCategory),
                        snapshot.pageTitle,
@@ -5339,7 +4955,6 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                        static_cast<int>(snapshot.panesFocusTarget),
                        static_cast<int>(snapshot.hotPathsFocusTarget),
                        static_cast<int>(snapshot.advancedFocusTarget),
-                       static_cast<int>(snapshot.monitorFocusTarget),
                        static_cast<int>(snapshot.compareDirectoriesFocusTarget),
                        static_cast<int>(snapshot.fileOperationsFocusTarget),
                        static_cast<int>(snapshot.themesFocusTarget),
@@ -5564,34 +5179,37 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     {
         return false;
     }
-    state.Require(waitForCategoryTreeReadyForKey(kPrefCategoryMonitor, LoadStringResource(nullptr, IDS_PREFS_CAT_MONITOR), L"reverse-navigation VK_UP", false),
-                  std::format(L"VK_UP should move Preferences navigation from Advanced to the focused Monitor category; {}.", describeCurrentState()));
+    state.Require(
+        waitForCategoryTreeReadyForKey(kPrefCategoryHotPaths, LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS), L"reverse-navigation VK_UP", false),
+        std::format(L"VK_UP should move Preferences navigation from Advanced to the focused Hot Paths category; {}.", describeCurrentState()));
 
-    if (! sendCategoryTreeKey(kPrefCategoryMonitor, LoadStringResource(nullptr, IDS_PREFS_CAT_MONITOR), VK_DOWN, L"reverse-navigation VK_DOWN"))
+    if (! sendCategoryTreeKey(kPrefCategoryHotPaths, LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS), VK_DOWN, L"reverse-navigation VK_DOWN"))
     {
         return false;
     }
     state.Require(
         waitForCategoryTreeReadyForKey(kPrefCategoryAdvanced, LoadStringResource(nullptr, IDS_PREFS_CAT_ADVANCED), L"reverse-navigation VK_DOWN", false),
-        std::format(L"VK_DOWN should move Preferences navigation from Monitor back to the focused Advanced category; {}.", describeCurrentState()));
+        std::format(L"VK_DOWN should move Preferences navigation from Hot Paths back to the focused Advanced category; {}.", describeCurrentState()));
 
     if (! sendCategoryTreeKey(kPrefCategoryAdvanced, LoadStringResource(nullptr, IDS_PREFS_CAT_ADVANCED), VK_UP, L"second reverse-navigation VK_UP"))
     {
         return false;
     }
     state.Require(
-        waitForCategoryTreeReadyForKey(kPrefCategoryMonitor, LoadStringResource(nullptr, IDS_PREFS_CAT_MONITOR), L"second reverse-navigation VK_UP", false),
-        std::format(L"VK_UP should restore Preferences navigation from Advanced to the focused Monitor category; {}.", describeCurrentState()));
+        waitForCategoryTreeReadyForKey(kPrefCategoryHotPaths, LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS), L"second reverse-navigation VK_UP", false),
+        std::format(L"VK_UP should restore Preferences navigation from Advanced to the focused Hot Paths category; {}.", describeCurrentState()));
 
-    if (! sendCategoryTreeKey(kPrefCategoryMonitor, LoadStringResource(nullptr, IDS_PREFS_CAT_MONITOR), VK_UP, L"third reverse-navigation VK_UP"))
+    if (! sendCategoryTreeKey(kPrefCategoryHotPaths, LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS), VK_UP, L"third reverse-navigation VK_UP"))
     {
         return false;
     }
     state.Require(
-        waitForCategoryTreeReadyForKey(kPrefCategoryHotPaths, LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS), L"third reverse-navigation VK_UP", false),
+        waitForCategoryTreeReadyForKey(
+            kPrefCategoryCompareDirectories, LoadStringResource(nullptr, IDS_PREFS_CAT_COMPARE_DIRECTORIES), L"third reverse-navigation VK_UP", false),
         std::format(L"Each VK_UP should move Preferences navigation exactly one focused visible category upward; {}.", describeCurrentState()));
 
-    if (! sendCategoryTreeKey(kPrefCategoryHotPaths, LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS), VK_HOME, L"reverse-navigation VK_HOME"))
+    if (! sendCategoryTreeKey(
+            kPrefCategoryCompareDirectories, LoadStringResource(nullptr, IDS_PREFS_CAT_COMPARE_DIRECTORIES), VK_HOME, L"reverse-navigation VK_HOME"))
     {
         return false;
     }

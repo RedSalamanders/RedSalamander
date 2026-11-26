@@ -35167,8 +35167,7 @@ template <typename Body> [[nodiscard]] bool RunFolderViewActivationPressCase(HWN
                            {PrefCategory::CompareDirectories, L"preferences-compare-directories"},
                            {PrefCategory::HotPaths, L"preferences-hot-paths"},
                            {PrefCategory::FileOperations, L"preferences-file-operations"},
-                           {PrefCategory::UserMenu, L"preferences-user-menu"},
-                           {PrefCategory::Monitor, L"preferences-monitor"}};
+                           {PrefCategory::UserMenu, L"preferences-user-menu"}};
     for (const auto& page : pages)
     {
         PreferencesDebugSnapshot snapshot{};
