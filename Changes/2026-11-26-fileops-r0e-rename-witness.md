@@ -1,1 +1,0 @@
-- Recognize the reviewed Batch Rename fixture in the R0e paired diagnostic. The fixture checks duplicate and distinct physical sources before the timed section. Both sides still require a matching reviewed fixture and the same workload and timing gates.

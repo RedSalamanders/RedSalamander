@@ -4,6 +4,20 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Document the fixed queued destination and available ZIP and 7z Pack options.
+- Disable Batch Rename and Change Case on providers without scheduled Rename support and explain direct shortcut refusals in the pane.
+- Verify live Samba Copy and Move for both folder and individual-file selections.
+- Verify that scheduled Rename leaves the source and unrelated files untouched when an SMB endpoint lacks exact file identity.
+- Recognize the reviewed Batch Rename fixture in the R0e paired diagnostic. The fixture checks duplicate and distinct physical sources before the timed section. Both sides still require a matching reviewed fixture and the same workload and timing gates.
+- Verify that ZIP and 7z Pack retain directory selections when Delete after cannot prove the complete cleanup set.
+- Corrected the File Operations regression checks for queued Pack publication, retained archive cleanup and duplicate Batch Rename identities.
+- Verify that File Operations keeps the active progress cadence when another Copy waits for credentials.
+- Run Unpack in File Operations so the panes stay usable during extraction. Cancel keeps entries already published and leaves the selected archives in place.
+- Verify the shared Batch Rename and Change Case task results on a registered Windows SMB fixture with exact file identity.
+- Run Pack in File Operations so the panes stay responsive while ZIP and 7z archives are being written. Cancel before publication keeps the previous archive and the original files.
+- Verify the Create Folder worker honors its original parent after the pane navigates elsewhere during preparation.
+- Preserve the previous ZIP or 7z archive if Pack fails to publish its completed output.
+- Route RedSalamander build and performance guidance to the verified shared RedHome skills.
 - Verify process timeout cleanup with the PID from the launcher so the test works when the child has not reached its script before the deadline.
 - Document the hosted runtime-only vcpkg environment, SDK admission order, and the contained copied-module fixture already covered by RedSalamander tooling checks.
 - Microsoft Drive Rename preserves an observed occupant, sends the source revision with its rename request, and reports the per-item result to both single-item and batch callers.
