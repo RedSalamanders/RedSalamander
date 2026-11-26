@@ -719,6 +719,21 @@ $sample = ']('
         (@($inventory.ProtectedDone.Unexpected) -contains $companionPath) | Should Be $true
     }
 
+    It 'admits only the reviewed Done index and rejects its siblings and companions' {
+        $root = New-RSSpecFixtureRepository
+        $relativePath = 'Specs/Plans/Done/README.md'
+        Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# Completed work`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
+        (@($inventory.ProtectedDone.AllowedAdditional) -contains $relativePath) | Should Be $true
+        foreach ($path in @('Specs/Plans/Done/README_2026-11-19.md', 'Specs/Plans/Done/README/unreviewed.md')) {
+            Set-RSFixtureFile -Root $root -RelativePath $path -Content "# Unreviewed companion`n"
+        }
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be 2
+    }
+
     It 'admits only the reviewed PowerShell tooling closeout record' {
         $root = New-RSSpecFixtureRepository
         $relativePath = 'Specs/Plans/Done/PowerShellTooling_2026-10-28.md'

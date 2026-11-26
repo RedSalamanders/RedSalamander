@@ -1294,7 +1294,9 @@ function Test-RSProtectedDoneHistory {
             'Specs/Plans/Done/AdvisorSurvey_004-refresh-stale-active-owners_2026-08-25.md',
             'Specs/Plans/Done/AdvisorSurvey_005-decision-hold-scratch-routing_2026-08-25.md',
             # Exact I63 File Operations UX closeout record (closed 2026-11-11); I64 owns the unfinished work.
-            'Specs/Plans/Done/FileOperations_UxFidelityAndPaneActivation_2026-11-10.md'
+            'Specs/Plans/Done/FileOperations_UxFidelityAndPaneActivation_2026-11-10.md',
+            # The Done index every repository keeps (CV-6-03, B-03). It routes only; the records it lists stay frozen.
+            'Specs/Plans/Done/README.md'
         )
     )
 
