@@ -1223,7 +1223,8 @@ the same synchronous reporter and counter path as the pointer overload.
   `R0fGraph_FakeGraphReadWriteCreateRenameRecycle` uses a loopback Graph fixture and an owned pane;
   `Phase16_RemoteOneDrivePersonalInlineRename` uses saved sign-in and a fresh test-only fixture child, with exact file and folder Rename, case-only spelling, occupied-name refusal, and Recycle verification;
   `FileOps_SmbRecycleRefusal` uses one fresh child of `path.smb.primary`. It checks that the guarded Local Shell route
-  reports a known non-commit on the share, offers one exact-item permanent-delete decision and retains the same bytes
+  reports a known non-commit on the share, offers one item-specific permanent-delete decision on the independently
+  probed exact or by-name route and retains the same bytes
   after Skip. Cleanup verifies the file contents and removes only that file and its empty parent. A missing or
   unreachable registration is an environment skip;
   the provider capability matrix uses private providers, owned data and direct task controls;

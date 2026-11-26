@@ -14157,6 +14157,18 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
     if (! SelfTest::WriteTextFile(source, kSourceBytes))
         return reject(L"could not write the owned file");
 
+    wil::com_ptr<IFileSystemObjectBinding> binding;
+    if (! state.fsLocal.try_query_to(binding.put()))
+        return reject(L"Local provider does not expose an identity probe");
+    constexpr auto readFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+    wil::com_ptr<IFileSystemBoundObject> original;
+    const HRESULT identity = binding->BindObject(source.c_str(), readFlags, original.put());
+    const bool exact       = identity == S_OK && original;
+    if (! exact && (identity != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || original))
+        return reject(std::format(L"the identity probe returned 0x{:08X}", static_cast<uint32_t>(identity)));
+    original.reset();
+    const auto consentBucket = exact ? Task::ConflictBucket::RecycleFailed : Task::ConflictBucket::RecycleFailedByName;
+
     const auto sourceRetained = [&]() noexcept
     {
         const DWORD attributes = GetFileAttributesW(source.c_str());
@@ -14200,10 +14212,14 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
         return reject(std::format(L"the guarded Recycle did not reach exact-item consent (task result 0x{:08X})", static_cast<uint32_t>(result)));
     }
     const auto& question = prompt.value();
-    if (! question.buttonsPublishable || ! question.deferredConsent || question.bucket != Task::ConflictBucket::RecycleFailed ||
+    if (! question.buttonsPublishable || ! question.deferredConsent || question.bucket != consentBucket ||
         question.status != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || question.sourceItemIndex != 0u || question.sourcePath != source.native() ||
         ! PromptHasAction(question, Task::ConflictAction::PermanentDelete) || ! PromptHasAction(question, Task::ConflictAction::Skip) || ! sourceRetained())
-        return reject(L"the Shell refusal must keep the original bytes and offer consent for just that item");
+        return reject(std::format(L"expected one exact-item consent with bytes retained (bucket={}, expected={}, status=0x{:08X}, index={})",
+                                  static_cast<unsigned int>(question.bucket),
+                                  static_cast<unsigned int>(consentBucket),
+                                  static_cast<uint32_t>(question.status),
+                                  question.sourceItemIndex.value_or((std::numeric_limits<size_t>::max)())));
 
     const auto decisionUs = Debug::Perf::ElapsedUs(started);
     if (! task->SubmitConflictDecision(question.generation, Task::ConflictAction::Skip, false))
@@ -14233,7 +14249,12 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
     if (! fixtureRemoved)
         return reject(L"the fixture's absence could not be confirmed");
 
-    Debug::Perf::Emit(L"FileOps.SelfTest.SmbRecycleRefusal", L"exact-item consent and Skip", decisionUs, completed.conflictPromptCount, 1u, question.status);
+    Debug::Perf::Emit(L"FileOps.SelfTest.SmbRecycleRefusal",
+                      exact ? L"exact-identity consent and Skip" : L"by-name consent and Skip",
+                      decisionUs,
+                      completed.conflictPromptCount,
+                      1u,
+                      question.status);
     AppendLog(std::format(L"SMB Recycle: known non-commit, one exact-item question, original bytes retained on Skip, fixture removed ({} us to consent).",
                           decisionUs));
     return true;
