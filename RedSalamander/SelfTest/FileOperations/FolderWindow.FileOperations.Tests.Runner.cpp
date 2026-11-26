@@ -10566,10 +10566,11 @@ using TickResult = std::optional<bool>;
     constexpr size_t kHistoryIssues = 128u;
     uint64_t taskId                 = 0u;
     uint64_t queuedTaskId           = 0u;
-    bool workerQuiet                = true;
-    bool cleanupAttempted           = false;
-    bool cleanupSucceeded           = false;
-    const auto cleanup              = [&]() noexcept
+    std::array<uint64_t, 2> credentialPeerTasks{};
+    bool workerQuiet      = true;
+    bool cleanupAttempted = false;
+    bool cleanupSucceeded = false;
+    const auto cleanup    = [&]() noexcept
     {
         if (cleanupAttempted)
             return cleanupSucceeded;
@@ -10594,6 +10595,11 @@ using TickResult = std::optional<bool>;
                 operations->DismissCompletedTask(taskId);
             if (queuedTaskId != 0u)
                 operations->DismissCompletedTask(queuedTaskId);
+            for (const uint64_t id : credentialPeerTasks)
+            {
+                if (id != 0u)
+                    operations->DismissCompletedTask(id);
+            }
             operations->DebugResetPopupForSelfTest();
         }
         operations->SetAutoDismissSuccess(autoDismiss);
@@ -11212,6 +11218,83 @@ using TickResult = std::optional<bool>;
         operations->DebugSuppressTaskPresentationPostsForSelfTest(false);
         if (! adopted.conditionMet)
             return reject(L"the pending fallback completion was not adopted after its worker joined");
+    }
+
+    // A second real Copy must keep the 100 ms cadence while its peer awaits credentials.
+    // Hold both at their normal publication checkpoint so the observation cannot race completion.
+    {
+        const auto peerDestination = root / L"credential-peer";
+        if (! SelfTest::EnsureDirectory(peerDestination))
+            return reject(L"the parallel credential fixture destination is unavailable");
+        SetFileOpsLiveOutputPublishedPauseForSelfTest(true);
+        const auto startCopy = [&](const std::filesystem::path& target) noexcept
+        {
+            return StartFileOperationAndGetId(operations,
+                                              FILESYSTEM_COPY,
+                                              FolderWindow::Pane::Left,
+                                              FolderWindow::Pane::Right,
+                                              folder->GetFileSystem(FolderWindow::Pane::Left),
+                                              {queuedSource},
+                                              target,
+                                              FILESYSTEM_FLAG_NONE,
+                                              false,
+                                              0u,
+                                              State::ExecutionMode::PerItem,
+                                              false,
+                                              folder->GetFileSystem(FolderWindow::Pane::Right));
+        };
+        credentialPeerTasks[0] = startCopy(queuedDestination).value_or(0u);
+        credentialPeerTasks[1] = startCopy(peerDestination).value_or(0u);
+        if (credentialPeerTasks[0] == 0u || credentialPeerTasks[1] == 0u)
+            return reject(L"the parallel credential fixture could not admit both Copies");
+        const uint64_t waitingId = credentialPeerTasks[0];
+        const uint64_t activeId  = credentialPeerTasks[1];
+        const auto bothPublished = RedSalamander::TestSupport::PumpMessagesUntil(
+            [&]() noexcept
+        {
+            const auto isLivePublisher = [&](const uint64_t id) noexcept
+            {
+                const Task* const live = operations->FindTask(id);
+                return live && live->_hasPublishedLiveOutput.load(std::memory_order_acquire);
+            };
+            return isLivePublisher(waitingId) && isLivePublisher(activeId);
+        },
+            {.timeout = SelfTest::Scale(4s), .operationName = L"parallel cadence Copies publish"});
+        if (! bothPublished.conditionMet)
+            return reject(L"the parallel credential fixture did not publish both owned Copies");
+
+        bool sawCredentialAndActive = false;
+        {
+            Task::OnCredentialWait(operations->FindTask(waitingId), true);
+            const auto leaveWait = wil::scope_exit([&]() noexcept
+            {
+                if (Task* const waiting = operations->FindTask(waitingId))
+                    Task::OnCredentialWait(waiting, false);
+            });
+            if (! measure(L"engine-credential-active-peer", 700ms, before, after))
+                return reject(L"the parallel credential cadence measurement pump failed");
+            using Snapshot = FileOperationsPopupInternal::TaskSnapshot;
+            Snapshot waiting{}, active{};
+            const bool bothProjected =
+                DebugGetFileOperationsPopupTaskSnapshot(popup, waitingId, waiting) && DebugGetFileOperationsPopupTaskSnapshot(popup, activeId, active);
+            sawCredentialAndActive = bothProjected && waiting.waitingForCredentials && waiting.statusKind == Snapshot::StatusKind::AwaitingCredentials &&
+                                     ! active.waitingForCredentials && active.statusKind == Snapshot::StatusKind::Running &&
+                                     operations->GetPopupTelemetryWork() == State::PopupTelemetryWork::Active && after.popup.timerIntervalMs == 100u &&
+                                     after.popup.timerTicks - before.popup.timerTicks >= 3u;
+        }
+        ReleaseFileOpsLiveOutputPublishedPauseForSelfTest();
+        const auto bothRetired     = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+            return ! operations->FindTask(waitingId) && ! operations->FindTask(activeId);
+        }, {.timeout = SelfTest::Scale(5s), .operationName = L"parallel cadence Copies retire"});
+        const bool parallelCadence = sawCredentialAndActive && bothRetired.conditionMet;
+        Debug::Perf::Emit(L"FileOps.PopupCadence.CredentialActivePeer",
+                          L"two-owned-copies",
+                          static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(bothPublished.elapsed).count()),
+                          after.popup.timerTicks - before.popup.timerTicks,
+                          after.popup.timerIntervalMs,
+                          parallelCadence ? S_OK : E_FAIL);
+        if (! parallelCadence)
+            fail(L"the credential-waiting Copy did not coexist with an active Copy at the active cadence through clean retirement");
     }
 
     if (GetForegroundWindow() != foreground)
