@@ -4,6 +4,9 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Make cancellation deterministic during the large Local selection counting selftest.
+- Resolve the exact focused pending-decision disclosure after repaint in the File Operations pointer test.
+- Match the shared Copilot pointer and document explicit desktop agreement, owned windows and the existing focus-restoration policy.
 - Add the root `test.ps1` command for affected and full local testing. Preserve `Test-Changes.ps1` as a compatibility command and pin the shared engine with ordered scope fallbacks. Use the shared scope manifest for unattended Full and PrePush, with cross-build-only profiles and archive-bound suite reports. Preserve canonical artifact re-attestation and compatibility commands.
 - Remove the unused schema reader left by the Monitor Preferences test retirement so test-enabled Release builds meet the zero-warning requirement.
 - Fix OneDrive Personal Copy when Graph returns an upload session on its Microsoft consumer content origin. Keep the existing transport and credential controls.
