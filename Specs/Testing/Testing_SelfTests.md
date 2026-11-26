@@ -219,7 +219,9 @@ The case has the same
 admission rule. It dispatches real archive commands on sandbox fixtures through synthetic
 input and answers the archive cleanup question within the test. The case verifies that an
 Unpack collision skip preserves the selected archive and its existing destination, and that
-Pack keeps the originals when a link is omitted from the archive.
+Pack keeps the originals when a link is omitted from the archive. The stored ZIP and 7z controls each publish a complete
+selection with nonempty and empty directories while keeping the original files and folders. Delete after queues no Delete
+and asks no cleanup question when this selection lacks exact descendant authority.
 
 Before opening any fixture, bind `LOCALAPPDATA`, `TEMP` and `TMP` to marked
 capture scratch through the canonical `ScopedEnvironmentVariable` helper. Refuse

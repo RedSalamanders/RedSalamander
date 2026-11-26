@@ -14232,8 +14232,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     }
     state.Require(SelfTest::PathExists(archivePath), L"Pack command should create the ZIP archive.");
 
+    for (const std::wstring_view extension : {std::wstring_view(L"zip"), std::wstring_view(L"7z")})
     {
-        const auto retainedArchive       = outputRoot / L"folders-retained.zip";
+        const auto retainedArchive       = outputRoot / std::format(L"folders-retained.{}", extension);
         auto folderCleanupOptions        = packOptions;
         folderCleanupOptions.archivePath = retainedArchive;
         folderCleanupOptions.deleteAfter = true;
@@ -14246,7 +14247,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                 retained->entries == packResult->entries && cleanupIdle() && SelfTest::PathExists(retainedArchive) && SelfTest::PathExists(emptyRoot) &&
                 ReadUtf8TextFileForCommandSelfTest(sourceRoot / L"alpha.txt") == L"alpha" &&
                 ReadUtf8TextFileForCommandSelfTest(nestedRoot / L"beta.txt") == L"beta",
-            L"Pack must write the complete folder selection and keep every source without a cleanup prompt or Delete when no tree receipt is available.");
+            std::format(
+                L"{} Pack must write the complete folder selection and keep every source without a cleanup prompt or Delete when no tree receipt is available.",
+                extension));
     }
 
     {
