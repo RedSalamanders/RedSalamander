@@ -11271,16 +11271,25 @@ using TickResult = std::optional<bool>;
                 if (Task* const waiting = operations->FindTask(waitingId))
                     Task::OnCredentialWait(waiting, false);
             });
+            const auto settled   = waitForInterval(100u, SelfTest::Scale(2s), L"parallel credential active cadence after card entrance");
             if (! measure(L"engine-credential-active-peer", 700ms, before, after))
                 return reject(L"the parallel credential cadence measurement pump failed");
             using Snapshot = FileOperationsPopupInternal::TaskSnapshot;
             Snapshot waiting{}, active{};
             const bool bothProjected =
                 DebugGetFileOperationsPopupTaskSnapshot(popup, waitingId, waiting) && DebugGetFileOperationsPopupTaskSnapshot(popup, activeId, active);
-            sawCredentialAndActive = bothProjected && waiting.waitingForCredentials && waiting.statusKind == Snapshot::StatusKind::AwaitingCredentials &&
-                                     ! active.waitingForCredentials && active.statusKind == Snapshot::StatusKind::Running &&
-                                     operations->GetPopupTelemetryWork() == State::PopupTelemetryWork::Active && after.popup.timerIntervalMs == 100u &&
-                                     after.popup.timerTicks - before.popup.timerTicks >= 3u;
+            const auto popupWork   = operations->GetPopupTelemetryWork();
+            sawCredentialAndActive = settled.conditionMet && bothProjected && waiting.waitingForCredentials &&
+                                     waiting.statusKind == Snapshot::StatusKind::AwaitingCredentials && ! active.waitingForCredentials &&
+                                     active.statusKind == Snapshot::StatusKind::Running && popupWork == State::PopupTelemetryWork::Active &&
+                                     after.popup.timerIntervalMs == 100u && after.popup.timerTicks - before.popup.timerTicks >= 3u;
+            note(std::format(L"credential and active peer: settled={} projected={} waitingStatus={} activeStatus={} work={} intervalMs={}",
+                             settled.conditionMet,
+                             bothProjected,
+                             static_cast<unsigned>(waiting.statusKind),
+                             static_cast<unsigned>(active.statusKind),
+                             work(popupWork),
+                             after.popup.timerIntervalMs));
         }
         ReleaseFileOpsLiveOutputPublishedPauseForSelfTest();
         const auto bothRetired     = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
