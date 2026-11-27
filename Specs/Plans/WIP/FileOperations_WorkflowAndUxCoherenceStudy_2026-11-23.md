@@ -6,6 +6,16 @@
 
 ## Implementation checklist
 
+### Restart qualification (2026-11-27)
+
+- [x] Verify the saved x64 Release artifacts. The canonical runner refused the interrupted profile before taking focus. The independently sealed solution build on PR #348 head `96e495135` passed byte verification and became the desktop basis.
+- [ ] Run Commands, File Operations, Viewer PE Interactive and Viewer SQLite Interactive during the approved window ending at 08:55 CET. The x64 Release CI run `20261127T070925Z-27348-dd7cbf0dec974bf49844d7b72bb08804` also includes the two approved Viewer Text dialog checks. It uses build receipt `5aaaae600267450f00e8a3e8c0fcabcd32331ba59c72a6de7d86dad247a47e29`.
+- [x] Read both hosted job verdicts and check the archived run states. On `09c663878`, x64 completed all six interactive entries and its tooling suite failed six checks. ARM64 stopped during Commands retirement after observing a foreign console. Its archived state also records failed tooling and pending later desktop entries. [Hosted x64 and ARM64 qualification](https://github.com/RedSalamanders/RedSalamander/actions/runs/45907308619)
+- [x] Repair the five RedSalamander tooling failures. The focused Pester 3.4.0 rerun passed 312 checks with zero failures or skips. [Restart and hosted evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md)
+- [x] Reproduce and repair the shared PrePush fixture failure. The corrected fixture passed all 40 cases on the product. [Shared-engine PR #130](https://github.com/RedSalamanders/.github/pull/130)
+- [ ] Integrate the repaired shared engine and obtain a hosted native pass for both architectures. Preserve desktop ownership during ARM64 retirement.
+- [ ] Merge the verified follow-up. The live provider and exact archive cleanup gates below still govern Done.
+
 **Live qualification checkpoint (2026-11-26).**
 
 - [x] Verify one Local Native item and one Windows SMB Managed item in the same Move. Exact x64 Release passed 3/0/0 without activation, verified both destination payloads and source removals, and retired the SMB fixture. The Samba exact-identity control skipped before creating its fixture. [PR #348](https://github.com/RedSalamanders/RedSalamander/pull/348) [Mixed Move and control evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-26_221027_live_mixed_smb/README.md)

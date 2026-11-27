@@ -114,9 +114,19 @@ Describe 'Project CI engine path resolution' {
         $before=$env:CI_NATIVE_BUILDS_DISABLED
         try { & ([scriptblock]::Create($staticBranch[0].Extent.Text)) }
         finally { $env:CI_NATIVE_BUILDS_DISABLED=$before }
-        $spec=@($calls|Where-Object Path -ceq 'Tools/Get-SpecInventory.ps1')
+        @($calls | Where-Object Path -CEQ 'validate-specs.ps1').Count | Should Be 1
+
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'validate-specs.ps1') -Destination $root
+        [void][IO.Directory]::CreateDirectory((Join-Path $root 'Tools'))
+        [IO.File]::WriteAllText((Join-Path $root 'Tools/Get-SpecInventory.ps1'), @'
+[CmdletBinding()]
+param([switch]$FailOnFindings, [switch]$NoReports)
+[pscustomobject]@{ FailOnFindings = $FailOnFindings.IsPresent; NoReports = $NoReports.IsPresent }
+'@)
+        $spec = @(& (Join-Path $root 'validate-specs.ps1'))
         $spec.Count | Should Be 1
-        ($spec[0].Arguments -join ',') | Should Be '-FailOnFindings,-NoReports'
+        $spec[0].FailOnFindings | Should Be $true
+        $spec[0].NoReports | Should Be $true
     }
 
     It 'resolves relative engine paths from the PowerShell filesystem location and preserves absolute paths' {

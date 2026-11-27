@@ -24,6 +24,12 @@ Copy-Item -LiteralPath (Join-Path $RepositoryRoot 'ThirdParty/RedMonitor') -Dest
 $lockPath=Join-Path $fixture 'Dependencies/RedMonitor.lock.json'
 $baseline=[IO.File]::ReadAllText((Join-Path $RepositoryRoot 'Dependencies/RedMonitor.lock.json'))
 [IO.File]::WriteAllText($lockPath,$baseline)
+$fixtureTools = Join-Path $fixture 'Dependencies/RedMonitorClientTools'
+[void][IO.Directory]::CreateDirectory($fixtureTools)
+foreach ($name in 'Verify-RedMonitorClient.ps1', 'Update-RedMonitorClient.ps1') {
+    $source = Join-Path $RepositoryRoot "Dependencies/RedMonitorClientTools/$name"
+    Copy-Item -LiteralPath $source -Destination $fixtureTools
+}
 $results=[Collections.Generic.List[object]]::new()
 function Invoke-Control([bool]$Pass,[string]$Name){
  $start=[Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)

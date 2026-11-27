@@ -113,7 +113,8 @@ Tools/Restore-RedMonitor.ps1 entrypoint now verifies that local client and rejec
 Every first-party native project with ClCompile inputs verifies before PrepareForBuild, including a
 direct plugin build that does not reference Common. Resource-only and external dependency projects
 are excluded. Real MSBuild controls prove valid direct admission, tampered-header rejection before
-admission, and both exclusions; offline verifier controls cover the immutable manifest and file bytes.
+admission, and both exclusions. Offline verifier controls stage both exact pinned commands with the
+manifest and client bytes, then verify that damaged inputs are rejected without a build, cache or Git on PATH.
 
 The full behavioral receipt closure includes the lock, header, license and local verification tools.
 There are no viewer/test/satellite compatibility projects, helper build/staging operations, or helper

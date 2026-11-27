@@ -185,7 +185,10 @@ Describe 'Winget shared publication route' {
         $generator | Should Match 'function Resolve-WingetReleaseDate'
         $generator | Should Not Match '\$ReleaseDate = Get-Date -Format'
         $source = Get-Content (Join-Path $engine 'Tools/Modules/Ci.Publication.psm1') -Raw
-        $source | Should Not Match 'ReleaseDate:|Get-Date -Format'
+        $hosted = Get-Content -LiteralPath (Join-Path $engine 'Tools/Invoke-Publication.ps1') -Raw
+        $hosted | Should Match 'New-CiWingetManifest \$plan'
+        $hosted | Should Not Match '(?m)^.*New-CiWingetManifest.*-ReleaseDate'
+        $source | Should Not Match 'Get-Date -Format'
         $source | Should Match 'NestedInstallerFiles:'
         $source | Should Match 'PortableCommandAlias:'
     }
