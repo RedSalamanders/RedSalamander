@@ -398,3 +398,21 @@ The approved x64 Release replay used the same verified Pack receipt. The two exa
 | Mouse-opened main menu keyboard input | 461, 472 and 436 ms | `20261127T230810Z-43548-cfb4c4e19f4649ad99889572084627ad` | `248902ab90aba90163b25c7c2c4be511bbda426641070928a7e09458ed220363` |
 
 The focused repository verdict is `NOT_EVALUATED` in both cases. The native ARM64 follow-up remains open.
+
+### Hosted x64 follow-up after the Commands trace fix
+
+The x64 job on `651a700fc66de7927ad6684b08a8abc1553e1afa` finished with 3,045 passes, two failures and 71 skips. Commands passed 965 with five skips. File Operations passed 294 with 36 skips. All four interactive viewer entries passed. Tooling failed both attempts at the HWND render-target source assertion. Viewer PE non-interactive failed its first WebView2 private-origin observation and passed its retry. The hosted classifier retained one regression and one blocking flaky result. [Hosted x64 job](https://github.com/RedSalamanders/RedSalamander/actions/runs/46061664377/job/140741316649)
+
+The original x64 job log is preserved in `20261127T231756Z-73420-0ed1a0cd3ac34ceca26562bef5678857`. SHA-256 `c27195e3d584326b434566e7283f4c9d77f7f16b6a232f24561dd3bac0e2f5d2`.
+
+The HWND assertion expected `wil::com_ptr` for the shared factory, target and brush. Their existing `wil::com_ptr_nothrow` ownership predates both hosted revisions. The focused Pester 3.4.0 baseline reproduced the failure in `20261127T232000Z-82176-ac3ad0d4234540b3a9e6747fe4338bf2` with 2/1/0, SHA-256 `d11334610fb945f99122a4ea5148fffb89acb2ddbdd48d0351c25f2d5fe47dd4`. Candidate `fe5d6e248bade5b7e35058a035baa6d0f88820a2` passed all three checks in `20261127T232045Z-31404-2cf21bf5d28044b8ba268666f6aa853c`, SHA-256 `17c66fb622cde05978307d59acf05fce459ee66d666b25e50b5dc805d95480cd`. [Source-contract repair PR #389](https://github.com/RedSalamanders/RedSalamander/pull/389)
+
+PR #389 merged at `db658051844f10de7c07452bf54b9b160d8dade9` after the required checks passed. Its source-contract test and specification match the reviewed head on main.
+
+### ViewerWeb private origin follow-up
+
+The original non-interactive Viewer PE console confirms that only its raw HTML source assertion failed within the private-origin child. The isolated profile, script disablement, raw byte checks, and local and virtual PDF checks passed. The original console SHA-256 is `5f7e9b59b9f2f3ae781c762643978b60d1ce627cae82bb5d0ff19612d87b73a8`. The full x64 artifact is preserved locally in `20261127T232122Z-37168-94cfd42c925646baa43dc150962a6e9c`. [Hosted x64 artifact](https://github.com/RedSalamanders/RedSalamander/actions/runs/46061664377/artifacts/15237492399)
+
+The pre-change x64 Release non-activating Viewer PE entry passed on `fe5d6e248bade5b7e35058a035baa6d0f88820a2`. This contains the HWND contract correction and unchanged viewer source. Receipt `8c2cff1733f7b30d221cb8695e191eb070a9d3b7eb038acc62abec61e7d6a2f1`, run `20261127T232334Z-39372-07dad03628ad4bf997b216bca421f17a`, console SHA-256 `4cac7e242a5992be3ddc3e330c0713dd330b5b84abf5d5f647df88303fe9ea21`. The filtered repository verdict was `NOT_EVALUATED`.
+
+The first two exact ViewerWeb candidate launches stopped before compilation because the isolated checkout lacked its pinned vcpkg inputs. Their run IDs are `20261127T232709Z-59132-39712ba67d284d32a9c6e4c3a0af64a4` and `20261127T233003Z-67196-2167e0c047014d75bf7f0def457c04fd`. Candidate `f8e90684f5099d93491dc47ea4625cd715898d29` now builds in the prepared checkout after the baseline suite drained. [ViewerWeb repair PR #390](https://github.com/RedSalamanders/RedSalamander/pull/390)
