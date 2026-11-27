@@ -116,8 +116,10 @@ Saving must be atomic and conflict-aware to prevent partial writes and stale-sna
    directory, uses the bounded zero-progress-safe handle writer, verifies the requested size, and flushes it.
 4. Under the per-target cross-process commit lock, compare the current target identity with the snapshot's
    expected identity. A mismatch returns `ERROR_REVISION_MISMATCH` and leaves the target unchanged.
-5. Publish the unique sibling using `MoveFileExW` replace/write-through semantics. The identity returned to the
-   caller is captured from the finalized sibling held through the move; do not re-stat the destination afterward.
+5. Publish the unique sibling through its open handle. When the snapshot expects a missing target, neither the
+   preferred rename nor its compatibility fallback may replace a destination. A competing creation reports
+   `ERROR_REVISION_MISMATCH` and preserves the other writer's file. The identity returned to the caller comes
+   from the finalized sibling held through the rename. Do not re-stat the destination afterward.
 6. A successful mutable save advances the caller's expected identity so the same snapshot can be saved again.
 
 Moving the canonical settings file to a diagnostic or explicit-replacement backup is also a publication

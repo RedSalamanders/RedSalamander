@@ -1,0 +1,1 @@
+- Preserve a settings file created by a competing writer during the first save and report the revision conflict to the caller.

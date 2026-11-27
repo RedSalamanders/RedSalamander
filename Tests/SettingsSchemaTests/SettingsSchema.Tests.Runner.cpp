@@ -30,6 +30,7 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "LocalFileTransaction.h"
 #include "PathUtils.h"
 #include "PluginConfiguration.h"
 #include "SettingsSchemaParser.h"
@@ -735,12 +736,28 @@ void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
     CleanupSettingsTestArtifacts(appId);
     const auto cleanup                       = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
     const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+    const std::wstring extendedSettingsPath  = Common::Paths::ToExtendedWin32Path(settingsPath.native());
 
     Common::Settings::Settings seed{};
     seed.theme.currentThemeId = L"builtin/light";
+#ifdef ENABLE_TESTS
+    Common::Files::Testing::FailNextLocalFileTransactionPublish(HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS));
+    const HRESULT lateCollision = Common::Settings::SaveSettings(appId, seed);
+    static_cast<void>(Common::Files::Testing::TakeNextLocalFileTransactionPublishFailure());
+    Check(lateCollision == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && GetFileAttributesW(extendedSettingsPath.c_str()) == INVALID_FILE_ATTRIBUTES,
+          L"settings create-only publication: a late destination collision is a revision conflict",
+          success);
+#endif
     Check(Common::Settings::SaveSettings(appId, seed) == S_OK, L"settings CAS: baseline save succeeds", success);
 
-    const std::wstring extendedSettingsPath = Common::Paths::ToExtendedWin32Path(settingsPath.native());
+    const std::string firstSavedBytes = ReadTestBytes(settingsPath);
+    Common::Settings::Settings competingCreator{};
+    competingCreator.theme.currentThemeId = L"builtin/dark";
+    Check(Common::Settings::SaveSettings(appId, competingCreator) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && ! firstSavedBytes.empty() &&
+              ReadTestBytes(settingsPath) == firstSavedBytes,
+          L"settings create-only publication: a stale missing snapshot preserves the competing file",
+          success);
+
     wil::unique_hfile compatibleReader(
         CreateFileW(extendedSettingsPath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
     Common::Settings::Settings sharedLoad{};

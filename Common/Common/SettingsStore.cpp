@@ -777,11 +777,22 @@ HRESULT WriteFileBytesAtomic(const std::filesystem::path& path,
         *writtenStamp = Common::Settings::SettingsFileStamp{};
     }
 
+    const bool createOnly        = expectedStamp && ! expectedStamp->has_value();
+    const auto targetPolicy      = createOnly ? Common::Files::ExistingTargetPolicy::FailIfExists : Common::Files::ExistingTargetPolicy::Replace;
+    const auto publicationStatus = [createOnly](HRESULT result) noexcept
+    {
+        if (createOnly && (result == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS) || result == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)))
+        {
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        }
+        return result;
+    };
+
     Common::Files::LocalFileTransaction transaction;
-    HRESULT hr = Common::Files::LocalFileTransaction::Create(path, Common::Files::ExistingTargetPolicy::Replace, true, transaction);
+    HRESULT hr = Common::Files::LocalFileTransaction::Create(path, targetPolicy, true, transaction);
     if (FAILED(hr))
     {
-        return hr;
+        return publicationStatus(hr);
     }
     hr = transaction.Write(bytes);
     if (FAILED(hr))
@@ -814,7 +825,7 @@ HRESULT WriteFileBytesAtomic(const std::filesystem::path& path,
     hr = transaction.Commit(bytes.size(), writtenStamp ? &committedInformation : nullptr);
     if (FAILED(hr))
     {
-        return hr;
+        return publicationStatus(hr);
     }
     if (writtenStamp)
     {
