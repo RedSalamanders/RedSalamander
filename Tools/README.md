@@ -546,7 +546,10 @@ firewall rules, accesses a device, or rewrites checked-in assets, read its
 `Run-AllTests.ps1` keeps active execution beneath the marked `runs/<runId>` tree.
 Each contained native self-test also leaves a unique `artifacts/native-process-exits/<guid>.json`
 with its original signed process exit, PID, executable and UTC observation before result
-normalization. Missing/stale results can fail coverage independently of that exit. Retry
+normalization. After a negative exit from the original Commands child, the runner can print
+`[selftest-commands-crash]` after containment closes. The console row associates the launch ID and
+exit with a recent, complete case boundary from the guarded Commands trace before desktop retirement
+or archiving. Missing/stale results can fail coverage independently of that exit. Retry
 records are separate, write failures stop execution, and archive refusal preserves the records.
 After children and owned-disk teardown finish, it verifies and renames the complete
 tree into `evidence/completed-runs/<runId>` on the same volume. Summary/dashboard

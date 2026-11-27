@@ -1,1 +1,0 @@
-- Add root restore, Release packaging and WinGet generation for both architectures. Default dependency installation to x64, use the canonical package directory for root packaging and hosted production, and preserve legacy package and manifest entry points.

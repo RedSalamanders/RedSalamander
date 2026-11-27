@@ -163,6 +163,8 @@ File Operations reported 294 passes, zero failures and 36 environment skips. Bot
 
 Download archive `20261127T123447Z-79056-5b3ef4e8c2a3483db68a6121d5d45438`. Native summary SHA-256 `a87ed25cdb65c686605da0fadfe53dcaff4685febbf3acf3c87b72d67bc6628b`. Regression receipt SHA-256 `91183a13591b8ee8cc3cc871305734c5884689d531f2eca802182b0968b073ec`. File Operations result SHA-256 `889983445fc7ff6827d76bc28d38c7bc88d1b16c05bdf80c230b11f3fd196454`. The combined test gate and production jobs skipped after the ARM64 failure.
 
+The promoted Commands result includes `cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation` passing in 2,284 ms. Its ZIP and 7z folder-selection assertions prove the complete archive entry set, retained original bytes and empty source directory, and no cleanup question or Delete when a tree receipt is unavailable. The Commands result SHA-256 is `2d9db08e76b5658fe2af21e18c7f813c0e00d7e26460d9734afd3beeb9bc28be`. The File Operations result also records passing `FileOps_ReviewRemediationContracts`, `Phase10_DeferredConsentAndRecycleEscalation`, and `Phase10_MetadataPreservationAndSourceRetention`. Exact Pack descendant cleanup and combined sensitive-metadata coverage remain open.
+
 ### Integrated non-interactive x64 Release PrePush
 
 The integrated source `fc3fe2499e11ce70eb3b1fc5bc426e3e17bfa197` built the test-enabled x64 Release solution in 7 minutes 58 seconds with zero warnings and errors. The runner verified initial receipt `36e84c4cb767b1334ec51ca9ea629f9a91fa1c13b1d3bf0c22a32bbc40e9ae39`, passed all 35 build-tooling tests, and re-attested receipt `21aa51848139198445f680aead0e3885fb0f8419b25fdaa1c14ee968bdab735f` with another zero-warning, zero-error build.
@@ -170,3 +172,41 @@ The integrated source `fc3fe2499e11ce70eb3b1fc5bc426e3e17bfa197` built the test-
 Fresh run `20261127T115257Z-66576-ae56caf6de77484ebe13ecf8bda2b90f` promoted all 14 selected entries. It reported 1,801 passes, zero failures and 30 Compare Directories environment skips. The full Tooling Pester entry passed 1,501 checks. The archived change verdict is `PASSED`. The repository verdict is `NOT_EVALUATED`, and the runner exited 2 because Commands, File Operations, Viewer PE Interactive and Viewer SQLite Interactive were outside the non-interactive plan.
 
 Canonical result SHA-256 `9458f6fbcf01a61b9b2e511be53172ff7d3ca833baa6bcb13a49ea732794175d`. Runner detail SHA-256 `ac69705f8969031bcac214dd41b944bbd35b3bfa8a6c662c97719234a613241b`. Both files are in the completed-run archive on the marked Z test root.
+
+### Approved viewer recheck
+
+Both exact viewer selections ran in the approved window on 2026-11-27. The launcher began at 14:33:18 CET and drained before the 14:45:18 CET cutoff. Source `36c07a80367f3986f05172fcd89b7b75aa5a4855`. All 188 outputs in each x64 profile verified against its receipt before launch. Release receipt `e03407c5c0b2bc4cd0d1d3cfac87e3fe889c6a52665dac1a008b5e5edacaf0fb`. Debug receipt `eb9fa049e81ca26846afca61fcc4e6c6ceec46d9c521dfa46fd01ea6e7e6f707`.
+
+- **Viewer PE Interactive, x64 Release.** Run `20261127T133320Z-71308-8ddcb037ed434ffeba8082d889aeb495`. The entry passed, including the previously interrupted VLC and ImgRaw focus checks. The runner finished in 3 minutes 22 seconds. Result SHA-256 `0c21062df063527552c028569878e47fe542f2272bdea465c4ea3fbff86bb5ab`. Child output SHA-256 `3f040be7d005363149b0b361a070e968b8d9edbaf25632f092e9a4207d1f3b74`.
+- **Viewer SQLite Interactive, x64 Debug.** Run `20261127T133738Z-54716-cd7d6cb85999494b8347c348771cf577`. `TestViewerWindowTabTraversalMatchesExpectedOrder` passed forward and reverse traversal, Escape focus return to the results grid, and closure from the grid. The runner finished in 17.8 seconds. Result SHA-256 `809048662c5c56b21cafac1173d3d3cf8b6a48b8d1df83e7f0c823feafe47d6a`. Child output SHA-256 `c81b0c87447a26597e7c77da10f44cc2b3a7b8bf883e055af2061a5cc3629c0d`.
+
+Each selection recorded one passed entry, zero failures and zero skips. Both archives completed under the marked C test root, and the launcher and owned test processes exited. Each filtered runner retained repository verdict `NOT_EVALUATED` and exit 2. The prior Release-only run retains its original verdicts.
+
+### Commands native exit diagnostic
+
+Candidate `d636033db3e0a8e34e1c2fe3dfe59f9fdbb12fa0` records the most recent complete case entry or return after the original Commands child exits with a negative native code. The runner emits the launch ID, signed exit and case boundary after containment closes and before desktop retirement. This preserves a bounded observation in the console when the full archive is refused. The observation identifies the last case boundary available in the trace.
+
+Focused Pester 3.4.0 run `20261127T135346Z-73832-01a4bff9c29d49b6bfb5d6bad44ef070` passed 12 checks with zero failures or skips in the marked Z sandbox. The checks include the injected negative exit, retirement ordering, the fresh bounded UTF-16 tail, unsafe and incomplete inputs, and original versus retry scope. Log SHA-256 `52977bdc0fdebc6715be738aa29b4ebb1e71d5bf205cc8eb516d84d82490bcc8`. A read-only replay of the real x64 Commands trace preserved by rotation recognized the return of `cmd_pane_copy_text` from the last 64 KiB of the 999,718-byte trace.
+
+A direct broader Pester launch lacked the canonical runner's module, planner arguments and exact native profile. The 397 passed checks and its failing fixture preconditions are retained in `20261127T134906Z-76344-c2125eb6a5d54d5482d13f2ed52e51df` and `20261127T140251Z-72584-d3ecb27611c047afaef27be4e8b74a0b`. Supplying the normal runner module and planner context passed all four affected-planning fixtures in `20261127T140520Z-70432-b8e09347cb3d4c549456a521bcfdfbad`. Canonical selected run `20261127T135417Z-53784-abd16f94c2fc4e14ac88dba47dc5c340` built test-enabled x64 Release on the exact candidate and bound receipt `1294c2b395a3f7f33c9537372048facc3f82c0d1d7d66b5fed3dc1ed5562c67f` with 188 outputs. Tooling Pester promoted 1,504 passes with zero failures and zero skips in 1,351.6 seconds. It completed archival with the filtered repository verdict `NOT_EVALUATED` and result exit 2. The scoped adapter returned 0 for the successful selected entry. Detail SHA-256 `dc4301325aeb10b29959734a994622acaf85c2d498873b60c71d8d6c39cd4744`. The [diagnostic PR](https://github.com/RedSalamanders/RedSalamander/pull/370) merged on `a9ca4a6472ff76212614e32a0e9b0ff03e57e38c`.
+
+### Hosted ARM64 foreground failure after live-provider qualification
+
+[Hosted ARM64 Release job](https://github.com/RedSalamanders/RedSalamander/actions/runs/45993909744/job/140509781386) failed on `8c3c568016794ce90178cafe56eea29f426a10e8`. Tooling Pester passed 1,501 checks with zero failures or skips. Compare Directories and the non-interactive Viewer PE and SQLite entries promoted.
+
+The Commands child ran on `WinSta0\Default` for 44 minutes 23 seconds of native case time, then exited 1 and closed its containment job. The original native suite reported 963 passes, two failures and five skips.
+
+- `cmd_pane_fileops_popup_throughput_disclosure` lost real foreground before Enter. Focus remained associated with the owned popup, while a `ConsoleWindowClass` window from a different process held foreground.
+- `cmd_viewer_space_hover_does_not_rebuild_static_cache` observed a `ConsoleWindowClass` window under the test pointer. The failed pointer sample belonged to the console.
+
+The hosted boundary refused foreground restoration. The outer desktop sample identified a separate foreground WSL process at retirement. The native case evidence identifies the earlier window class and the first case's PID independently. Canonical run `20261127T132325Z-5580-c78f80db1e174bd0897100ae0dfb2ec6` saved Commands as running without a promotion, while File Operations and the four interactive viewer entries remained pending. Its retained build receipt is `caa12463184a324ef994fabe20ff65c5b3d9d0f803edfe2095278e7dbd294e12`.
+
+Commands result SHA-256 `172b173d5644c74a6f438e68c899c5c82baeef86a08169ffad631bca210741ee`. Canonical run-state SHA-256 `61144db8c7db98660b7db6085eb325d1ea0929318b793c4bb246a5c38e88d4be`. Hosted evidence and workspace import `20261127T150203Z-39044-9b1cafb5ab2e4326bdf52f86d894a89c`. Complete job log archive `20261127T150301Z-43024-0539b2767ed943d386bb212c44c8c2c6` with SHA-256 `e255cb131ec763f2acc456d78fb87978190b22e30f17f4216de8887620d589e1`.
+
+### Hosted x64 success after live-provider qualification
+
+[Hosted x64 Release job](https://github.com/RedSalamanders/RedSalamander/actions/runs/45993909744/job/140509781222) passed on the same `8c3c568016794ce90178cafe56eea29f426a10e8` revision. The regression executed and passed all 3,028 required tests, with 72 expected skips, zero unexpected skips and no failures. The Release assertion probe passed. Native CI run `20261127T133015Z-2032-6dda6fd0c29b4b0882a3bf27e0647d66` promoted all 19 entries and reported exit 0. Build receipt `2375463eb2247b321ac64cecb4873057ec16671b16ca12426dc4b705c6ae433d`.
+
+Commands reported 965 passes and five skips. Both the path-detail and ViewerSpace hover cases that failed on ARM64 passed here. File Operations reported 293 passes, zero failures and 37 environment skips. The independent-volume and nested-roots Delete cases passed in that suite. The combined test gate and production jobs skipped following the ARM64 failure.
+
+Hosted evidence import `20261127T151601Z-85572-911f2b54a6af442a8310e4beb7b0515b`. Canonical summary SHA-256 `af52a48fa45523315013421fb7f32f7f3830cfee47a5ae9317304e75fbe11a26` matches the hosted regression receipt. Regression receipt SHA-256 `f3e24dc62bb0f52aa76d8cde199fc431c886f669b3f0a2a11a9825d2d95746f2`. File Operations result SHA-256 `9e19ae1c5edf4b2897790bd0288c9db4f9df6eee75947b75cfc6130391fc5f9d`.

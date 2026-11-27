@@ -7,15 +7,128 @@ $helperModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestRunPlan.psm1'
 $testSupport = Join-Path $PSScriptRoot 'TestSupport.psm1'
 Import-Module $testSupport -Force
 
-# Extract only the actual private diagnostic writer; never execute the runner.
+# Extract the actual private diagnostics without executing the runner.
 $launchTokens = $null; $launchErrors = $null
 $launchAst = [Management.Automation.Language.Parser]::ParseFile(
     (Join-Path $repoRoot 'Tools/Run-AllTests.ps1'), [ref]$launchTokens, [ref]$launchErrors)
-$launchWriter = $launchAst.Find({ param($node)
-    $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Write-RSSelfTestLaunchDiagnostic'
-}, $true)
-if (-not $launchWriter) { throw 'Missing actual private launch diagnostic writer.' }
-. ([scriptblock]::Create($launchWriter.Extent.Text))
+foreach ($diagnosticName in @('Get-RSLastCommandsCaseBoundary', 'Write-RSSelfTestLaunchDiagnostic')) {
+    $diagnostic = $launchAst.Find({ param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $diagnosticName
+    }, $true)
+    if (-not $diagnostic) { throw "Missing private diagnostic function $diagnosticName." }
+    . ([scriptblock]::Create($diagnostic.Extent.Text))
+}
+
+Describe 'Commands case boundary after native exit' {
+    BeforeEach {
+        Import-Module $helperModule -ErrorAction Stop
+        $caseTraceTestRoot = Get-RSTestSandboxRoot -RepoRoot $repoRoot
+        $caseTraceFixture = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot `
+            -Harness 'tools-pester' -Case ('commands-case-boundary-' + [guid]::NewGuid().ToString('N'))
+        $caseTraceDir = Join-Path $caseTraceFixture 'commands'
+        [void][IO.Directory]::CreateDirectory($caseTraceDir)
+        $caseTracePath = Join-Path $caseTraceDir 'trace.txt'
+        $caseTraceRequest = @{
+            TestRoot = $caseTraceTestRoot
+            ArtifactRoot = $caseTraceFixture
+            LaunchStartedUtc = [DateTime]::UtcNow.AddMinutes(-1)
+        }
+    }
+
+    It 'reads the last complete boundary in the bounded UTF-16 tail' {
+        $trace = "Case: old_case`r`n" + ('f' * 64KB) + "`r`n" +
+            "Case: current_case`r`nCase returned: current_case ok=yes failed=no skipped=no`r`n" +
+            "Case: C:\private\workspace`r`nCase: incomplete"
+        Set-Content -LiteralPath $caseTracePath -Value $trace -Encoding Unicode -NoNewline
+        $observation = Get-RSLastCommandsCaseBoundary @caseTraceRequest
+        $observation.CaseName | Should Be 'current_case'
+        $observation.Boundary | Should Be 'returned'
+
+        $clippedPrefix = "Case: clipped_prefix`r`n"
+        $tail = $clippedPrefix + ('f' * ((64KB / 2) - $clippedPrefix.Length))
+        Set-Content -LiteralPath $caseTracePath -Value (('x' * 64KB) + $tail) -Encoding Unicode -NoNewline
+        $null -eq (Get-RSLastCommandsCaseBoundary @caseTraceRequest) | Should Be $true
+    }
+
+    It 'omits a missing or stale trace and refuses an artifact path outside the sandbox' {
+        $null -eq (Get-RSLastCommandsCaseBoundary @caseTraceRequest) | Should Be $true
+        Set-Content -LiteralPath $caseTracePath -Value 'Case: stale_case' -Encoding Unicode
+        [IO.File]::SetLastWriteTimeUtc($caseTracePath, $caseTraceRequest.LaunchStartedUtc.AddMinutes(-1))
+        $null -eq (Get-RSLastCommandsCaseBoundary @caseTraceRequest) | Should Be $true
+
+        $caseTraceRequest.ArtifactRoot = Split-Path -Parent $caseTraceTestRoot
+        { Get-RSLastCommandsCaseBoundary @caseTraceRequest } | Should Throw 'TestSandbox path must remain below'
+    }
+
+    It 'publishes only the original negative Commands exit before desktop retirement' {
+        & {
+            $definition = $launchAst.Find({ param($node)
+                $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Invoke-RSSelfTestProcess'
+            }, $true)
+            . ([scriptblock]::Create($definition.Extent.Text))
+            $testRunContext = @{
+                TestRoot = $caseTraceTestRoot
+                RunRoot = $caseTraceFixture
+                ArtifactRoot = $caseTraceFixture
+            }
+            $nativeCrash = -1073740771
+            $observed = @{
+                ExitCode = $nativeCrash
+                FailRetirement = $true
+                Closed = $false
+                ClosedAtCaseRow = $false
+                Rows = [Collections.Generic.List[string]]::new()
+            }
+            function Test-RSTestEntryRequiresInteractiveDesktop { param($Entry) $true }
+            function Invoke-RSInteractiveDesktopOperation {
+                param($RequiresInteractiveDesktop, $Operation)
+                $result = & $Operation
+                if ($observed.FailRetirement) { throw 'seeded desktop retirement refusal' }
+                return $result
+            }
+            function Start-RSContainedProcess {
+                param($ProcessStartInfo)
+                $trace = "Case: prior_case`r`nCase returned: prior_case ok=yes failed=no skipped=no`r`nCase: latest_case"
+                Set-Content -LiteralPath $caseTracePath -Value $trace -Encoding Unicode
+                $child = [pscustomobject]@{ Id = 42; IsInContainmentJob = $true; ExitCode = $observed.ExitCode }
+                $child | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { }
+                return $child
+            }
+            function Close-RSContainedProcess { param($Process) $observed.Closed = $true }
+            function Write-Host {
+                param($Object)
+                $line = [string]$Object
+                $observed.Rows.Add($line)
+                if ($line.StartsWith('[selftest-commands-crash] ')) {
+                    $observed.ClosedAtCaseRow = $observed.Closed
+                }
+            }
+
+            $entry = [pscustomobject]@{ Path = 'fixture.exe'; WorkingDirectory = $caseTraceFixture }
+            $result = Invoke-RSTestBlock { Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--commands-selftest') }
+            $result.Succeeded | Should Be $false
+            $result.Error.Exception.Message | Should Match 'seeded desktop retirement refusal'
+            $observed.ClosedAtCaseRow | Should Be $true
+            $caseRows = @($observed.Rows | Where-Object { $_.StartsWith('[selftest-commands-crash] ') })
+            $caseRows.Count | Should Be 1
+            $caseRow = $caseRows[0].Substring('[selftest-commands-crash] '.Length) | ConvertFrom-Json
+            $closedRow = $observed.Rows[$observed.Rows.Count - 2].Substring('[selftest-launch] '.Length) | ConvertFrom-Json
+            $closedRow.stage | Should Be 'closed'
+            $caseRow.launch_id | Should Be $closedRow.launch_id
+            $caseRow.native_exit_code | Should Be $nativeCrash
+            $caseRow.case_name | Should Be 'latest_case'
+            $caseRow.case_boundary | Should Be 'entered'
+
+            $observed.FailRetirement = $false
+            $observed.Rows.Clear()
+            (Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--commands-selftest') -InvocationKind 'classification-case') | Should Be $nativeCrash
+            (Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest')) | Should Be $nativeCrash
+            $observed.ExitCode = 0
+            (Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--commands-selftest')) | Should Be 0
+            @($observed.Rows | Where-Object { $_.StartsWith('[selftest-commands-crash] ') }).Count | Should Be 0
+        }
+    }
+}
 
 Describe 'Shared scoped test entry points' {
     BeforeAll {
