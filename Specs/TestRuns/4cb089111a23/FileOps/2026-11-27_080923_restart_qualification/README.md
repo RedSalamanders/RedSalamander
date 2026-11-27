@@ -170,3 +170,12 @@ The integrated source `fc3fe2499e11ce70eb3b1fc5bc426e3e17bfa197` built the test-
 Fresh run `20261127T115257Z-66576-ae56caf6de77484ebe13ecf8bda2b90f` promoted all 14 selected entries. It reported 1,801 passes, zero failures and 30 Compare Directories environment skips. The full Tooling Pester entry passed 1,501 checks. The archived change verdict is `PASSED`. The repository verdict is `NOT_EVALUATED`, and the runner exited 2 because Commands, File Operations, Viewer PE Interactive and Viewer SQLite Interactive were outside the non-interactive plan.
 
 Canonical result SHA-256 `9458f6fbcf01a61b9b2e511be53172ff7d3ca833baa6bcb13a49ea732794175d`. Runner detail SHA-256 `ac69705f8969031bcac214dd41b944bbd35b3bfa8a6c662c97719234a613241b`. Both files are in the completed-run archive on the marked Z test root.
+
+### Approved viewer recheck
+
+Both exact viewer selections ran in the approved window on 2026-11-27. The launcher began at 14:33:18 CET and drained before the 14:45:18 CET cutoff. Source `36c07a80367f3986f05172fcd89b7b75aa5a4855`. All 188 outputs in each x64 profile verified against its receipt before launch. Release receipt `e03407c5c0b2bc4cd0d1d3cfac87e3fe889c6a52665dac1a008b5e5edacaf0fb`. Debug receipt `eb9fa049e81ca26846afca61fcc4e6c6ceec46d9c521dfa46fd01ea6e7e6f707`.
+
+- **Viewer PE Interactive, x64 Release.** Run `20261127T133320Z-71308-8ddcb037ed434ffeba8082d889aeb495`. The entry passed, including the previously interrupted VLC and ImgRaw focus checks. The runner finished in 3 minutes 22 seconds. Result SHA-256 `0c21062df063527552c028569878e47fe542f2272bdea465c4ea3fbff86bb5ab`. Child output SHA-256 `3f040be7d005363149b0b361a070e968b8d9edbaf25632f092e9a4207d1f3b74`.
+- **Viewer SQLite Interactive, x64 Debug.** Run `20261127T133738Z-54716-cd7d6cb85999494b8347c348771cf577`. `TestViewerWindowTabTraversalMatchesExpectedOrder` passed forward and reverse traversal, Escape focus return to the results grid, and closure from the grid. The runner finished in 17.8 seconds. Result SHA-256 `809048662c5c56b21cafac1173d3d3cf8b6a48b8d1df83e7f0c823feafe47d6a`. Child output SHA-256 `c81b0c87447a26597e7c77da10f44cc2b3a7b8bf883e055af2061a5cc3629c0d`.
+
+Each selection recorded one passed entry, zero failures and zero skips. Both archives completed under the marked C test root, and the launcher and owned test processes exited. Each filtered runner retained repository verdict `NOT_EVALUATED` and exit 2. The prior Release-only run retains its original verdicts.
