@@ -3168,12 +3168,13 @@ constexpr DWORD kBackupMetadataMaxStreamNameBytes = 64u * 1024u;
 constexpr size_t kBackupMetadataIoBufferBytes     = 64u * 1024u;
 constexpr uint32_t kMetadataBackupFeatures        = FILESYSTEM_METADATA_MOTW | FILESYSTEM_METADATA_ALTERNATE_STREAMS | FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES;
 
-[[nodiscard]] HRESULT ReopenExactFile(HANDLE source, DWORD desiredAccess, wil::unique_handle& reopened, DWORD additionalFlags = 0u) noexcept
+[[nodiscard]] HRESULT ReopenExactFile(HANDLE source,
+                                      DWORD desiredAccess,
+                                      wil::unique_handle& reopened,
+                                      DWORD additionalFlags = 0u,
+                                      DWORD shareMode       = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE) noexcept
 {
-    reopened.reset(ReOpenFile(source,
-                              desiredAccess,
-                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                              FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS | additionalFlags));
+    reopened.reset(ReOpenFile(source, desiredAccess, shareMode, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS | additionalFlags));
     if (! reopened)
     {
         const DWORD error = GetLastError();
@@ -3590,6 +3591,23 @@ constexpr std::wstring_view kStageCleanupDelayFiredEnvVar = L"REDSALAMANDER_FILE
 
 using LocalFileRevision = std::array<int64_t, 4>;
 
+[[nodiscard]] HRESULT ReadLocalFileRevision(HANDLE file, int64_t sizeBytes, LocalFileRevision& revision) noexcept
+{
+    FILE_BASIC_INFO basic{};
+    if (GetFileInformationByHandleEx(file, FileBasicInfo, &basic, sizeof(basic)) == FALSE)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+    if (basic.ChangeTime.QuadPart <= 0 || basic.LastWriteTime.QuadPart <= 0)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    revision = {basic.CreationTime.QuadPart, basic.LastWriteTime.QuadPart, basic.ChangeTime.QuadPart, sizeBytes};
+    return S_OK;
+}
+
 class LocalBoundObject final : public IFileSystemBoundObject,
                                public IFileSystemBoundMetadata,
                                public IFileSystemBoundContentProof,
@@ -3778,8 +3796,10 @@ public:
             return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
 
+        // Install the write exclusion before checking the revision on the handle that will read the data.
+        const DWORD shareMode = FILE_SHARE_READ | FILE_SHARE_DELETE | (_revision ? 0u : FILE_SHARE_WRITE);
         wil::unique_handle reopened;
-        const HRESULT reopenHr = ReopenExactFile(_file.get(), GENERIC_READ, reopened, FILE_FLAG_OVERLAPPED);
+        const HRESULT reopenHr = ReopenExactFile(_file.get(), GENERIC_READ, reopened, FILE_FLAG_OVERLAPPED, shareMode);
         if (FAILED(reopenHr))
         {
             return reopenHr;
@@ -3804,6 +3824,20 @@ public:
         {
             const DWORD error = GetLastError();
             return fileSize.QuadPart < 0 ? HRESULT_FROM_WIN32(ERROR_INVALID_DATA) : HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+
+        if (_revision)
+        {
+            LocalFileRevision current{};
+            const HRESULT revisionHr = ReadLocalFileRevision(reopened.get(), fileSize.QuadPart, current);
+            if (FAILED(revisionHr))
+            {
+                return revisionHr;
+            }
+            if (current != *_revision)
+            {
+                return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+            }
         }
 
         auto* impl = new (std::nothrow) Win32FileReader(std::move(reopened), static_cast<uint64_t>(fileSize.QuadPart), options);
@@ -7894,17 +7928,13 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path, FileSystem
         if (kind != FILESYSTEM_BOUND_REGULAR_FILE)
             return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
 
-        FILE_BASIC_INFO basic{};
-        if (GetFileInformationByHandleEx(file.get(), FileBasicInfo, &basic, sizeof(basic)) == FALSE)
+        LocalFileRevision snapshot{};
+        const HRESULT revisionHr = ReadLocalFileRevision(file.get(), static_cast<int64_t>(committedSizeBytes), snapshot);
+        if (FAILED(revisionHr))
         {
-            const DWORD error = GetLastError();
-            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+            return revisionHr;
         }
-        if (basic.ChangeTime.QuadPart <= 0 || basic.LastWriteTime.QuadPart <= 0)
-            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-
-        revision = std::make_unique<const LocalFileRevision>(
-            LocalFileRevision{basic.CreationTime.QuadPart, basic.LastWriteTime.QuadPart, basic.ChangeTime.QuadPart, static_cast<int64_t>(committedSizeBytes)});
+        revision = std::make_unique<const LocalFileRevision>(snapshot);
     }
 
     auto* impl = new (std::nothrow) LocalBoundObject(std::move(file), identity, kind, committedSizeBytes, flags, false, path, std::move(revision));

@@ -2165,6 +2165,9 @@ records inventory preparation, archive format, entry count, selected root count 
 measures worker execution. `archive.pack.admission.ui_thread_us` measures pane capture, options, consent and task admission.
 Pack requires an error-free source listing and keeps the selected originals if any entry is omitted from the archive.
 For a regular-file selection, both Pack writers read from each approved source identity and revision.
+Each such read holds a Local handle that excludes data writers for the read lifetime and checks the
+approved revision on that handle. A writer already holding the source or a revision mismatch fails
+the operation before publication and leaves the prior output and sources intact.
 The cleanup task retains the published archive's exact file handle with write and delete sharing denied while it
 rebinds those versions for nonrecursive Delete before removing any selected file.
 If Pack cannot prove the exact cleanup set, including the descendants of selected directories, it
@@ -2188,8 +2191,8 @@ If Unpack skips a requested entry because of a destination conflict or reports
 incomplete extraction, it keeps the selected archive set and reports that in
 the pane. Before asking to delete the selected archives, Unpack captures each
 regular archive's provider identity and revision. It rebinds each file against
-that snapshot before reading from the binding, including ZIP fallback
-extraction. The cleanup plan carries those snapshots and requires a matching
+that snapshot before opening a revision-checked read handle that excludes writers.
+Both ZIP extraction paths use that handle. The cleanup plan carries those snapshots and requires a matching
 nonrecursive Delete binding for every approved archive before any removal.
 A changed source stops cleanup and is reported on the task. If the original
 selection cannot supply an exact snapshot, Unpack can extract and keeps all

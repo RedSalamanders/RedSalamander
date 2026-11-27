@@ -14807,6 +14807,72 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         }
     }
 
+    const std::wstring busySourceName = L"busy-source.txt";
+    const auto busySource             = packCleanupRoot / busySourceName;
+    if (! state.Require(SelfTest::WriteTextFile(busySource, "approved archive source") &&
+                            ForceRefreshPaneForCommandSelfTest(mainWindow, FolderWindow::Pane::Left, SelfTest::Scale(3000ms)) &&
+                            WaitForPaneItems(FolderWindow::Pane::Left, {busySourceName}, SelfTest::Scale(3000ms)) &&
+                            g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, busySourceName),
+                        L"The active-writer Pack test needs a selected source."))
+        return false;
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [&](std::wstring_view name) noexcept { return name == busySourceName; });
+
+    const auto openWriter = [&busySource]() noexcept
+    {
+        return wil::unique_hfile(CreateFileW(
+            busySource.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    };
+    {
+        const auto writer = openWriter();
+        if (! state.Require(static_cast<bool>(writer), L"Open the competing source writer for both Pack formats."))
+            return false;
+
+        for (const std::wstring_view extension : {L"zip", L"7z"})
+        {
+            FolderWindow::ArchiveCommandDebugOptions busyPack{};
+            busyPack.archivePath     = outputRoot / std::format(L"busy-source.{}", extension);
+            busyPack.packerExtension = extension;
+            busyPack.deleteAfter     = true;
+            busyPack.overwrite       = true;
+            if (! state.Require(SelfTest::WriteTextFile(busyPack.archivePath, "previous archive"), L"Seed the existing Pack output."))
+                return false;
+            g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(busyPack);
+            if (! state.Require(dispatchApprovedCleanup(L"cmd/pane/pack", L"The active-writer Pack test requires exact cleanup consent."),
+                                L"Dispatch approved Pack while its source has an active writer."))
+                return false;
+            const auto packed = waitForArchiveResult();
+            if (! state.Require(packed.has_value() && FAILED(packed->hr) && cleanupIdle() &&
+                                    ReadUtf8TextFileForCommandSelfTest(busyPack.archivePath) == L"previous archive" &&
+                                    ReadUtf8TextFileForCommandSelfTest(busySource) == L"approved archive source",
+                                std::format(L"{} must refuse the active writer, preserve both files and leave no active cleanup.", extension)))
+                return false;
+        }
+    }
+
+    const auto localFileSystem        = g_folderWindow.GetFileSystem(FolderWindow::Pane::Left);
+    constexpr auto versionedReadFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA |
+                                                                         FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_REVISION);
+    const auto versionedSource        = FileOperations::BindObjectAuthority(localFileSystem.get(), busySource.native(), L"local-win32", versionedReadFlags);
+    wil::com_ptr<IFileReader> versionedReader;
+    if (! state.Require(versionedSource.state == FileOperations::ObjectBindingState::Bound &&
+                            versionedSource.authority.boundObject->OpenReader(nullptr, versionedReader.put()) == S_OK && versionedReader,
+                        L"Open the reader for the approved Local revision with no writer present."))
+        return false;
+    const auto deniedWriter = openWriter();
+    const DWORD writerError = deniedWriter ? ERROR_SUCCESS : GetLastError();
+    if (! state.Require(writerError == ERROR_SHARING_VIOLATION, L"The active versioned reader must deny a new writer."))
+        return false;
+    versionedReader.reset();
+
+    if (! state.Require(SelfTest::WriteTextFile(busySource, "modified archive source"), L"The same file can be rewritten after the reader closes."))
+        return false;
+    std::filesystem::last_write_time(busySource, std::filesystem::file_time_type::clock::now() - std::chrono::hours(24), ec);
+    if (! state.Require(! ec &&
+                            versionedSource.authority.boundObject->OpenReader(nullptr, versionedReader.put()) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) &&
+                            ! versionedReader,
+                        L"Opening the old version must refuse a same-size change made before this read."))
+        return false;
+
     const std::filesystem::path cp437ArchivePath = outputRoot / L"cp437.zip";
     std::string cp437EntryName                   = "caf";
     cp437EntryName.push_back(static_cast<char>(0x82u));
