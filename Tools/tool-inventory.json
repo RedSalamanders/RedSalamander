@@ -1594,7 +1594,7 @@
         "Suspends and re-attests only the selected profile around a declared artifact writer",
         "Runs contained test executables and Pester",
         "Writes a unique create-only raw native self-test exit record before result parsing; a write failure fails execution",
-        "May print a bounded Commands case boundary after the original child returns a negative native exit, before desktop retirement or archive processing",
+        "Observes the original Commands trace metadata before launch and may print a bounded case boundary from a changed trace after a negative native exit, before desktop retirement or archiving",
         "Holds the Windows-session mutex only around plan entries marked RequiresInteractiveDesktop",
         "Creates run, temp, archive, and evidence state only beneath exact X:/RedSalamander.Perf",
         "Projects explicitly configured non-secret Connection Manager profile names, SMB roots, MTP selectors, and one exact alternate local test root into the runner process and restores the caller environment",

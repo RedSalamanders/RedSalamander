@@ -2151,7 +2151,8 @@ Pack offers stored ZIP and 7z. Unpack accepts ZIP input and uses the 7-Zip decod
 
 After the Pack options and any exact cleanup confirmation, Pack enters the File Operations scheduler with its captured
 Local provider instance, sources, format and archive target. Preparation qualifies the source and publication scopes.
-The worker inventories and encodes the selection. The task can pause between work checkpoints and can cancel before
+The worker prepares one sorted source inventory and checks any approved cleanup receipt against it. Stored ZIP
+and 7z consume that prepared inventory. The task can pause between work checkpoints and can cancel before
 commit. Once publication succeeds, a later cancellation keeps the archive and withholds source cleanup.
 Pane completion refreshes visible matching Local output folders. A changed source pane provider cannot redirect cleanup.
 
@@ -2159,15 +2160,18 @@ Both Pack writers use the shared Local file transaction to write a private sibli
 the retained handle after the archive is complete. An existing archive remains available until successful
 replacement. A creation, encoding, flush or publication failure preserves the previous target, retires the
 unpublished stage by handle and starts no source cleanup. The `archive.pack.publish_us` metric
-records the completed-output flush and publication duration, archive format and result. `archive.pack_us`
+records the completed-output flush and publication duration, archive format and result. `archive.pack.prepare_us`
+records inventory preparation, archive format, entry count, selected root count and result. `archive.pack_us`
 measures worker execution. `archive.pack.admission.ui_thread_us` measures pane capture, options, consent and task admission.
 Pack requires an error-free source listing and keeps the selected originals if any entry is omitted from the archive.
 For a regular-file selection, both Pack writers read from each approved source identity and revision.
 The cleanup task retains the published archive's exact file handle with write and delete sharing denied while it
 rebinds those versions for nonrecursive Delete before removing any selected file.
 If Pack cannot prove the exact cleanup set, including the descendants of selected directories, it
-writes the archive and keeps the originals without asking to delete them. Archive admission requires
-the version receipt and rejects recursive Delete.
+writes the archive and keeps the originals without asking to delete them. After complete publication,
+the pane alert reports that Pack created the archive and kept the originals. When a source entry was
+omitted, the alert reports incomplete packing and retained originals. Archive admission requires the
+version receipt and rejects recursive Delete.
 When an exact regular-file Pack or Unpack selection contains a possible leftover, the permanent-delete
 confirmation includes the leftover disclosure. Confirming accepts the exact artifact touch receipt.
 Admission compares the receipt before publishing the cleanup task and the worker checks it again after waiting.
@@ -2316,9 +2320,16 @@ in the published layout is coerced to Cancel.
 | Destination space unknown | Continue | Same task/risk/destination root when explicitly selected |
 | EFS plaintext destination | Copy/Move without encryption; Copy and keep source on Move | Same task/risk/destination root when explicitly selected |
 | Sparse allocation inflation | Continue | Same task/risk/destination root when explicitly selected |
+| EFS plaintext and sparse inflation together | Copy/Move without encryption or Copy and keep source on Move | Same task, combined risk and destination root when explicitly selected |
 | Placeholder hydration/recall | Download and continue | Same task/risk/destination root when explicitly selected |
 | Security-significant metadata loss on an unpublished Move stage | Move anyway / Copy and keep source / Skip item | Same task/risk/destination root when explicitly selected |
 | Recycle escalation | Delete permanently / Skip; Delete all remaining permanently (multi-item task, a direct action) | Exact item, or the explicit task-scoped choice for later known non-commits on the same profile/root; never the Apply-to-all checkbox |
+
+When the staged transfer has established both EFS loss and sparse inflation before writing file data,
+the deferred-consent gate presents the two consequences together. A matching combined decision covers
+both risks for the item. Any repeat grant is scoped to the combined risk. Placeholder hydration still
+has its own earlier decision before opening a reader. A loss discovered later uses its appropriate
+publication and source-retention rules.
 
 An accepted per-item choice is returned directly to the waiting executor together with its accepted
 prompt observation; validation remains bound to that task, prompt generation, item and destination

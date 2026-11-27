@@ -4578,7 +4578,7 @@ case SelfTestState::Step::Phase10_MetadataPreservationAndSourceRetention:
         return false;
     }
 
-    if (state.stepState >= 2 && state.stepState <= 4)
+    if (state.stepState == 2 || state.stepState == 3)
     {
         Task* task        = state.taskB.has_value() ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
         const auto prompt = TryGetConflictPromptCopy(task);
@@ -4586,15 +4586,13 @@ case SelfTestState::Step::Phase10_MetadataPreservationAndSourceRetention:
         {
             return false;
         }
-        constexpr std::array<ConflictBucket, 3> expectedBuckets{{
+        constexpr std::array<ConflictBucket, 2> expectedBuckets{{
             ConflictBucket::PlaceholderHydration,
-            ConflictBucket::EfsPlaintext,
-            ConflictBucket::SparseInflation,
+            ConflictBucket::EfsPlaintextAndSparseInflation,
         }};
-        constexpr std::array<ConflictAction, 3> decisions{{
+        constexpr std::array<ConflictAction, 2> decisions{{
             ConflictAction::Proceed,
             ConflictAction::RetainSource,
-            ConflictAction::Proceed,
         }};
         const size_t index = static_cast<size_t>(state.stepState - 2u);
         // SubmitConflictDecision is asynchronous. The just-submitted prompt can remain visible for
@@ -4610,7 +4608,7 @@ case SelfTestState::Step::Phase10_MetadataPreservationAndSourceRetention:
             return true;
         }
         task->DebugSubmitCurrentConflictDecision(decisions[index], false);
-        ++state.stepState;
+        state.stepState = index == 0u ? 3 : 5;
         return false;
     }
 
@@ -4772,7 +4770,7 @@ case SelfTestState::Step::Phase10_MetadataPreservationAndSourceRetention:
         }
 
         Debug::Perf::Emit(L"FileOps.SelfTest.MetadataMatrix",
-                          L"ads-motw-sparse=preserved;placeholder-efs-sparse=consented;loss=source-retained;cancel=not-published-retained",
+                          L"ads-motw-sparse=preserved;placeholder=consented;efs-sparse=consented-together;loss=source-retained;cancel=not-published-retained",
                           0u,
                           4u,
                           0u,

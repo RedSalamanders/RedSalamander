@@ -42,7 +42,7 @@
     Every native self-test launch records its actual process exit separately under the run's
     artifacts/native-process-exits directory, before coverage and archive processing.
     A negative native exit from the original Commands child can also print its last observed
-    case boundary from the current run's trace after containment closes.
+    case boundary after containment closes, when the current run's trace differs from its prelaunch file state.
 
 .PARAMETER Suite
     Which suite(s) to run:
@@ -978,20 +978,40 @@ function Invoke-RSTestEntryClassificationRetry {
         -Reason (Get-RSTestResultFailureReason -Result $retryResult)
 }
 
-function Get-RSLastCommandsCaseBoundary {
+function Get-RSCommandsCaseTraceState {
     param(
         [Parameter(Mandatory)][string]$TestRoot,
-        [Parameter(Mandatory)][string]$ArtifactRoot,
-        [Parameter(Mandatory)][datetime]$LaunchStartedUtc
+        [Parameter(Mandatory)][string]$ArtifactRoot
     )
 
     $tracePath = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot `
         -Path (Join-Path $ArtifactRoot 'commands/trace.txt') -RequireDescendant
-    $traceFile = [IO.FileInfo]::new($tracePath)
-    if (-not $traceFile.Exists -or $traceFile.LastWriteTimeUtc -lt $LaunchStartedUtc) { return }
+    try {
+        $trace = Get-Item -LiteralPath $tracePath -ErrorAction Stop
+    } catch [Management.Automation.ItemNotFoundException] {
+        return @{ Path = $tracePath; Version = 'absent' }
+    }
+    if ($trace -isnot [IO.FileInfo]) { throw 'The Commands trace path must name an ordinary file.' }
+
+    # Filesystem timestamps can precede the launch clock even for a write made after launch.
+    return @{
+        Path = $tracePath
+        Version = '{0}:{1}:{2}' -f $trace.Length, $trace.CreationTimeUtc.Ticks, $trace.LastWriteTimeUtc.Ticks
+    }
+}
+
+function Get-RSLastCommandsCaseBoundary {
+    param(
+        [Parameter(Mandatory)][string]$TestRoot,
+        [Parameter(Mandatory)][string]$ArtifactRoot,
+        [Parameter(Mandatory)][string]$BeforeVersion
+    )
+
+    $trace = Get-RSCommandsCaseTraceState -TestRoot $TestRoot -ArtifactRoot $ArtifactRoot
+    if ($trace.Version -ceq 'absent' -or $trace.Version -ceq $BeforeVersion) { return }
 
     # The native trace is UTF-16LE. Bound the read and discard partial records.
-    $stream = [IO.File]::Open($tracePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $stream = [IO.File]::Open($trace.Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
     try {
         $length = $stream.Length
         $alignedLength = $length - ($length % 2)
@@ -1077,7 +1097,11 @@ function Write-RSSelfTestLaunchDiagnostic {
         scope = 'direct-owned-launch-only;absence-uninformative;not-foreign-creator-proof'
         }) | ConvertTo-Json -Compress))
 
-        if ($null -ne $CommandsCaseTrace) {
+        if ($null -ne $CommandsCaseTrace -and $Stage -ceq 'before-start') {
+            $traceBeforeLaunch = Get-RSCommandsCaseTraceState -TestRoot $CommandsCaseTrace.TestRoot -ArtifactRoot $CommandsCaseTrace.ArtifactRoot
+            $CommandsCaseTrace.BeforeVersion = $traceBeforeLaunch.Version
+        } elseif ($null -ne $CommandsCaseTrace -and $Stage -ceq 'closed' -and $CloseCompleted -and
+            $null -ne $NativeExitCode -and $NativeExitCode -lt 0 -and $null -ne $CommandsCaseTrace.BeforeVersion) {
             $caseBoundary = Get-RSLastCommandsCaseBoundary @CommandsCaseTrace
             if ($null -ne $caseBoundary) {
                 Write-Host ('[selftest-commands-crash] ' + (([ordered]@{
@@ -1401,11 +1425,19 @@ function Invoke-RSSelfTestProcess {
             $nativeExitCode = $null
             $nativeFailure = $null
             $desktopRequest = if ((Test-RSTestEntryRequiresInteractiveDesktop -Entry $Entry) -and $env:REDSALAMANDER_HOSTED_TEST_DESKTOP -ceq 'default') { 'WinSta0\Default' } else { 'inherited' }
+            $commandsCaseTrace = $null
             try {
-                Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind $InvocationKind -Stage 'before-start' -Process $null -DesktopRequest $desktopRequest
+                if ($InvocationKind -ceq 'original' -and $Arguments -ccontains '--commands-selftest') {
+                    $commandsCaseTrace = @{
+                        TestRoot = $testRunContext.TestRoot
+                        ArtifactRoot = $testRunContext.ArtifactRoot
+                        BeforeVersion = $null
+                    }
+                }
+                Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind $InvocationKind `
+                    -Stage 'before-start' -Process $null -DesktopRequest $desktopRequest -CommandsCaseTrace $commandsCaseTrace
                 Write-Host '[selftest-preflight] Starting the contained native process.' -ForegroundColor DarkGray
                 $launchClock = [Diagnostics.Stopwatch]::StartNew()
-                $launchStartedUtc = [DateTime]::UtcNow
                 $process = Start-RSContainedProcess -ProcessStartInfo $startInfo
                 $launchClock.Stop()
                 Write-Host "[selftest-preflight] Contained native process started: $($launchClock.ElapsedMilliseconds) ms; pid=$($process.Id)." -ForegroundColor DarkGray
@@ -1438,15 +1470,6 @@ function Invoke-RSSelfTestProcess {
                 }
                 if ($null -eq $closeFailure -and $null -eq $diagnosticFailure) {
                     try {
-                        $commandsCaseTrace = $null
-                        if ($InvocationKind -ceq 'original' -and $Arguments -ccontains '--commands-selftest' -and
-                            $null -ne $nativeExitCode -and $nativeExitCode -lt 0) {
-                            $commandsCaseTrace = @{
-                                TestRoot = $testRunContext.TestRoot
-                                ArtifactRoot = $testRunContext.ArtifactRoot
-                                LaunchStartedUtc = $launchStartedUtc
-                            }
-                        }
                         Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind $InvocationKind `
                             -Stage 'closed' -Process $null -DesktopRequest $desktopRequest -NativeExitCode $nativeExitCode `
                             -CloseCompleted ($null -ne $process) -CommandsCaseTrace $commandsCaseTrace

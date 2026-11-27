@@ -14290,6 +14290,11 @@ struct StoredZipDeclaredEntryForCommandSelfTest
             std::format(
                 L"{} Pack must write the complete folder selection and keep every source without a cleanup prompt or Delete when no tree receipt is available.",
                 extension));
+        FolderView::AlertOverlayDebugSnapshot keptAlert{};
+        state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, keptAlert) && keptAlert.visible &&
+                          keptAlert.severity == FolderView::OverlaySeverity::Warning && ! keptAlert.blocksInput &&
+                          keptAlert.message == FormatStringResource(nullptr, IDS_FMT_ARCHIVE_PACK_ORIGINALS_KEPT, retainedArchive.wstring()),
+                      std::format(L"{} Pack should say it created the archive and kept the originals.", extension));
     }
 
     {
@@ -14321,6 +14326,11 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                           ReadUtf8TextFileForCommandSelfTest(sourceRoot / L"alpha.txt") == L"alpha" &&
                           ReadUtf8TextFileForCommandSelfTest(nestedRoot / L"beta.txt") == L"beta",
                       L"Pack should retain the original files and link without queuing a Delete.");
+        FolderView::AlertOverlayDebugSnapshot incompleteAlert{};
+        state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, incompleteAlert) && incompleteAlert.visible &&
+                          incompleteAlert.severity == FolderView::OverlaySeverity::Warning && ! incompleteAlert.blocksInput &&
+                          incompleteAlert.message == LoadStringResource(nullptr, IDS_MSG_ARCHIVE_PACK_SOURCES_KEPT),
+                      L"Pack should report that an item was omitted and the originals were kept.");
     }
 
     const std::filesystem::path existingArchivePath = outputRoot / L"existing.zip";

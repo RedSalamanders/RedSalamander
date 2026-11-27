@@ -485,7 +485,8 @@ UINT FileOperations::ConflictClassMessageId(ConflictClass bucket) noexcept
         case ConflictClass::RecycleFailed: return IDS_FILEOPS_CONFLICT_RECYCLE_BIN;
         case ConflictClass::InsufficientSpace: return IDS_FILEOPS_CONSENT_LOW_SPACE;
         case ConflictClass::SpaceUnknown: return IDS_FILEOPS_CONSENT_SPACE_UNKNOWN;
-        case ConflictClass::EfsPlaintext: return IDS_FILEOPS_CONSENT_EFS_PLAINTEXT;
+        case ConflictClass::EfsPlaintext:
+        case ConflictClass::EfsPlaintextAndSparseInflation: return IDS_FILEOPS_CONSENT_EFS_PLAINTEXT;
         case ConflictClass::SparseInflation: return IDS_FILEOPS_CONSENT_SPARSE_INFLATION;
         case ConflictClass::PlaceholderHydration: return IDS_FILEOPS_CONSENT_PLACEHOLDER_HYDRATION;
         case ConflictClass::MetadataLoss: return IDS_FILEOPS_CONSENT_METADATA_LOSS;
@@ -504,6 +505,10 @@ UINT FileOperations::ConflictClassMessageId(ConflictClass bucket) noexcept
 
 std::wstring FileOperations::FormatConflictProblemText(ConflictClass bucket, HRESULT status, std::optional<std::wstring_view> systemText) noexcept
 {
+    if (bucket == ConflictClass::EfsPlaintextAndSparseInflation)
+    {
+        return LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_EFS_PLAINTEXT) + L" " + LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_SPARSE_INFLATION);
+    }
     if (bucket != ConflictClass::Unknown)
         return LoadStringResource(nullptr, ConflictClassMessageId(bucket));
 
@@ -546,6 +551,7 @@ std::wstring FileOperations::FormatConflictActionLabel(ConflictAction action, Co
             switch (bucket)
             {
                 case ConflictClass::EfsPlaintext:
+                case ConflictClass::EfsPlaintextAndSparseInflation:
                     return LoadStringResource(nullptr,
                                               operation == FILESYSTEM_MOVE ? IDS_FILEOPS_CONSENT_BTN_MOVE_UNENCRYPTED : IDS_FILEOPS_CONSENT_BTN_PLAINTEXT);
                 case ConflictClass::PlaceholderHydration: return LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_BTN_DOWNLOAD);
@@ -577,7 +583,8 @@ std::wstring FileOperations::FormatConflictActionLabel(ConflictAction action, Co
             }
         case ConflictAction::RetainSource:
             return LoadStringResource(nullptr,
-                                      operation == FILESYSTEM_MOVE && (bucket == ConflictClass::EfsPlaintext || bucket == ConflictClass::MetadataLoss)
+                                      operation == FILESYSTEM_MOVE && (bucket == ConflictClass::EfsPlaintext || bucket == ConflictClass::MetadataLoss ||
+                                                                       bucket == ConflictClass::EfsPlaintextAndSparseInflation)
                                           ? IDS_FILEOPS_CONSENT_BTN_COPY_KEEP_SOURCE
                                           : IDS_FILEOPS_CONSENT_BTN_KEEP_SOURCE);
         case ConflictAction::RunConcurrently: return LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_BTN_RUN_CONCURRENT);
