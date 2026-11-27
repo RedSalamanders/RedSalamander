@@ -14310,13 +14310,9 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
 
     constexpr auto bindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
     wil::com_ptr<IFileSystemBoundObject> share;
-    const HRESULT shareIdentity = binding->BindObject(remoteRoot.c_str(), bindFlags, share.put());
-    if (shareIdentity == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && ! share)
-    {
-        unavailableReason = L"the registered share does not provide exact SMB identities for Managed Move";
-        return true;
-    }
-    if (shareIdentity != S_OK || ! share)
+    const HRESULT shareIdentity        = binding->BindObject(remoteRoot.c_str(), bindFlags, share.put());
+    const bool shareLacksExactIdentity = shareIdentity == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && ! share;
+    if (! shareLacksExactIdentity && (shareIdentity != S_OK || ! share))
         return reject(std::format(L"the registered root identity probe returned 0x{:08X}", static_cast<uint32_t>(shareIdentity)));
     share.reset();
 
@@ -14352,8 +14348,17 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
         return reject(L"could not write both fixture files");
 
     wil::com_ptr<IFileSystemBoundObject> sourceBinding;
-    const HRESULT sourceIdentity = binding->BindObject(managedSource.c_str(), bindFlags, sourceBinding.put());
-    if (sourceIdentity != S_OK || ! sourceBinding)
+    const HRESULT sourceIdentity        = binding->BindObject(managedSource.c_str(), bindFlags, sourceBinding.put());
+    const bool sourceLacksExactIdentity = sourceIdentity == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && ! sourceBinding;
+    if (sourceLacksExactIdentity)
+    {
+        const auto factsProvider = state.fsLocal.try_query<IFileSystemExpectedOccupantPublication>();
+        FileSystemExpectedOccupant facts{};
+        facts.sizeBytes = sizeof(facts);
+        if (! factsProvider || factsProvider->ReadExpectedOccupant(managedSource.c_str(), &facts) != S_OK || facts.fileSizeBytes != managedBytes.size())
+            return reject(L"the SMB provider could not corroborate the opened source without an exact ID");
+    }
+    else if (sourceIdentity != S_OK || ! sourceBinding)
         return reject(std::format(L"the owned SMB file identity probe returned 0x{:08X}", static_cast<uint32_t>(sourceIdentity)));
     sourceBinding.reset();
 
@@ -14417,11 +14422,10 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
     // The child is empty after Managed cleanup. Remove only that exact child.
     if (! isOrdinaryDirectory(remoteRoot) || ! isOrdinaryDirectory(remoteFixture) || ! RemoveDirectoryW(remoteFixture.c_str()) || ! isAbsent(remoteFixture))
         return reject(L"could not retire the empty SMB fixture nonrecursively");
-    removed = true;
-    Debug::Perf::Emit(
-        L"FileOps.SelfTest.SmbMixedMove", L"local-native-and-smb-managed", Debug::Perf::ElapsedUs(started), 2u, result.bridgeStageCreateCount, S_OK);
-    AppendLog(
-        L"SMB mixed Move: one task completed the Local Native and SMB Managed items. Both destinations matched their sources and the SMB fixture retired.");
+    removed                       = true;
+    const std::wstring_view route = sourceLacksExactIdentity ? L"local-native-and-smb-managed-by-facts" : L"local-native-and-smb-managed";
+    Debug::Perf::Emit(L"FileOps.SelfTest.SmbMixedMove", route, Debug::Perf::ElapsedUs(started), 2u, result.bridgeStageCreateCount, S_OK);
+    AppendLog(std::format(L"SMB mixed Move: one task completed {} with exact payloads, absent originals and retired fixture.", route));
     return true;
 }
 
