@@ -1179,6 +1179,63 @@ Describe 'Direct Commands no-activation admission' {
     }
 }
 
+Describe 'Standalone viewer desktop selection' {
+    It 'preserves canonical order, native commands and desktop requirements for the four exact viewer entries' {
+        Import-Module $helperModule -ErrorAction Stop
+        $ci = @(Get-RSTestRunPlan -Suite CI -RepoRoot $repoRoot -Platform x64 -Configuration Release `
+            -RedSalamanderExePath (Join-Path $repoRoot '.build/x64/Release/RedSalamander.exe'))
+        $requested = @('viewer-pe.goto-prompt','viewer-pe.find-prompt','viewer-sqlite.interactive','viewer-pe.interactive')
+        $selected = @(Select-RSScopedTestRunEntries -Entries $ci -EntryId $requested -ViewerDesktop)
+        Assert-RSSequenceEqual -Actual @($selected | ForEach-Object Id) -Expected @(
+            'viewer-pe.interactive','viewer-sqlite.interactive','viewer-pe.find-prompt','viewer-pe.goto-prompt'
+        ) -Message 'Viewer entries must execute in canonical CI order.'
+        Assert-RSSequenceEqual -Actual @($selected | ForEach-Object { $_.Arguments[0] }) -Expected @(
+            '--group=interactive','--group=interactive','TestViewerTextFindPromptUsesDxUiHostAndClosesCleanly',
+            'TestViewerTextGotoPromptUsesDxUiHostAndClosesCleanly'
+        ) -Message 'Viewer entries must retain their native case and group selections.'
+        foreach ($entry in $selected) {
+            $entry.RequiresInteractiveDesktop | Should Be $true
+            ($entry.ResourceClasses -contains 'interactive-desktop') | Should Be $true
+            ($entry.EnvironmentInputs -contains 'env.interactive-desktop') | Should Be $true
+            @($entry.ArtifactWriteIds).Count | Should Be 0
+        }
+
+        foreach ($id in @('viewer-pe.noninteractive','viewer-pe.*','Viewer-pe.interactive','selftest.commands','tooling.pester-build-toolchain')) {
+            $rejection = ''
+            try { $null = Select-RSScopedTestRunEntries -Entries $ci -EntryId @($id) -ViewerDesktop }
+            catch { $rejection = $_.Exception.Message }
+            $rejection | Should Be "Unknown or ineligible viewer desktop test entry '$id'."
+        }
+        $duplicate = ''
+        try { $null = Select-RSScopedTestRunEntries -Entries $ci -EntryId @('viewer-pe.interactive','viewer-pe.interactive') -ViewerDesktop }
+        catch { $duplicate = $_.Exception.Message }
+        $duplicate | Should Be "Duplicate scoped test entry 'viewer-pe.interactive'."
+
+        $defaultRejection = ''
+        try { $null = Select-RSScopedTestRunEntries -Entries $ci -EntryId @('viewer-pe.interactive') }
+        catch { $defaultRejection = $_.Exception.Message }
+        $defaultRejection | Should Be "Unknown or desktop-required scoped test entry 'viewer-pe.interactive'."
+    }
+
+    It 'rejects mixed selection, unverified builds and qualification references before touching the sandbox' {
+        $runner = Join-Path $repoRoot 'Tools/Run-AllTests.ps1'
+        $pwsh = (Get-Command pwsh -ErrorAction Stop).Source
+        $common = @('-NoProfile','-File',$runner,'-ViewerDesktopEntryId','viewer-pe.interactive')
+        foreach ($tailArgs in @(
+            @{ Arguments = @('-Suite','CI') },
+            @{ Arguments = @('-Suite','Full','-SkipBuild') },
+            @{ Arguments = @('-Suite','CI','-SkipBuild','-NonInteractive') },
+            @{ Arguments = @('-Suite','CI','-SkipBuild','-CaseFilter','hover') },
+            @{ Arguments = @('-Suite','CI','-SkipBuild','-ValidationMode','Affected') },
+            @{ Arguments = @('-Suite','CI','-SkipBuild','-ResultReferencePath','unused.json') }
+        )) {
+            $output = @(Invoke-RSTestFixtureNative -FilePath $pwsh -Arguments ($common + $tailArgs.Arguments))
+            $LASTEXITCODE | Should Be 3
+            ($output -join ' ') | Should Match 'ViewerDesktopEntryId requires Fresh CI with SkipBuild'
+        }
+    }
+}
+
 Describe 'Run-AllTests plan helper' {
     BeforeAll {
         Import-Module $helperModule -Force -ErrorAction Stop
