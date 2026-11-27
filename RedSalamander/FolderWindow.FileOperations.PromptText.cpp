@@ -117,8 +117,12 @@ std::wstring BuildConflictPromptQuestion(const ConflictPromptTextFacts& facts)
     if (bucket == ConflictClass::ReadOnlyRegularFile && facts.readOnlyDeleteOffered)
         question =
             LoadStringResource(nullptr, facts.sourceIsDirectory ? IDS_FILEOPS_CONFLICT_READONLY_DELETE_FOLDER : IDS_FILEOPS_CONFLICT_READONLY_DELETE_FILE);
-    else if (bucket == ConflictClass::EfsPlaintext && facts.operation == FILESYSTEM_MOVE)
+    else if ((bucket == ConflictClass::EfsPlaintext || bucket == ConflictClass::EfsPlaintextAndSparseInflation) && facts.operation == FILESYSTEM_MOVE)
+    {
         question = LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_EFS_MOVE_PLAINTEXT);
+        if (bucket == ConflictClass::EfsPlaintextAndSparseInflation)
+            question += L" " + LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_SPARSE_INFLATION);
+    }
     else if (bucket == ConflictClass::RecycleFailed && facts.operation == FILESYSTEM_MOVE)
         // I63 D-5: a Move raises a Recycle refusal only when Delete source meets a source location without a Recycle Bin.
         question = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_MOVE_SOURCE_NO_RECYCLE_BIN);
