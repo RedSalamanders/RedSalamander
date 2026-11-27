@@ -41,6 +41,8 @@
     without a desktop lease. Actual native execution retains its entry's desktop admission.
     Every native self-test launch records its actual process exit separately under the run's
     artifacts/native-process-exits directory, before coverage and archive processing.
+    A negative native exit from the original Commands child can also print its last observed
+    case boundary from the current run's trace after containment closes.
 
 .PARAMETER Suite
     Which suite(s) to run:
@@ -976,6 +978,55 @@ function Invoke-RSTestEntryClassificationRetry {
         -Reason (Get-RSTestResultFailureReason -Result $retryResult)
 }
 
+function Get-RSLastCommandsCaseBoundary {
+    param(
+        [Parameter(Mandatory)][string]$TestRoot,
+        [Parameter(Mandatory)][string]$ArtifactRoot,
+        [Parameter(Mandatory)][datetime]$LaunchStartedUtc
+    )
+
+    $tracePath = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot `
+        -Path (Join-Path $ArtifactRoot 'commands/trace.txt') -RequireDescendant
+    $traceFile = [IO.FileInfo]::new($tracePath)
+    if (-not $traceFile.Exists -or $traceFile.LastWriteTimeUtc -lt $LaunchStartedUtc) { return }
+
+    # The native trace is UTF-16LE. Bound the read and discard partial records.
+    $stream = [IO.File]::Open($tracePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    try {
+        $length = $stream.Length
+        $alignedLength = $length - ($length % 2)
+        $bytes = [byte[]]::new([int][Math]::Min($alignedLength, [long]64KB))
+        $offset = $alignedLength - $bytes.Length
+        $stream.Position = $offset
+        $read = 0
+        while ($read -lt $bytes.Length) {
+            $count = $stream.Read($bytes, $read, $bytes.Length - $read)
+            if ($count -eq 0) { return }
+            $read += $count
+        }
+    } finally {
+        $stream.Dispose()
+    }
+
+    $tail = [Text.Encoding]::Unicode.GetString($bytes)
+    if ($offset -eq 0) {
+        $tail = $tail.TrimStart([char]0xfeff)
+    } else {
+        $firstNewline = $tail.IndexOf("`n")
+        if ($firstNewline -lt 0) { return }
+        $tail = $tail.Substring($firstNewline + 1)
+    }
+
+    $caseRecords = [regex]::Matches($tail,
+        '(?m)^(?:Case: (?<name>[A-Za-z0-9_.-]{1,128})|Case (?<returned>returned): (?<name>[A-Za-z0-9_.-]{1,128}) ok=(?:yes|no) failed=(?:yes|no) skipped=(?:yes|no))\r?\n')
+    if ($caseRecords.Count -eq 0) { return }
+    $last = $caseRecords[$caseRecords.Count - 1]
+    return @{
+        CaseName = $last.Groups['name'].Value
+        Boundary = if ($last.Groups['returned'].Success) { 'returned' } else { 'entered' }
+    }
+}
+
 function Write-RSSelfTestLaunchDiagnostic {
     # Direct launch observations only. Missing rows say nothing about other
     # processes, and these facts cannot identify a foreign Terminal's creator.
@@ -988,7 +1039,8 @@ function Write-RSSelfTestLaunchDiagnostic {
         [string]$DesktopRequest = 'inherited',
         [string]$StreamsDrained = 'not-redirected',
         [AllowNull()]$NativeExitCode = $null,
-        [bool]$CloseCompleted = $false
+        [bool]$CloseCompleted = $false,
+        [hashtable]$CommandsCaseTrace
     )
     try {
         $processId = $null; $ownedJob = $null; $identityError = $null
@@ -1024,6 +1076,19 @@ function Write-RSSelfTestLaunchDiagnostic {
         native_exit_code = $NativeExitCode; redirected_streams_drained = $StreamsDrained; containment_close_completed = $CloseCompleted
         scope = 'direct-owned-launch-only;absence-uninformative;not-foreign-creator-proof'
         }) | ConvertTo-Json -Compress))
+
+        if ($null -ne $CommandsCaseTrace) {
+            $caseBoundary = Get-RSLastCommandsCaseBoundary @CommandsCaseTrace
+            if ($null -ne $caseBoundary) {
+                Write-Host ('[selftest-commands-crash] ' + (([ordered]@{
+                    launch_id = $LaunchId
+                    native_exit_code = $NativeExitCode
+                    case_name = $caseBoundary.CaseName
+                    case_boundary = $caseBoundary.Boundary
+                    scope = 'last-observed-commands-case-boundary'
+                }) | ConvertTo-Json -Compress))
+            }
+        }
     } catch [OutOfMemoryException] { throw }
       catch [StackOverflowException] { throw }
       catch [AccessViolationException] { throw }
@@ -1340,6 +1405,7 @@ function Invoke-RSSelfTestProcess {
                 Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind $InvocationKind -Stage 'before-start' -Process $null -DesktopRequest $desktopRequest
                 Write-Host '[selftest-preflight] Starting the contained native process.' -ForegroundColor DarkGray
                 $launchClock = [Diagnostics.Stopwatch]::StartNew()
+                $launchStartedUtc = [DateTime]::UtcNow
                 $process = Start-RSContainedProcess -ProcessStartInfo $startInfo
                 $launchClock.Stop()
                 Write-Host "[selftest-preflight] Contained native process started: $($launchClock.ElapsedMilliseconds) ms; pid=$($process.Id)." -ForegroundColor DarkGray
@@ -1372,7 +1438,18 @@ function Invoke-RSSelfTestProcess {
                 }
                 if ($null -eq $closeFailure -and $null -eq $diagnosticFailure) {
                     try {
-                        Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind $InvocationKind -Stage 'closed' -Process $null -DesktopRequest $desktopRequest -NativeExitCode $nativeExitCode -CloseCompleted ($null -ne $process)
+                        $commandsCaseTrace = $null
+                        if ($InvocationKind -ceq 'original' -and $Arguments -ccontains '--commands-selftest' -and
+                            $null -ne $nativeExitCode -and $nativeExitCode -lt 0) {
+                            $commandsCaseTrace = @{
+                                TestRoot = $testRunContext.TestRoot
+                                ArtifactRoot = $testRunContext.ArtifactRoot
+                                LaunchStartedUtc = $launchStartedUtc
+                            }
+                        }
+                        Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind $InvocationKind `
+                            -Stage 'closed' -Process $null -DesktopRequest $desktopRequest -NativeExitCode $nativeExitCode `
+                            -CloseCompleted ($null -ne $process) -CommandsCaseTrace $commandsCaseTrace
                     } catch { $diagnosticFailure = $_ }
                 }
                 if ($null -ne $diagnosticFailure -or $null -ne $closeFailure) {
