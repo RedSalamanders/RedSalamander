@@ -357,3 +357,33 @@ Both Windows SMB checks ran through the existing approved SINON fixture on the f
 | Windows SMB mixed Local Native and SMB Managed Move | 110 ms | `20261127T222342Z-69648-9a70cbf8427746e98ea52ee5792cb0b3` | `bf6d38f945058f66ea88fd23391648bdb7c170795227eb248bc0bb2575bd22ab` |
 
 Both Windows SMB runs retain the filtered repository verdict `NOT_EVALUATED`.
+
+### Follow-up checks on the Pack build
+
+Four canonical non-activating File Operations selections ran on x64 Release source `af79501c8d7b0fd1c7ecc469f0e59316e74642a2`. The runner byte-verified receipt `96a4e3da9f8bb0147d3eec1f70a0c1668003a02639bbcbadcfda342e3c90e35b` for each run. All passed setup, the selected case and cleanup, for 12 passes and zero failures or skips. The filtered repository verdict is `NOT_EVALUATED` for each selection.
+
+| Case | Body duration | Run ID | Native result SHA-256 |
+|---|---:|---|---|
+| Identity-less Delete and Pack writer interlock | 250 ms | `20261127T225237Z-23716-884c81862d934f8d96c5a73cac489228` | `0031e67c39ef50205e18a433d2243b5ab87429c35597ca9b3c307de4d6d65540` |
+| Deferred exit rejects new work | 19,828 ms | `20261127T225319Z-16148-654e72083b4b4196bf774d3492063b00` | `c3dc62bd55d45e1cfcce7d91b5782f3aa81e10da6557d7beda8677ad4eca90ac` |
+| Copy-only Move retains sources without destination proof | 313 ms | `20261127T225423Z-38824-899ab5092a25449cadcdcf376e8b6967` | `b31de1df6cba3fc030b1f66c53f84ed6014a67ef1f5dc165adb5ea91cbe086b3` |
+| Provider capability matrix | 2,156 ms | `20261127T225507Z-21448-da5661c651a14e0fbe3f677d4ee104f6` | `c6f3bfeb0700bd14e01e737ef9b3f9b90ae24824539cdba2e9388f16855598f2` |
+
+### Approved clipboard, consent and File Operations desktop pass
+
+The approved 12-minute window began at 23:56:24 CET on 27 November 2026. All four canonical runners verified the x64 Release Pack receipt and used the interactive desktop lease. Their contained processes drained at 23:59:30 CET, after about 185 seconds. Launcher archive `20261127T225624Z-73372-fbb5a7b2ca9d4883a6e6f277115d4b5e`, results SHA-256 `858fd811a4334bb60e8e06b77017d3e530df2bf16ef6a5522cae5e56dbab9d59`.
+
+| Case | Body duration | Run ID | Native result SHA-256 |
+|---|---:|---|---|
+| Clipboard Move admission and retained actions | 110 ms | `20261127T225626Z-84476-385832b37f9347a981ca3487f9f1e3c8` | `53f836d46bf6c16f9deb196ce8f92ee98a404f6bd2627521b44b29d9d6d8bbe9` |
+| Deferred consent and Recycle escalation | 2,219 ms | `20261127T225708Z-81900-10a2f2ae880447188b63e22070011c1e` | `c61bf363d2c9b183b7cb1f87bfd529fa61e712a6f1d5fd70b65b60768ab6673a` |
+| File Operations footer menu actions | 1,581 ms | `20261127T225754Z-51968-ea7c6e600c4540479618a458ae2452ac` | `ff074b3cb5fbd6e32fe8c60a77f0ad27fcc1a6ced7317202d1696ae6beca09e9` |
+| Retained source and mixed-result controls | 2,158 ms | `20261127T225842Z-77184-5b1a4df6e31b416787f56c167187638e` | `2e69e6c37084fc3e6bcac868b8180d3af5984af42bfb60e8a8592491b4dbce73` |
+
+The two File Operations runs each passed setup, case and cleanup. The two Commands cases each passed. The total was eight passes with zero failures or skips. Each filtered run retains repository verdict `NOT_EVALUATED`.
+
+### Earlier ARM64 Commands and desktop trace
+
+The retained ARM64 evidence in run `46027552244` on `bcc3f42e2e114953556605f3ef54e30919ada1bc` includes the original Commands result. It records 963 passes, two failures and five skips. The Direct2D failure-surface case reported that disabling Cancel all did not leave keyboard focus on Close. The mouse-opened main menu case had observed a readable popup, but its HWND was already invalid when the driver tried to post Down. Native result SHA-256 `f5e2a36e830560c8cfcda57419f2d56138544daf0c8dd3bbd7ba178d05dfc10f`. Native trace SHA-256 `08afdd4b28b6b3e26e4cae53de4913f418f9ac53695d5020e7025f300c79a43f`. [Retained ARM64 evidence](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244/artifacts/15231407555)
+
+The captured image digest for the separate retirement refusal matches the SHA-256 of the `C:\Windows\System32\wsl.exe` path encoded as UTF-16LE. PID 884 was created at 21:00:27.523 UTC. Its recorded parent PID 9292 could not be opened at retirement and returned Win32 error 87. The exact test-job relationship was unavailable. Startup preparation had finished at 20:13:28 UTC after retiring the approved account and search surfaces. Launch attribution remains open. Local evidence capture `20261127T230013Z-65064-7e827c14d0f7447b96441adb2053920b`. [ARM64 job log](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244/job/140671268108)
