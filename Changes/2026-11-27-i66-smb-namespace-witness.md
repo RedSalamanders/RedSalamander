@@ -1,1 +1,0 @@
-- Add an SMB Rename self-test for a changed parent and same-name files in neighboring folders.

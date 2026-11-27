@@ -4,6 +4,23 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Expose the pinned shared scope options through both root test commands, preserve the single-profile and interactive compatibility paths, and classify the plugin fixture README as CI prose.
+- Add root restore, Release packaging and WinGet generation for both architectures. Default dependency installation to x64, use the canonical package directory for root packaging and hosted production, and preserve legacy package and manifest entry points.
+- Add an SMB Rename self-test for a changed parent and same-name files in neighboring folders.
+- Restore compiler-free qualification checks for the shared PrePush fixture, offline RedMonitor client, Static validation, vcpkg process ownership, and WinGet rendering. Record the separate I66 desktop and hosted Release evidence.
+- Keep the last observed Commands case boundary in qualification logs when the native process
+  ends unexpectedly and its run archive is unavailable.
+- Allow the four standalone viewer desktop checks to run from an exact Release or Debug build
+  without repeating unrelated suites. The checks keep the existing desktop lease and report
+  filtered results.
+- Verify that Batch Rename and Change Case show an unsupported-operation warning on SFTP while F2 can still rename individual files and folders.
+- Verify mixed Local and Samba Move on a live share that provides source facts without exact item identity.
+- Fix heap corruption during parallel Local Delete by giving the scheduler's reserve worker its own
+  item paths and progress context. The nested-delete test verifies one successful completion per
+  selected root and supports a focused run without taking desktop input.
+- Run the same guidance, tool inventory and specification validation from the root command and compiler-free PR CI, after the existing product audits.
+- Include the ViewerWeb licenses and jsoneditor NOTICE in the portable package through the shared runtime manifest.
+- Use the shared run-evidence contract name and Measurements/TestRuns for new curated runs. Validate and compare both archive roots while retaining historical paths and byte identities.
 - Adopt the shared native build profile reference in the root development guidance.
 - Document ownership of prototype and tool guidance, and align the root callback exception rule with the existing typed handling and fatal allocation policy.
 - Organize the RedSalamander specification catalog under the common authority, workflow, domain, and validation headings. Keep the plan-history and pinned-path rules in the catalog.

@@ -1,1 +1,0 @@
-- Include the ViewerWeb licenses and jsoneditor NOTICE in the portable package through the shared runtime manifest.
