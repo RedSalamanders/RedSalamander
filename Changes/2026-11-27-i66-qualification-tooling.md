@@ -1,0 +1,1 @@
+- Restore compiler-free qualification checks for the shared PrePush fixture, offline RedMonitor client, Static validation, vcpkg process ownership, and WinGet rendering. Record the separate I66 desktop and hosted Release evidence.

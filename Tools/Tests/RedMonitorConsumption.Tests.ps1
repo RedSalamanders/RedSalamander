@@ -15,7 +15,7 @@ Describe 'Independent RedMonitor consumption' {
   }
   [IO.File]::AppendAllText((Join-Path $tools 'Update-RedMonitorClient.ps1'),[Environment]::NewLine)
   { & (Join-Path $repoRoot 'Tools/Verify-RedMonitorClient.ps1') -RepositoryRoot $scratch } |
-   Should Throw '*RedMonitor client tooling hash mismatch: Update-RedMonitorClient.ps1*'
+   Should Throw 'RedMonitor client tooling hash mismatch: Update-RedMonitorClient.ps1'
  }
  It 'owns no viewer or viewer-test build target' {
   $solution=Get-Content -LiteralPath (Join-Path $repoRoot 'RedSalamander.sln') -Raw

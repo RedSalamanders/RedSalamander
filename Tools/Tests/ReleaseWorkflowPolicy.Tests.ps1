@@ -114,9 +114,24 @@ Describe 'Project CI engine path resolution' {
         $before=$env:CI_NATIVE_BUILDS_DISABLED
         try { & ([scriptblock]::Create($staticBranch[0].Extent.Text)) }
         finally { $env:CI_NATIVE_BUILDS_DISABLED=$before }
-        $spec=@($calls|Where-Object Path -ceq 'Tools/Get-SpecInventory.ps1')
-        $spec.Count | Should Be 1
-        ($spec[0].Arguments -join ',') | Should Be '-FailOnFindings,-NoReports'
+        $specEntryPoints = @('validate-specs.ps1', 'validate.ps1')
+        @($calls | Where-Object { $_.Path -cin $specEntryPoints }).Count | Should Be 1
+
+        [void][IO.Directory]::CreateDirectory((Join-Path $root 'Tools'))
+        [IO.File]::WriteAllText((Join-Path $root 'validate-skills.ps1'), 'param()')
+        [IO.File]::WriteAllText((Join-Path $root 'Tools/Get-ToolInventory.ps1'), 'param([switch]$FailOnFindings, [string]$Format)')
+        [IO.File]::WriteAllText((Join-Path $root 'Tools/Get-SpecInventory.ps1'), @'
+[CmdletBinding()]
+param([switch]$FailOnFindings, [switch]$NoReports)
+[pscustomobject]@{ FailOnFindings = $FailOnFindings.IsPresent; NoReports = $NoReports.IsPresent }
+'@)
+        foreach ($entryPoint in $specEntryPoints) {
+            Copy-Item -LiteralPath (Join-Path $repoRoot $entryPoint) -Destination $root
+            $spec = @(& (Join-Path $root $entryPoint))
+            $spec.Count | Should Be 1
+            $spec[0].FailOnFindings | Should Be $true
+            $spec[0].NoReports | Should Be $true
+        }
     }
 
     It 'resolves relative engine paths from the PowerShell filesystem location and preserves absolute paths' {
