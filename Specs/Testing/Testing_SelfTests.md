@@ -665,6 +665,16 @@ If a suite encounters a fatal setup failure before all declared cases can run:
 - unreached declared cases must still be emitted as `skipped`,
 - each backfilled skipped case must explain that it was not executed because of suite setup failure.
 
+### Select standalone interactive viewer entries
+
+`Run-AllTests.ps1 -Suite CI -ValidationMode Fresh -SkipBuild -ViewerDesktopEntryId <ids>` can
+select `viewer-pe.interactive`, `viewer-sqlite.interactive`, `viewer-pe.find-prompt` and
+`viewer-pe.goto-prompt` by exact case-sensitive ID. The four standalone entries have no preceding
+artifact writers. Use an exact test-enabled solution receipt on the native host architecture.
+Execute the entries in canonical CI order with their existing native commands, resource classes,
+desktop lease, warning and teardown. The person at the desktop agrees to the window.
+`-ExplainPlan` prints the selection without entering the desktop lease.
+
 ## Conditional Coverage Rules
 
 Conditional coverage must remain part of the suite membership. Preconditions change execution status, not case existence.

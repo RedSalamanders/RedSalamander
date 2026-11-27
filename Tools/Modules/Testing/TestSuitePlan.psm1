@@ -377,19 +377,30 @@ function Select-RSScopedTestRunEntries {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][object[]]$Entries,
-        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$EntryId
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$EntryId,
+        [switch]$ViewerDesktop
     )
 
+    $entryError = 'Unknown or desktop-required scoped test entry'
+    if ($ViewerDesktop) {
+        $entryError = 'Unknown or ineligible viewer desktop test entry'
+        $viewerIds = @('viewer-pe.interactive', 'viewer-sqlite.interactive', 'viewer-pe.find-prompt', 'viewer-pe.goto-prompt')
+        $eligible = @($Entries | Where-Object {
+            $_.Id -cin $viewerIds -and $_.Kind -ceq 'Executable' -and $_.RequiresInteractiveDesktop
+        })
+    } else {
+        $eligible = @($Entries | Where-Object { -not $_.RequiresInteractiveDesktop })
+    }
     $selected = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach ($id in $EntryId) {
-        $entry = @($Entries | Where-Object Id -CEQ $id)
-        if ($entry.Count -ne 1 -or $entry[0].RequiresInteractiveDesktop) {
-            throw "Unknown or desktop-required scoped test entry '$id'."
+        $entry = @($eligible | Where-Object Id -CEQ $id)
+        if ($entry.Count -ne 1) {
+            throw "$entryError '$id'."
         }
         if (-not $selected.Add($id)) { throw "Duplicate scoped test entry '$id'." }
     }
-    # The Full plan owns execution order, including artifact writers before their readers.
-    $Entries | Where-Object { $selected.Contains([string]$_.Id) }
+    # Preserve the selected plan's execution order, including artifact writers before their readers.
+    $eligible | Where-Object { $selected.Contains([string]$_.Id) }
 }
 
 Export-ModuleMember -Function @(

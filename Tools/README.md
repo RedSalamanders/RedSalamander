@@ -65,6 +65,18 @@ This evaluates their solution and deployed runtime union and publishes a selecte
 receipt. Selftest-only All/Compare/Commands/FileOps accept their exact application
 union with byte verification; PR/CI/Full and package gates retain full-solution
 receipts. Selection cannot grant contamination repair rights for the full solution.
+After agreeing to a desktop window, use the exact viewer entry selector to run only the four
+standalone interactive viewer entries from a verified build.
+
+```powershell
+$viewerEntries = 'viewer-pe.interactive','viewer-sqlite.interactive','viewer-pe.find-prompt','viewer-pe.goto-prompt'
+./Tools/Run-AllTests.ps1 -Suite CI -ValidationMode Fresh -Configuration Release -Platform x64 `
+    -SkipBuild -ViewerDesktopEntryId $viewerEntries
+```
+
+Add `-ExplainPlan` to list the exact selection without running it. Each selected executable retains
+its canonical desktop lease and command arguments. The resulting evidence is filtered.
+
 All runner build modes enable the native test surface. Before desktop admission or
 launch, in-product cases require both a test-enabled receipt and the actual PE's
 ENABLE_TESTS resource marker; production artifacts fail closed, including SkipBuild.
