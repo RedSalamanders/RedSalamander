@@ -1,0 +1,4 @@
+- Protect settings publication and keep the newest ten owned crash reports.
+  - Preserve a competing first creation and recheck the accepted settings revision at both rename paths.
+  - Keep the associated crash sidecars and preserve legacy and unrelated reports.
+  - Leave pending notices and plugin recovery available for interactive startup after a self-test.

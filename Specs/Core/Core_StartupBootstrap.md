@@ -83,6 +83,11 @@ Installation sources:
 
 - Folder: `%LOCALAPPDATA%\\RedSalamander\\Crashes`
 - Marker: `%LOCALAPPDATA%\\RedSalamander\\Crashes\\last_crash.txt` (UTF-16, contains dump path)
+- New dumps are named `RedSalamander-report-v1-<20-digit UTC file time>-p<pid>.dmp`.
+  The optional text report has the same stem and a `.txt` extension.
+- Healthy interactive startup keeps the ten newest owned dumps and their text sidecars. It
+  preserves the pending dump during its restart notice, along with legacy names, unrelated files
+  and reparse points. Self-test startup leaves pending notices for an interactive start.
 
 ### Crash-on-Next-Launch UX
 

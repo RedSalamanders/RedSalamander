@@ -7847,7 +7847,10 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         g_settings.theme.currentThemeId = ThemeIdFromThemeMode(envTheme);
     }
 
-    CrashQuarantine::OfferPluginDisableIfPreviousCrashDetected(g_settings);
+    if (! IsRunningAnySelfTest())
+    {
+        CrashQuarantine::OfferPluginDisableIfPreviousCrashDetected(g_settings);
+    }
 
 #ifdef ENABLE_TESTS
     const bool runHeadlessCompareSelfTest = g_runCompareDirectoriesSelfTest && ! g_runFileOpsSelfTest && ! g_runCommandsSelfTest &&
@@ -11589,8 +11592,8 @@ LRESULT OnMainWindowStartupInputReady([[maybe_unused]] HWND hWnd)
 #endif
     {
         SplashScreen::RequestCloseIfExist();
+        CrashHandler::ShowPreviousCrashUiIfPresent(hWnd);
     }
-    CrashHandler::ShowPreviousCrashUiIfPresent(hWnd);
     return 0;
 }
 

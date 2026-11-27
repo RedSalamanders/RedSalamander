@@ -20,6 +20,7 @@
 
 #include <exception>
 #include <filesystem>
+#include <format>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -242,11 +243,62 @@ bool TestBuildDumpPathShape(const std::filesystem::path& root) noexcept
     Check(dump.extension() == L".dmp", L"BuildDumpPath: extension is .dmp", success);
 
     const std::wstring name = dump.filename().wstring();
-    Check(name.rfind(L"RedSalamander-", 0) == 0, L"BuildDumpPath: filename starts with RedSalamander-", success);
+    Check(name.starts_with(L"RedSalamander-report-v1-"), L"BuildDumpPath: filename identifies a retained report", success);
 
     const std::wstring pidTag = L"-p" + std::to_wstring(GetCurrentProcessId());
     Check(name.find(pidTag) != std::wstring::npos, L"BuildDumpPath: filename embeds -p<pid>", success);
     Check(! HasInvalidFilenameChar(name), L"BuildDumpPath: filename has no invalid path characters", success);
+    return success;
+}
+
+bool TestOwnedReportRetention(const std::filesystem::path& root)
+{
+    bool success         = true;
+    const auto directory = root / L"retention";
+    std::error_code error;
+    std::filesystem::create_directory(directory, error);
+    if (error)
+    {
+        Check(false, L"crash retention: create the test folder", success);
+        return false;
+    }
+    Check(CrashHandler::PruneOldReportsForTest(directory) == 0, L"crash retention: empty folder has nothing to prune", success);
+
+    const auto writePair = [&](const std::wstring& name)
+    {
+        auto dump            = directory / name;
+        const bool wroteDump = SUCCEEDED(CrashHandler::WriteMarkerFileForTest(dump, L"dump fixture"));
+        dump.replace_extension(L".txt");
+        return wroteDump && SUCCEEDED(CrashHandler::WriteMarkerFileForTest(dump, L"sidecar fixture"));
+    };
+    Check(writePair(L"RedSalamander-20261127-120000-p7.dmp"), L"crash retention: seed a legacy pair", success);
+    Check(writePair(L"RedSalamander-report-v1-unrelated.dmp"), L"crash retention: seed an unrelated pair", success);
+    const auto name = [](int stamp) { return std::format(L"RedSalamander-report-v1-{:020}-p7.dmp", stamp); };
+    for (int stamp = 1; stamp <= 10; ++stamp)
+    {
+        Check(writePair(name(stamp)), L"crash retention: seed an owned pair", success);
+    }
+    Check(CrashHandler::PruneOldReportsForTest(directory) == 0, L"crash retention: keep ten owned reports", success);
+    Check(writePair(name(11)), L"crash retention: seed the eleventh owned report", success);
+    const auto pending = directory / name(1);
+    Check(
+        CrashHandler::PruneOldReportsForTest(directory, pending.native()) == 0, L"crash retention: keep an older report while its notice is pending", success);
+    Check(CrashHandler::PruneOldReportsForTest(directory) == 1, L"crash retention: prune one owned report", success);
+
+    const auto pairExists = [&](const std::wstring& pairName, bool expected)
+    {
+        auto path             = directory / pairName;
+        const bool dumpExists = std::filesystem::exists(path);
+        path.replace_extension(L".txt");
+        return dumpExists == expected && std::filesystem::exists(path) == expected;
+    };
+    Check(pairExists(name(1), false), L"crash retention: remove the oldest dump and sidecar", success);
+    for (int stamp = 2; stamp <= 11; ++stamp)
+    {
+        Check(pairExists(name(stamp), true), L"crash retention: preserve a newer pair", success);
+    }
+    Check(pairExists(L"RedSalamander-20261127-120000-p7.dmp", true), L"crash retention: preserve the legacy pair", success);
+    Check(pairExists(L"RedSalamander-report-v1-unrelated.dmp", true), L"crash retention: preserve unrelated evidence", success);
     return success;
 }
 
@@ -327,6 +379,7 @@ int wmain()
     }
 
     success &= TestBuildDumpPathShape(tempRoot);
+    success &= TestOwnedReportRetention(tempRoot);
     success &= TestMarkerRoundTrip(tempRoot);
     success &= TestMarkerReadTrimsTrailingWhitespace(tempRoot);
     success &= TestMarkerReadMissingIsEmpty(tempRoot);

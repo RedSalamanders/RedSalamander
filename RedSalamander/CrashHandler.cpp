@@ -2,12 +2,16 @@
 
 #include "Framework.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include <dbghelp.h>
 #include <shellapi.h>
@@ -29,9 +33,12 @@ namespace CrashHandler
 {
 namespace
 {
-constexpr wchar_t kCompanyDirName[] = L"RedSalamander";
-constexpr wchar_t kCrashDirName[]   = L"Crashes";
-constexpr wchar_t kMarkerFileName[] = L"last_crash.txt";
+constexpr wchar_t kCompanyDirName[]          = L"RedSalamander";
+constexpr wchar_t kCrashDirName[]            = L"Crashes";
+constexpr wchar_t kMarkerFileName[]          = L"last_crash.txt";
+constexpr std::wstring_view kOwnedDumpPrefix = L"RedSalamander-report-v1-";
+constexpr size_t kKeepNewestReports          = 10;
+constexpr size_t kDumpTimeDigits             = 20;
 
 std::atomic<bool> g_installed{false};
 
@@ -74,27 +81,106 @@ std::atomic<bool> g_installed{false};
 
 [[nodiscard]] std::filesystem::path BuildDumpPath(const std::filesystem::path& dir) noexcept
 {
-    SYSTEMTIME st{};
-    GetLocalTime(&st);
-
-    const DWORD pid = GetCurrentProcessId();
+    FILETIME fileTime{};
+    GetSystemTimePreciseAsFileTime(&fileTime);
+    ULARGE_INTEGER timestamp{};
+    timestamp.LowPart  = fileTime.dwLowDateTime;
+    timestamp.HighPart = fileTime.dwHighDateTime;
 
     wchar_t fileName[128]{};
     constexpr size_t fileNameMax = (sizeof(fileName) / sizeof(fileName[0])) - 1;
-    const auto r                 = std::format_to_n(fileName,
-                                                    fileNameMax,
-                                                    L"RedSalamander-{:04}{:02}{:02}-{:02}{:02}{:02}-p{}.dmp",
-                                                    static_cast<unsigned>(st.wYear),
-                                                    static_cast<unsigned>(st.wMonth),
-                                                    static_cast<unsigned>(st.wDay),
-                                                    static_cast<unsigned>(st.wHour),
-                                                    static_cast<unsigned>(st.wMinute),
-                                                    static_cast<unsigned>(st.wSecond),
-                                                    static_cast<unsigned long>(pid));
+    const auto r                 = std::format_to_n(fileName, fileNameMax, L"{}{:020}-p{}.dmp", kOwnedDumpPrefix, timestamp.QuadPart, GetCurrentProcessId());
     const size_t written         = (r.size < fileNameMax) ? r.size : fileNameMax;
     fileName[written]            = L'\0';
 
     return dir / fileName;
+}
+
+[[nodiscard]] bool IsOwnedDumpName(std::wstring_view name) noexcept
+{
+    constexpr std::wstring_view extension = L".dmp";
+    if (! name.starts_with(kOwnedDumpPrefix) || ! name.ends_with(extension))
+        return false;
+
+    name.remove_prefix(kOwnedDumpPrefix.size());
+    name.remove_suffix(extension.size());
+    constexpr size_t pidOffset = kDumpTimeDigits + 2;
+    if (name.size() <= pidOffset || name.size() > pidOffset + 10 || name.substr(kDumpTimeDigits, 2) != L"-p")
+        return false;
+
+    const auto isDigit = [](wchar_t ch) noexcept { return ch >= L'0' && ch <= L'9'; };
+    return std::ranges::all_of(name.substr(0, kDumpTimeDigits), isDigit) && std::ranges::all_of(name.substr(pidOffset), isDigit);
+}
+
+[[nodiscard]] bool DeletePlainReportFile(const std::filesystem::path& path) noexcept
+{
+    wil::unique_hfile file(
+        CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES | DELETE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (! file || ! GetFileInformationByHandle(file.get(), &info) || (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0)
+        return false;
+
+    FILE_DISPOSITION_INFO disposition{.DeleteFile = TRUE};
+    return SetFileInformationByHandle(file.get(), FileDispositionInfo, &disposition, sizeof(disposition)) != FALSE;
+}
+
+[[nodiscard]] size_t PruneOldReports(const std::filesystem::path& directory, std::wstring_view pendingDump = {})
+{
+    if (! directory.is_absolute())
+        return 0;
+
+    // Pin the path components without sharing delete so the scan and removal stay in this directory.
+    auto entered = directory.root_path();
+    std::vector<wil::unique_hfile> ancestors;
+    for (const auto& component : directory.relative_path())
+    {
+        if (component.empty() || component == L"." || component == L"..")
+            return 0;
+        entered /= component;
+        wil::unique_hfile folder(CreateFileW(entered.c_str(),
+                                             FILE_LIST_DIRECTORY,
+                                             FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                             nullptr,
+                                             OPEN_EXISTING,
+                                             FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+                                             nullptr));
+        BY_HANDLE_FILE_INFORMATION info{};
+        if (! folder || ! GetFileInformationByHandle(folder.get(), &info) ||
+            (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != FILE_ATTRIBUTE_DIRECTORY)
+            return 0;
+        ancestors.push_back(std::move(folder));
+    }
+    if (ancestors.empty())
+        return 0;
+    const auto pattern = directory / L"RedSalamander-report-v1-*.dmp";
+    WIN32_FIND_DATAW found{};
+    wil::unique_hfind search(FindFirstFileW(pattern.c_str(), &found));
+    if (! search)
+        return 0;
+
+    std::vector<std::wstring> dumps;
+    do
+    {
+        if ((found.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == 0 && IsOwnedDumpName(found.cFileName))
+            dumps.emplace_back(found.cFileName);
+    } while (FindNextFileW(search.get(), &found));
+    if (GetLastError() != ERROR_NO_MORE_FILES)
+        return 0;
+    search.reset();
+    std::ranges::sort(dumps, [](const std::wstring& lhs, const std::wstring& rhs) noexcept { return lhs > rhs; });
+
+    size_t deleted = 0;
+    for (size_t index = kKeepNewestReports; index < dumps.size(); ++index)
+    {
+        auto path = directory / dumps[index];
+        if (path.native() != pendingDump && DeletePlainReportFile(path))
+        {
+            ++deleted;
+            path.replace_extension(L".txt");
+            static_cast<void>(DeletePlainReportFile(path));
+        }
+    }
+    return deleted;
 }
 
 [[nodiscard]] HRESULT WriteMarkerFile(const std::filesystem::path& markerPath, std::wstring_view dumpPath) noexcept
@@ -137,7 +223,7 @@ std::atomic<bool> g_installed{false};
         return E_INVALIDARG;
     }
 
-    wil::unique_handle file(CreateFileW(dumpPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    wil::unique_handle file(CreateFileW(dumpPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (! file)
     {
         return HRESULT_FROM_WIN32(GetLastError());
@@ -323,7 +409,7 @@ std::atomic<bool> g_installed{false};
 
     const std::wstring text = BuildStackTraceText(exceptionPointers);
 
-    wil::unique_handle file(CreateFileW(reportPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    wil::unique_handle file(CreateFileW(reportPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (! file)
     {
         return HRESULT_FROM_WIN32(GetLastError());
@@ -487,14 +573,25 @@ void ShowPreviousCrashUiIfPresent(HWND ownerWindow) noexcept
         return;
     }
 
+    const std::filesystem::path crashDir = markerPath.parent_path();
     std::error_code ec;
-    if (! std::filesystem::exists(markerPath, ec))
+    const bool markerExists = std::filesystem::exists(markerPath, ec);
+    if (ec)
+        return;
+    const std::wstring dumpPath = markerExists ? ReadMarkerDumpPath(markerPath) : std::wstring{};
+    try
+    {
+        static_cast<void>(PruneOldReports(crashDir, dumpPath));
+    }
+    catch (const std::exception&)
+    {
+        // Retention is best-effort. A scan failure must leave the pending notice available.
+    }
+
+    if (! markerExists)
     {
         return;
     }
-
-    const std::wstring dumpPath          = ReadMarkerDumpPath(markerPath);
-    const std::filesystem::path crashDir = markerPath.parent_path();
 
     // Remove marker first to avoid repeated prompts if the user force-kills during the prompt.
     std::filesystem::remove(markerPath, ec);
@@ -539,6 +636,11 @@ std::filesystem::path GetCrashMarkerPathForTest() noexcept
 std::filesystem::path BuildDumpPathForTest(const std::filesystem::path& dir) noexcept
 {
     return BuildDumpPath(dir);
+}
+
+size_t PruneOldReportsForTest(const std::filesystem::path& dir, std::wstring_view pendingDump)
+{
+    return PruneOldReports(dir, pendingDump);
 }
 
 HRESULT WriteMarkerFileForTest(const std::filesystem::path& markerPath, std::wstring_view dumpPath) noexcept

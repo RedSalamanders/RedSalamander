@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #ifdef ENABLE_TESTS
+#include <cstddef>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -29,11 +30,10 @@ void ShowPreviousCrashUiIfPresent(HWND ownerWindow) noexcept;
 void TriggerCrashTest() noexcept;
 
 #ifdef ENABLE_TESTS
-// Test-only seams. Thin forwarders to the pure path/marker helpers in CrashHandler.cpp's anonymous
-// namespace. They perform no SEH, no minidump, and no UI — they exist so the dump-naming and marker
-// write/read round-trip logic can be unit-tested without invoking the fused crash/UI paths.
+// Test-only entry points for dump naming, retention and marker I/O in the owned test folder.
 [[nodiscard]] std::filesystem::path GetCrashMarkerPathForTest() noexcept;
 [[nodiscard]] std::filesystem::path BuildDumpPathForTest(const std::filesystem::path& dir) noexcept;
+[[nodiscard]] size_t PruneOldReportsForTest(const std::filesystem::path& dir, std::wstring_view pendingDump = {});
 [[nodiscard]] HRESULT WriteMarkerFileForTest(const std::filesystem::path& markerPath, std::wstring_view dumpPath) noexcept;
 [[nodiscard]] std::wstring ReadMarkerDumpPathForTest(const std::filesystem::path& markerPath) noexcept;
 #endif
