@@ -2624,10 +2624,13 @@ Full exact Rename qualification also needs host cancellation and handle peaks.
 
 `FileOps_SmbCorroboratedRenameProvider` uses a dedicated SMB child on an endpoint that can open
 ordinary objects without exact IDs. It drives the normal F2 worker for a nested folder, a
-name collision with Keep both, a case-only rename, and cancellation before dispatch.
-It also runs 100 independent provider captures and renames, checking content, spelling
-and receipt for each one. Collect `FileOps.Smb.CorroboratedRenameControlUs` for host-folder
-completion, the cancellation round and the provider series. The provider emits capture
+name collision with Keep both, a case-only rename, cancellation, and changed source and
+parent checks before dispatch. The parent control restores the original file at the same
+path through a different directory. The free-name control preserves same-name decoys
+in two owned ancestors. It also runs 100 independent provider captures and renames,
+checking content, spelling and receipt for each one. Collect
+`FileOps.Smb.CorroboratedRenameControlUs` for host-folder completion, cancellation, the
+revision and namespace controls, and the provider series. The provider emits capture
 and mutation duration and guarded directory counts under `FileOps.Local.CorroboratedRename`.
 The Debug plugin contract separately exercises a blocked source handle, a replaced ancestor
 and a lost response after a real mutation.

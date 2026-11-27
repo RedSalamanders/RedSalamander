@@ -1219,6 +1219,11 @@ the same synchronous reporter and counter path as the pointer overload.
   the identity-less Delete witnesses use owned sandbox data and submit task decisions directly. The archive writer
   also submits and awaits a real parallel Pack in the pinned tree before it releases the Delete;
   the added storage/route witnesses use owned sandbox data and the same activation blocker;
+  the corroborated SMB Rename case requires its new name beside the captured source while same-name
+  decoys in both owned ancestor directories retain their bytes. The paused case moves the original
+  file back to the captured path through a replacement parent. Rename must report a revision
+  mismatch before mutation and preserve that file and the decoy in the moved directory. This
+  witness uses an owned child of the registered SMB fixture. The exact-ID route has a separate test;
   the Curl reply-loss case runs the owned loopback FTP endpoint through a joined worker with no UI;
   the repeated non-clipboard Copy and Move cases use owned task controls and sandbox files under the activation blocker;
   `FileOps_DeferredExitRefusesNewWork` also compares F7 prompt appearance from a displayed Dummy listing with a delayed direct read of the same parent, then verifies the worker's numbered creation and pane refresh.
