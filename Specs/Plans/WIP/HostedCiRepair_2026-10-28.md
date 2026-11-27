@@ -35,7 +35,7 @@ Local focus-taking runs require agreement to their timing and the existing warni
 and restoration. Native ARM64 runtime acceptance comes from native execution.
 
 Owning contracts to reconcile as fixes are established: `Specs/Testing/Testing_SelfTests.md`,
-`Specs/Testing/Testing_ValidationEvidence.md`, `Specs/Testing/Testing_ToolingGovernance.md`,
+`Specs/Testing/Testing_RunEvidence.md`, `Specs/Testing/Testing_ToolingGovernance.md`,
 `Specs/Build/Build_Toolchain.md` and any affected product domain contract.
 
 ## Established causes and candidate repairs

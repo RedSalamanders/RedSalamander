@@ -126,6 +126,8 @@ function Write-RSMetricFile {
 }
 
 function New-RSTerminalVtArchiveFixture {
+    param([string]$CandidateArchiveRoot = 'Specs/TestRuns')
+
     $root = New-RSArchiveContractRoot
     $schemaDestination = Join-Path $root 'Specs\Terminal\TerminalVtUpgradeEvidence.schema.json'
     New-Item -ItemType Directory -Path (Split-Path -Parent $schemaDestination) -Force | Out-Null
@@ -135,7 +137,7 @@ function New-RSTerminalVtArchiveFixture {
     # Synthetic evidence keeps contract tests executable in fresh/shallow clones;
     # historical local benchmark archives are never prerequisites for unit tests.
     $baselineRelative = 'Specs/TestRuns/0123456789ab/Terminal/20261028_120000_baseline'
-    $candidateRelative = 'Specs/TestRuns/0123456789ab/Terminal/20261028_120001_candidate'
+    $candidateRelative = "$CandidateArchiveRoot/0123456789ab/Terminal/20261028_120001_candidate"
     foreach ($relative in @($baselineRelative, $candidateRelative)) {
         $destination = Join-Path $root $relative
         New-Item -ItemType Directory -Path (Join-Path $destination 'perf') -Force | Out-Null
@@ -245,6 +247,72 @@ function Invoke-RSArchiveValidatorProcess {
         ExitCode = $process.ExitCode
         Output = ((Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction SilentlyContinue) +
             (Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue))
+    }
+}
+
+Describe 'Curated archive layout' {
+    It 'governs new staged evidence alongside retained legacy archives' {
+        $root = New-RSArchiveContractRoot
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'init'; '--quiet')
+        if ($LASTEXITCODE -ne 0) { throw 'Could not initialize the archive fixture.' }
+
+        $run = '7d3a1247382a/FileOps/2026-11-26_120000'
+        $legacy = "Specs/TestRuns/$run/trace.txt"
+        $current = "Measurements/TestRuns/$run/trace.txt"
+        $other = 'Measurements/Toolchain/trace.txt'
+        foreach ($path in @($legacy, $current, $other)) {
+            $file = Join-Path $root $path
+            New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force | Out-Null
+            $size = if ($path -eq $legacy) { 512 } else { 1025 }
+            [IO.File]::WriteAllBytes($file, [byte[]]::new($size))
+        }
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--'; $legacy; $current; $other)
+        if ($LASTEXITCODE -ne 0) { throw 'Could not stage the two archive roots.' }
+
+        $expected = "$current|$legacy"
+        ((Get-RSChangedTestRunArchivePaths -RepoRoot $root) -join '|') | Should Be $expected
+        ((Get-RSTestRunArchiveInventoryPaths -RepoRoot $root) -join '|') | Should Be $expected
+        $preStage = @(Get-RSTestRunArchivePathsForRuns -RepoRoot $root -RunPath @("Measurements/TestRuns/$run", "Specs/TestRuns/$run"))
+        (($preStage | ForEach-Object { $_ -replace '\\', '/' }) -join '|') | Should Be $expected
+        $violations = @(Get-RSTestRunArchiveViolations -RepoRoot $root -Paths $preStage -MaxFileBytes 1KB -MaxRunBytes 1536)
+        $violations.Count | Should Be 1
+        $violations[0].Kind | Should Be 'FileSize'
+        ($violations[0].Path -replace '\\', '/') | Should Be $current
+        $included = & (Get-Module ValidationFingerprint) { param($path) Test-RSValidationWorkspacePathIncluded -Path $path } $current
+        $included | Should Be $false
+    }
+
+    It 'compares a current Terminal VT candidate with its legacy baseline' {
+        $fixture = New-RSTerminalVtArchiveFixture -CandidateArchiveRoot 'Measurements/TestRuns'
+        $paths = @(Get-RSTestRunArchivePathsForRuns -RepoRoot $fixture.Root -RunPath @($fixture.Baseline, $fixture.Candidate))
+        $paths.Count | Should Be 6
+        @(Get-RSTestRunArchiveViolations -RepoRoot $fixture.Root -Paths $paths).Count | Should Be 0
+        $comparison = Compare-RSTerminalVtUpgradeEvidence -RepoRoot $fixture.Root -BaselineRunPath $fixture.Baseline -CandidateRunPath $fixture.Candidate
+        $comparison.Outcome | Should Be 'pass'
+        @($comparison.Measurements).Count | Should Be 3
+    }
+
+    It 'discovers both archive roots and honors an explicit root' {
+        $fixture = New-RSTerminalVtArchiveFixture -CandidateArchiveRoot 'Measurements/TestRuns'
+        foreach ($run in @($fixture.Baseline, $fixture.Candidate)) {
+            @('git_branch: archive-fixture', 'git_commit: aaaaaaaaaaaa') |
+                Set-Content -LiteralPath (Join-Path (Join-Path $fixture.Root $run) 'env.txt') -Encoding utf8
+        }
+        $command = Join-Path $repoRoot 'Tools/Show-PerfRuns.ps1'
+        Push-Location -LiteralPath $fixture.Root
+        try {
+            $report = & pwsh -NoProfile -File $command | Out-String
+            $LASTEXITCODE | Should Be 0
+            $report | Should Match '20261028_120000_baseline'
+            $report | Should Match '20261028_120001_candidate'
+
+            $legacy = & pwsh -NoProfile -File $command -RunsRoot 'Specs/TestRuns' | Out-String
+            $LASTEXITCODE | Should Be 0
+            $legacy | Should Match '20261028_120000_baseline'
+            $legacy | Should Not Match '20261028_120001_candidate'
+        } finally {
+            Pop-Location
+        }
     }
 }
 

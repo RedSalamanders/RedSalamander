@@ -4,7 +4,7 @@ This folder contains local build/test run logs used to validate critical fixes. 
 
 ## Conventions
 
-- Create a new subfolder per run under `Specs/TestRuns/<Profile>/<Area>/yyyy-MM-dd_HHmmss/`.
+- Existing archives retain their `Specs/TestRuns/<Profile>/<Area>/<RunId>/` paths. Follow the [current archive guide](../../Measurements/TestRuns/README.md) for new runs.
 - Prefer `.txt`, `.md`, `.json`, or `.jsonl` files (the repo ignores `*.log`).
 - Keep logs small and avoid secrets.
   - `--fileops-selftest` includes optional Phase 16 “Remote*Secret” checks; these should normally be **skipped** in curated runs unless explicitly validating WinCred/Connection Manager behavior.

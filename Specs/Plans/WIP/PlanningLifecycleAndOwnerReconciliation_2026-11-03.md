@@ -9,7 +9,7 @@
 - **Owner:** repository specification maintainers; coordinate edits with each affected indexed owner.
 - **Planned at:** `269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1`, reconciled 2026-11-03.
 - **Ownership boundary:** lifecycle metadata and its bounded inventory guard, contradictory current-plan directions, and current owner routing. Existing owners retain implementation, human review, qualification, budgets and acceptance decisions.
-- **Authoritative contracts:** [specification authority and plan lifecycle](../../README.md), [tooling governance](../../Testing/Testing_ToolingGovernance.md), [agent guidance](../../Testing/Testing_AgentGuidance.md), [validation evidence](../../Testing/Testing_ValidationEvidence.md), and [performance validation](../../Testing/Testing_PerformanceValidation.md).
+- **Authoritative contracts:** [specification authority and plan lifecycle](../../README.md), [tooling governance](../../Testing/Testing_ToolingGovernance.md), [agent guidance](../../Testing/Testing_AgentGuidance.md), [validation evidence](../../Testing/Testing_RunEvidence.md), and [performance validation](../../Testing/Testing_PerformanceValidation.md).
 - **Implementation/tests:** extend the existing `Tools/Modules/Tooling/SpecInformationArchitecture.psm1` and `Tools/Tests/SpecInformationArchitecture.Tests.ps1` for the reviewed lifecycle-field guard. The bounded historical-review metadata defect in `Tools/Tests/DocumentationDriftContracts.Tests.ps1` is a validation prerequisite below. Current archive-path admission is already delivered by this consolidation.
 - **Drift check:** run the following and inspect dirty/untracked state before continuing. Changed excerpts require fresh evidence; the August survey's line numbers and proposed edits are historical.
 

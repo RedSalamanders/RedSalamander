@@ -1,23 +1,27 @@
 <#
 .SYNOPSIS
-    Generates winget manifest files from templates.
+    Generates WinGet manifests with the shared publication renderer.
 .DESCRIPTION
-    Hashes the x64 and ARM64 portable packages and writes the reviewed multi-file
-    manifest from repository templates.
+    Hashes both portable packages and generates the reviewed multi-file manifest
+    from .ci/project.json using the checkout's pinned CI engine.
 .PARAMETER Version
     Package version (e.g., 7.0.183). If not provided, derives it from the shared version helper.
 .PARAMETER BuildNumber
     Positive compiled package build number used when Version is omitted. One of
     Version or BuildNumber is required.
 .PARAMETER ZipPath
-    Required path to the x64 ZIP installer. Its leaf name must be exactly
+    Path to the x64 ZIP installer. Its leaf name must be exactly
     RedSalamander-<Version>-x64-Portable.zip.
 .PARAMETER Arm64ZipPath
-    Required path to the ARM64 ZIP installer. Its leaf name must be exactly
+    Path to the ARM64 ZIP installer. Its leaf name must be exactly
     RedSalamander-<Version>-ARM64-Portable.zip.
 .PARAMETER OutputDir
-    Output directory for manifest files. It must resolve beneath the repository's
-    .build\AppPackages root. Default: .build\AppPackages\winget-manifest.
+    Output directory within the selected package root. The compatibility caller
+    defaults to .build\AppPackages\winget-manifest. The canonical caller uses a version subfolder.
+.PARAMETER CanonicalPackageDirectory
+    Use the canonical .build/packages root and discover either package layout when ZIP paths are omitted.
+.PARAMETER ValidateManifest
+    Run winget validate on the staged manifest before publication.
 .PARAMETER ReleaseDate
     Manifest ReleaseDate as yyyy-MM-dd. The release workflow passes the GitHub
     release's published date so reruns generate identical manifests. Default: today.
@@ -28,7 +32,7 @@
 .NOTES
     Mutates shared packaging outputs while holding the repository-wide packaging
     coordination lock. Interrupted packaging fails closed until a reviewer restores
-    Installer inputs and .build\AppPackages and removes the reported marker.
+    Installer inputs and package roots and removes the reported marker.
 #>
 [CmdletBinding()]
 param(
@@ -36,8 +40,10 @@ param(
     [int]$BuildNumber = 0,
     [string]$ZipPath,
     [string]$Arm64ZipPath,
-    [string]$OutputDir = ".build\AppPackages\winget-manifest",
-    [string]$ReleaseDate = ''
+    [string]$OutputDir = '',
+    [string]$ReleaseDate = '',
+    [switch]$CanonicalPackageDirectory,
+    [switch]$ValidateManifest
 )
 
 $ErrorActionPreference = 'Stop'
@@ -128,6 +134,17 @@ function Resolve-WingetPortableZip {
     return $item.FullName
 }
 
+function Get-WingetPortableZipPath {
+    param([string]$RepositoryRoot, [string]$LeafName)
+
+    foreach ($directory in @('.build\packages', '.build\AppPackages')) {
+        $candidate = Resolve-RSGuardedRepositoryPath -RepoRoot $RepositoryRoot -GuardedRelativeRoot $directory `
+            -Path (Join-Path $directory $LeafName)
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    throw "No package named '$LeafName' exists in .build/packages or .build/AppPackages."
+}
+
 if ([string]::IsNullOrWhiteSpace($Version) -and ($BuildNumber -le 0 -or $BuildNumber -gt 65535)) {
     throw 'Winget manifest generation requires either -Version or -BuildNumber in the range 1..65535; it never allocates or guesses a package version.'
 }
@@ -135,7 +152,7 @@ if ([string]::IsNullOrWhiteSpace($Version) -and ($BuildNumber -le 0 -or $BuildNu
 $RepoRoot = Split-Path -Parent $PSScriptRoot | Split-Path -Parent
 $VersioningModule = Join-Path $RepoRoot "Tools\Modules\Build\Versioning.psm1"
 $ArtifactOperationLockModule = Join-Path $RepoRoot "Tools\Modules\Build\ArtifactOperationLock.psm1"
-$TemplateDir = Join-Path $PSScriptRoot "templates"
+$PackageRelativeRoot = if ($CanonicalPackageDirectory) { '.build\packages' } else { '.build\AppPackages' }
 if (-not (Test-Path $ArtifactOperationLockModule)) {
     throw "Artifact-operation lock module not found: $ArtifactOperationLockModule"
 }
@@ -157,7 +174,7 @@ try {
     if ($PackagingLock.WasAbandoned) {
         [void](Set-RSArtifactOperationContaminated `
                 -RepoRoot $RepoRoot `
-                -Reason 'The previous packaging owner exited while mutating shared installer inputs or AppPackages outputs.' `
+                -Reason 'The previous packaging owner exited while mutating shared installer inputs or package outputs.' `
                 -AbandonedOwner $PackagingLock.AbandonedOwner `
                 -Scope $PackagingScope)
     }
@@ -168,7 +185,7 @@ try {
         $MarkerPath = Get-RSArtifactContaminationMarkerPath `
             -RepoRoot $RepoRoot `
             -Scope $PackagingScope
-        throw "Shared packaging state may be incomplete after an interrupted operation. Review and restore Installer inputs and .build\AppPackages, then remove the marker explicitly. Marker: $MarkerPath"
+        throw "Shared packaging state may be incomplete after an interrupted operation. Review and restore Installer inputs and the package roots .build\packages and .build\AppPackages, then remove the marker explicitly. Marker: $MarkerPath"
     }
 
 # Read version from the shared version helper if not provided
@@ -187,8 +204,22 @@ if (-not $Version) {
 }
 
 Assert-WingetManifestVersion -CandidateVersion $Version
-# The release workflow passes the GitHub release's published date; a bare local run stamps today.
 $ReleaseDate = Resolve-WingetReleaseDate -CandidateDate $ReleaseDate
+if ($CanonicalPackageDirectory) {
+    if (-not $ZipPath) {
+        $ZipPath = Get-WingetPortableZipPath -RepositoryRoot $RepoRoot -LeafName "RedSalamander-$Version-x64-Portable.zip"
+    }
+    if (-not $Arm64ZipPath) {
+        $Arm64ZipPath = Get-WingetPortableZipPath -RepositoryRoot $RepoRoot -LeafName "RedSalamander-$Version-ARM64-Portable.zip"
+    }
+}
+if (-not $OutputDir) {
+    $OutputDir = if ($CanonicalPackageDirectory) {
+        Join-Path $PackageRelativeRoot "winget-manifest\$Version"
+    } else {
+        Join-Path $PackageRelativeRoot 'winget-manifest'
+    }
+}
 $ZipPath = Resolve-WingetPortableZip `
     -CandidatePath $ZipPath `
     -ExpectedLeaf "RedSalamander-$Version-x64-Portable.zip" `
@@ -199,58 +230,73 @@ $Arm64ZipPath = Resolve-WingetPortableZip `
     -Label 'ARM64'
 $OutputDir = Resolve-RSGuardedRepositoryPath `
     -RepoRoot $RepoRoot `
-    -GuardedRelativeRoot '.build\AppPackages' `
-    -Path $OutputDir `
-    -CreateDirectory
+    -GuardedRelativeRoot $PackageRelativeRoot `
+    -Path $OutputDir
 
 Write-Host "Generating winget manifest for version $Version..." -ForegroundColor Cyan
 
-# Calculate SHA256 for the portable archive
-Write-Host "  Calculating x64 ZIP SHA256..." -ForegroundColor Gray
-$ZipSha256 = (Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256).Hash
-Write-Host "  Calculating ARM64 ZIP SHA256..." -ForegroundColor Gray
-$Arm64ZipSha256 = (Get-FileHash -LiteralPath $Arm64ZipPath -Algorithm SHA256).Hash
+$binding = Join-Path $RepoRoot '.ci-engine/Tools/Modules/Ci.EngineBinding.psm1'
+if (-not (Test-Path -LiteralPath $binding -PathType Leaf)) {
+    throw 'WinGet manifest generation requires the .ci-engine checkout pinned by .ci/project.json.'
+}
+Import-Module $binding -ErrorAction Stop
+$publication = Resolve-CiPinnedEngineModule -ProjectRoot $RepoRoot -Name 'Publication.psm1'
+Import-Module (Join-Path (Split-Path -Parent $publication) 'Ci.Policy.psm1') -ErrorAction Stop
+Import-Module $publication -ErrorAction Stop
 
-# Template substitutions
-$Replacements = @{
-    '{VERSION}' = $Version
-    '{ VERSION }' = $Version
-    '{ZIP_SHA256}' = $ZipSha256
-    '{ ZIP_SHA256 }' = $ZipSha256
-    '{ARM64_ZIP_SHA256}' = $Arm64ZipSha256
-    '{ ARM64_ZIP_SHA256 }' = $Arm64ZipSha256
-    '{RELEASE_DATE}' = $ReleaseDate
-    '{ RELEASE_DATE }' = $ReleaseDate
+$project = Read-CiProject $RepoRoot
+if ($project.repository -cne 'RedSalamanders/RedSalamander') {
+    throw 'WinGet manifest generation requires the RedSalamander project manifest.'
 }
 
-# Process each template
-$Templates = @(
-    "RedSalamanders.RedSalamander.installer.yaml",
-    "RedSalamanders.RedSalamander.locale.en-US.yaml",
-    "RedSalamanders.RedSalamander.yaml"
-)
-
-foreach ($Template in $Templates) {
-    $TemplatePath = Join-Path $TemplateDir $Template
-    $OutputPath = Join-Path $OutputDir $Template
-    
-    Write-Host "  Processing $Template..." -ForegroundColor Gray
-    
-    $Content = Get-Content $TemplatePath -Raw
-    foreach ($Key in $Replacements.Keys) {
-        $Content = $Content -replace [regex]::Escape($Key), $Replacements[$Key]
+$plan = @{
+    project = $project
+    batch = @{ version = $Version }
+    tag = "v$Version"
+    assets = @(
+        @{ platform = 'x64'; file = [IO.Path]::GetFileName($ZipPath); path = $ZipPath; sha256 = (Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256).Hash }
+        @{ platform = 'ARM64'; file = [IO.Path]::GetFileName($Arm64ZipPath); path = $Arm64ZipPath; sha256 = (Get-FileHash -LiteralPath $Arm64ZipPath -Algorithm SHA256).Hash }
+    )
+}
+$StageDir = Resolve-RSGuardedRepositoryPath -RepoRoot $RepoRoot -GuardedRelativeRoot $PackageRelativeRoot `
+    -Path (Join-Path $PackageRelativeRoot ('.winget-' + [Guid]::NewGuid().ToString('N'))) -CreateDirectory
+try {
+    $null = New-CiWingetManifest -Plan $plan -Directory $StageDir -ReleaseDate $ReleaseDate
+    if ($ValidateManifest) {
+        . (Join-Path $PSScriptRoot 'WingetValidation.ps1')
+        Invoke-RSWingetManifestValidation -ManifestPath $StageDir
     }
-    
-    Set-Content -Path $OutputPath -Value $Content -Encoding UTF8 -NoNewline
+
+    $OutputDir = Resolve-RSGuardedRepositoryPath -RepoRoot $RepoRoot -GuardedRelativeRoot $PackageRelativeRoot `
+        -Path $OutputDir -CreateDirectory
+    $destinations = @(foreach ($suffix in '.yaml', '.installer.yaml', '.locale.en-US.yaml') {
+        $candidate = Resolve-RSGuardedRepositoryPath -RepoRoot $RepoRoot -GuardedRelativeRoot $PackageRelativeRoot `
+            -Path (Join-Path $OutputDir "$($project.winget.identifier)$suffix")
+        if (Test-Path -LiteralPath $candidate -PathType Container) {
+            throw "A WinGet manifest destination is a directory: $candidate"
+        }
+        $candidate
+    })
+    foreach ($destination in $destinations) {
+        $name = [IO.Path]::GetFileName($destination)
+        $temporary = Resolve-RSGuardedRepositoryPath -RepoRoot $RepoRoot -GuardedRelativeRoot $PackageRelativeRoot `
+            -Path (Join-Path $OutputDir ('.' + $name + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'))
+        try {
+            [IO.File]::Copy((Join-Path $StageDir $name), $temporary)
+            $null = Publish-RSGuardedRepositoryFile -RepoRoot $RepoRoot -GuardedRelativeRoot $PackageRelativeRoot `
+                -StagedPath $temporary -DestinationPath $destination
+        } finally {
+            if (Test-Path -LiteralPath $temporary -PathType Leaf) {
+                Remove-Item -LiteralPath $temporary -Force
+            }
+        }
+    }
+} finally {
+    $cleanup = Resolve-RSGuardedRepositoryPath -RepoRoot $RepoRoot -GuardedRelativeRoot $PackageRelativeRoot -Path $StageDir
+    Remove-Item -LiteralPath $cleanup -Recurse -Force
 }
 
-Write-Host "✓ Winget manifest generated successfully!" -ForegroundColor Green
-Write-Host "  Output: $OutputDir" -ForegroundColor Gray
-Write-Host "`nNext steps:" -ForegroundColor Cyan
-Write-Host "  1. Review the manifest files in $OutputDir" -ForegroundColor Gray
-Write-Host "  2. Validate with: winget validate --manifest $OutputDir" -ForegroundColor Gray
-Write-Host "  3. Test install with: winget install --manifest $OutputDir" -ForegroundColor Gray
-Write-Host "  4. Submit to winget-pkgs repository (see docs/WingetIntegration.md)" -ForegroundColor Gray
+Write-Host "WinGet manifests published to $OutputDir" -ForegroundColor Green
 }
 finally {
     Exit-RSArtifactOperationLock -Lock $PackagingLock

@@ -309,16 +309,17 @@ configuration when protecting that shared dependency.
 Packaging uses the other reviewed shared scope. Build orchestration acquires
 repository-wide `coordination=packaging` only after compilation and keeps it
 through portable ZIP and Winget manifest generation because platforms share
-package inputs and `.build\AppPackages`. Standalone packaging mutators enter the
+package inputs and output roots. Standalone packaging mutators enter the
 same scope; ordinary build/test work remains outside it. Abandoned packaging
 state fails closed for explicit restoration and is not cleared by a profile rebuild.
 Standalone packagers that read compiled outputs acquire the artifact-profile
-scope first and packaging second, then release in reverse. Repository-scoped
-locks protect only reviewed repository descendants: configurable package outputs
-remain beneath `.build\AppPackages`. Package files are produced as unique same-directory
-staged files, validated before publication, and published with the shared guarded
-atomic-file helper only after immediate ancestor/final reparse revalidation;
-force-overwriting a live package path is outside the reviewed tooling contract.
+scope first and packaging second, then release in reverse. These locks protect
+reviewed repository descendants. Package outputs remain beneath
+`.build\packages` for the root commands and hosted production or
+`.build\AppPackages` for the compatibility commands. Package assembly and smoke
+extraction use a unique guarded stage beneath the selected root. The packager
+validates unique same-directory staged files and publishes them through the
+shared guarded atomic-file helper after revalidating ancestors and destinations.
 
 Process names are never sufficient ownership evidence. Residual build-tool
 checks use boundary-aware repository plus profile evidence, and exact-output
@@ -352,7 +353,7 @@ include the qualified new-file route without removing the original managed/verif
 [`Operation Startrail`](../Plans/Done/Operation_Startrail_TrustedIncrementalValidationAndResumableFullEvidence_2026-08-13.md)
 records the gated implementation history. Fresh remains the default and final-closeout
 authority; explicit local Resume and Affected use the narrower active contracts in
-`Testing_ValidationEvidence.md`.
+`Testing_RunEvidence.md`.
 The completed
 [`cross-domain remediation`](../Plans/Done/CodeReview_CrossDomain_Remediation_2026-08-10.md)
 records the post-completion `L4-BUILD-01..08` and `L4-STAR-01..16` repairs;
@@ -381,7 +382,7 @@ must retain complete help, stable exit categories, output-root contracts, and fo
 
 The shared scoped-suite projections under `.build/reports` are compatibility metadata for completed selected
 runs. Their archive reference and evidence digests are governed by
-[Testing_ValidationEvidence.md](Testing_ValidationEvidence.md). The runner keeps native outputs and Startrail
+[Testing_RunEvidence.md](Testing_RunEvidence.md). The runner keeps native outputs and Startrail
 evidence in their existing authority locations.
 
 The Full runner's initial test-enabled build and post-writer full-profile re-attestation

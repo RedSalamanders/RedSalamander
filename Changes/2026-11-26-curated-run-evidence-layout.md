@@ -1,0 +1,1 @@
+- Use the shared run-evidence contract name and Measurements/TestRuns for new curated runs. Validate and compare both archive roots while retaining historical paths and byte identities.

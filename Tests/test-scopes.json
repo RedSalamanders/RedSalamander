@@ -4,7 +4,7 @@
   "buildNumber": "none",
   "nativeProfileOwner": "product",
   "nativeInventory": {"path":"Tests/native-test-files.json","exclude":["Specs/**","Measurements/**","legacy/**","External/**","Tools/TerminalEngine/TerminalEngineGate0ContractTestAdapter.cpp"],"testFolders":["Tests/**","RedSalamander/SelfTest/**"]},
-  "prose": ["docs/**","Changes/*.md"],
+  "prose": ["docs/**","Changes/*.md","Plugins/**/README.md"],
   "unscoped": ["Specs/TestRuns/**","Specs/Plans/WIP/Notes_Scratch.md"],
   "scopes": [
     {"name":"tooling.pester-build-toolchain","native":true,"reuse":false},

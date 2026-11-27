@@ -56,7 +56,7 @@ Read these owning contracts before a corresponding investigation:
 - [File Operations](../../FileSystem/FileSystem_FileOperations.md) and [S3](../../FileSystem/FileSystem_S3.md).
 - [Preferences](../../UI/UI_PreferencesDialog.md) and [FolderView](../../UI/UI_FolderView.md).
 - [Viewer integration](../../Plugins/Plugins_ViewerPlugins.md).
-- [Self-test execution and desktop ownership](../../Testing/Testing_SelfTests.md), [validation evidence](../../Testing/Testing_ValidationEvidence.md), [performance validation](../../Testing/Testing_PerformanceValidation.md) and [test guide](../../../Tests/README.md).
+- [Self-test execution and desktop ownership](../../Testing/Testing_SelfTests.md), [validation evidence](../../Testing/Testing_RunEvidence.md), [performance validation](../../Testing/Testing_PerformanceValidation.md) and [test guide](../../../Tests/README.md).
 - Existing coordination: [I29 File Operations qualification](FileOperations_PostMergeQualification_2026-10-05.md), [I25 S3/harness residuals](FileOperations_S3PathStyleCopyAndHarnessResiduals_2026-09-15.md), [I27 DxUi qualification](DxUi_HostMessagesToolsetAndRestore_2026-10-01.md), [I4 source-contract migration](Operation_Astrolabe_TestContractArchitectureMigration_2026-07-17.md), [I10 tooling](Tooling_ToolsInventoryAndGovernance_2026-08-13.md) and [I2 FolderView qualification](Operation_FolderView_WarpDrive_RemainingCloseout_2026-08-25.md).
 
 ## Evidence identities and aggregate accounting

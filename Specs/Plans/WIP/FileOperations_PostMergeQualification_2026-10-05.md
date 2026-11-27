@@ -19,7 +19,7 @@ Current contracts remain [File Operations](../../FileSystem/FileSystem_FileOpera
 [selftests](../../Testing/Testing_SelfTests.md),
 [coverage](../../Testing/Testing_TestCoverage.md),
 [performance validation](../../Testing/Testing_PerformanceValidation.md),
-[validation evidence](../../Testing/Testing_ValidationEvidence.md) and
+[validation evidence](../../Testing/Testing_RunEvidence.md) and
 [spec authority](../../README.md). Domain specs stay in their canonical folders.
 
 Independent owners remain independent: [DxUi I31](DxUi_HostMessagesToolsetAndRestore_2026-10-01.md),

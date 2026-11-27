@@ -14,6 +14,7 @@ $script:RSTestRunArchiveRelocationSourceCommit = '6b6f5646be297fbc232d137f1df6a0
 $script:RSTestRunArchiveRelocationBaselineCommit = '8b9e36191835cc71b5ee0dfeea4dddd5d942dd5a'
 $script:RSTestRunArchiveRelocationPathCount = 1394
 $script:RSTestRunArchiveCurrentRelocationPathCount = 1012
+$script:RSTestRunArchiveRoots = @('Measurements/TestRuns', 'Specs/TestRuns')
 
 function Invoke-RSTestRunArchiveGitCapture {
     param([string]$Root, [string[]]$Arguments, [AllowEmptyCollection()][string[]]$InputLines)
@@ -629,8 +630,8 @@ function Read-RSTerminalVtUpgradeEvidence {
     $root = [IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/')
     $relativeRun = ConvertTo-RSRepoRelativePath -RepoRoot $root -Path $RunPath
     $parts = $relativeRun -split '[\\/]'
-    if ($parts.Count -ne 5 -or $parts[0] -ne 'Specs' -or $parts[1] -ne 'TestRuns' -or $parts[3] -ne 'Terminal') {
-        throw "Terminal VT evidence path must be Specs/TestRuns/<MachineHash>/Terminal/<RunId>: $RunPath"
+    if ($parts.Count -ne 5 -or ($parts[0..1] -join '/') -notin $script:RSTestRunArchiveRoots -or $parts[3] -ne 'Terminal') {
+        throw "Terminal VT evidence must use Measurements/TestRuns/<MachineHash>/Terminal/<RunId> or the legacy Specs/TestRuns root: $RunPath"
     }
     $runRoot = Join-Path $root $relativeRun
     $resultsPath = Join-Path $runRoot 'results.json'
@@ -681,7 +682,7 @@ function Get-RSTestRunArchiveViolations {
         }
 
         $parts = $relativePath -split '[\\/]'
-        if ($parts.Count -lt 5 -or $parts[0] -ne 'Specs' -or $parts[1] -ne 'TestRuns') {
+        if ($parts.Count -lt 5 -or ($parts[0..1] -join '/') -notin $script:RSTestRunArchiveRoots) {
             continue
         }
 
@@ -1056,12 +1057,13 @@ function Get-RSChangedTestRunArchivePaths {
         }
     }
 
+    $archivePathspec = @('--') + $script:RSTestRunArchiveRoots
     $commands = [System.Collections.Generic.List[object]]::new()
     if ($null -ne $baseRef) {
-        $commands.Add(@('diff', '--no-renames', '--name-only', '--diff-filter=AM', "$baseRef...HEAD", '--', 'Specs/TestRuns'))
+        $commands.Add(@('diff', '--no-renames', '--name-only', '--diff-filter=AM', "$baseRef...HEAD") + $archivePathspec)
     }
-    $commands.Add(@('diff', '--no-renames', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'))
-    $commands.Add(@('diff', '--no-renames', '--cached', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'))
+    $commands.Add(@('diff', '--no-renames', '--name-only', '--diff-filter=AM') + $archivePathspec)
+    $commands.Add(@('diff', '--no-renames', '--cached', '--name-only', '--diff-filter=AM') + $archivePathspec)
 
     foreach ($arguments in $commands) {
         $output = (Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments $arguments).Output | Write-Output
@@ -1090,6 +1092,7 @@ function Get-RSTestRunArchiveInventoryPaths {
     )
 
     $root = [IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/')
+    $archivePathspec = @('--') + $script:RSTestRunArchiveRoots
     $gitTopLevel = (Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('rev-parse','--show-toplevel')).Output | Write-Output
     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace([string]$gitTopLevel)) {
         $resolvedGitTopLevel = [IO.Path]::GetFullPath(([string]$gitTopLevel).Trim()).TrimEnd('\', '/')
@@ -1117,9 +1120,9 @@ function Get-RSTestRunArchiveInventoryPaths {
             if ($null -ne $contractRange) {
                 $paths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
                 $commands = @(
-                    @('diff', '--no-renames', '--name-only', '--diff-filter=AM', $contractRange, '--', 'Specs/TestRuns'),
-                    @('diff', '--no-renames', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'),
-                    @('diff', '--no-renames', '--cached', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns')
+                    (@('diff', '--no-renames', '--name-only', '--diff-filter=AM', $contractRange) + $archivePathspec),
+                    (@('diff', '--no-renames', '--name-only', '--diff-filter=AM') + $archivePathspec),
+                    (@('diff', '--no-renames', '--cached', '--name-only', '--diff-filter=AM') + $archivePathspec)
                 )
                 foreach ($arguments in $commands) {
                     $output = (Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments $arguments).Output | Write-Output
@@ -1134,9 +1137,9 @@ function Get-RSTestRunArchiveInventoryPaths {
                 }
                 $trackedPaths = @($paths)
             } else {
-                $trackedPaths = (Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('ls-files','--cached','--','Specs/TestRuns')).Output | Write-Output
+                $trackedPaths = (Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments (@('ls-files','--cached') + $archivePathspec)).Output | Write-Output
                 if ($LASTEXITCODE -ne 0) {
-                    throw 'git ls-files --cached -- Specs/TestRuns failed while enumerating the checked-in TestRuns inventory.'
+                    throw 'git ls-files failed while enumerating the checked-in TestRuns inventory.'
                 }
             }
 
@@ -1153,8 +1156,11 @@ function Get-RSTestRunArchiveInventoryPaths {
         }
     }
 
-    $testRunsRoot = Join-Path $root 'Specs\TestRuns'
-    if (-not (Test-Path -LiteralPath $testRunsRoot -PathType Container)) {
+    $archiveDirectories = @(foreach ($archiveRoot in $script:RSTestRunArchiveRoots) {
+        $directory = Join-Path $root $archiveRoot
+        if (Test-Path -LiteralPath $directory -PathType Container) { $directory }
+    })
+    if ($archiveDirectories.Count -eq 0) {
         return @()
     }
 
@@ -1162,7 +1168,7 @@ function Get-RSTestRunArchiveInventoryPaths {
     foreach ($relocatedPath in Get-RSTestRunArchiveValidatedGrandfatheredRelocationPaths -RepoRoot $root) {
         [void]$grandfatheredPaths.Add($relocatedPath)
     }
-    return @(Get-ChildItem -LiteralPath $testRunsRoot -File -Recurse -Force |
+    return @(Get-ChildItem -LiteralPath $archiveDirectories -File -Recurse -Force |
             ForEach-Object { ConvertTo-RSRepoRelativePath -RepoRoot $root -Path $_.FullName } |
             Where-Object { -not $grandfatheredPaths.Contains($_) } |
             Sort-Object -Unique)
@@ -1184,8 +1190,8 @@ function Get-RSTestRunArchivePathsForRuns {
     foreach ($candidate in $RunPath) {
         $relativeRun = ConvertTo-RSRepoRelativePath -RepoRoot $root -Path $candidate
         $parts = $relativeRun -split '[\\/]'
-        if ($parts.Count -lt 5 -or $parts[0] -ne 'Specs' -or $parts[1] -ne 'TestRuns') {
-            throw "Run path is not under Specs/TestRuns/<Profile>/<Area>/<RunId>: $candidate"
+        if ($parts.Count -lt 5 -or ($parts[0..1] -join '/') -notin $script:RSTestRunArchiveRoots) {
+            throw "Run path must use Measurements/TestRuns/<Profile>/<Area>/<RunId> or the legacy Specs/TestRuns root: $candidate"
         }
 
         $fullRun = Join-Path $root $relativeRun

@@ -23,7 +23,7 @@ source e32cf9f9b29f4e817decb09e1be44be7fc1a94de; the two private projects retain
 A receipt from an older engine identity never qualifies its changed deployment. Actual rollout and evidence are recorded below.
 
 Normative owners: [hosted CI](../../Build/Build_UnifiedCI.md), [build identity](../../Build/Build_Toolchain.md),
-[test evidence](../../Testing/Testing_ValidationEvidence.md), [self-tests](../../Testing/Testing_SelfTests.md),
+[test evidence](../../Testing/Testing_RunEvidence.md), [self-tests](../../Testing/Testing_SelfTests.md),
 [portable ZIPs](../../Installer/Installer_PortableZip.md), [winget](../../Installer/WingetIntegration.md),
 and the [shared engine contract](https://github.com/RedSalamanders/.github/blob/main/Specs/CI.md).
 

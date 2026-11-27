@@ -37,6 +37,8 @@
     Optional maximum MSBuild worker count. Zero uses MSBuild's default.
 .PARAMETER Zip
     Build a portable ZIP package after a successful build (Release only)
+.PARAMETER CanonicalPackageDirectory
+    Use .build/packages for ZIP and WinGet outputs. Used by the root package command.
 .PARAMETER GenerateWingetManifest
     Generate winget manifests from the x64 and ARM64 portable ZIP packages (Release only).
 .PARAMETER BuildNumber
@@ -107,6 +109,8 @@ param(
     [Parameter(HelpMessage = "Generate winget manifest after build (Release only)")]
     [switch]$GenerateWingetManifest,
 
+    [switch]$CanonicalPackageDirectory,
+
     [Parameter(HelpMessage = "Override the build number (required for local official release builds)")]
     [int]$BuildNumber = 0,
 
@@ -122,6 +126,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($CanonicalPackageDirectory -and -not ($Zip -or $GenerateWingetManifest)) {
+    throw 'CanonicalPackageDirectory requires Zip or GenerateWingetManifest.'
+}
 if ($ProjectNames.Count -and ($ProjectName -or $ProductionOnly -or $Zip -or $GenerateWingetManifest -or $OfficialRelease)) {
     throw 'ProjectNames cannot be combined with ProjectName, ProductionOnly or release/package actions.'
 }
@@ -1021,40 +1028,40 @@ function Assert-BuildOutputProcessNotRunning {
 
     $packagingLock = $null
     $packageEvidenceBefore = @{}
-    $appPackagesEvidenceRoot = Join-Path -Path $SolutionDir -ChildPath '.build\AppPackages'
+    $packageRelativeRoot = if ($CanonicalPackageDirectory) { '.build\packages' } else { '.build\AppPackages' }
+    $appPackagesEvidenceRoot = Join-Path -Path $SolutionDir -ChildPath $packageRelativeRoot
     if ($Zip -or $GenerateWingetManifest) {
         $appPackagesEvidenceRoot = Resolve-RSGuardedRepositoryPath `
-            -RepoRoot $SolutionDir -GuardedRelativeRoot '.build\AppPackages' `
+            -RepoRoot $SolutionDir -GuardedRelativeRoot $packageRelativeRoot `
             -Path $appPackagesEvidenceRoot
-        if (Test-Path -LiteralPath $appPackagesEvidenceRoot -PathType Container) {
-            foreach ($file in @(Get-ChildItem -LiteralPath $appPackagesEvidenceRoot -File -Recurse)) {
+    }
+    try {
+        if ($Zip -or $GenerateWingetManifest) {
+            $packagingScope = $artifactOperationScope.Clone()
+            $packagingScope['coordination'] = 'packaging'
+            $packagingLock = Enter-RSArtifactOperationLock `
+                -RepoRoot $SolutionDir `
+                -Operation "packaging $packageMode winget=$GenerateWingetManifest" `
+                -Scope $packagingScope
+            if ($packagingLock.WasAbandoned) {
+                [void](Set-RSArtifactOperationContaminated `
+                        -RepoRoot $SolutionDir `
+                        -Reason 'The previous packaging owner exited while mutating shared installer inputs or package outputs.' `
+                        -AbandonedOwner $packagingLock.AbandonedOwner `
+                        -Scope $packagingScope)
+            }
+            if (Test-RSArtifactOperationContaminated -RepoRoot $SolutionDir -Scope $packagingScope) {
+                $markerPath = Get-RSArtifactContaminationMarkerPath `
+                    -RepoRoot $SolutionDir `
+                    -Scope $packagingScope
+                throw "Shared packaging state may be incomplete after an interrupted operation. Review and remove the marker only after restoring Installer inputs and the package roots .build\packages and .build\AppPackages. Marker: $markerPath"
+            }
+        }
+        if ($packagingLock -and (Test-Path -LiteralPath $appPackagesEvidenceRoot -PathType Container)) {
+            foreach ($file in Get-ChildItem -LiteralPath $appPackagesEvidenceRoot -File -Recurse) {
                 $packageEvidenceBefore[$file.FullName] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             }
         }
-    }
-    if ($Zip -or $GenerateWingetManifest) {
-        $packagingScope = $artifactOperationScope.Clone()
-        $packagingScope['coordination'] = 'packaging'
-        $packagingLock = Enter-RSArtifactOperationLock `
-            -RepoRoot $SolutionDir `
-            -Operation "packaging $packageMode winget=$GenerateWingetManifest" `
-            -Scope $packagingScope
-        if ($packagingLock.WasAbandoned) {
-            [void](Set-RSArtifactOperationContaminated `
-                    -RepoRoot $SolutionDir `
-                    -Reason 'The previous packaging owner exited while mutating shared installer inputs or AppPackages outputs.' `
-                    -AbandonedOwner $packagingLock.AbandonedOwner `
-                    -Scope $packagingScope)
-        }
-        if (Test-RSArtifactOperationContaminated -RepoRoot $SolutionDir -Scope $packagingScope) {
-            $markerPath = Get-RSArtifactContaminationMarkerPath `
-                -RepoRoot $SolutionDir `
-                -Scope $packagingScope
-            throw "Shared packaging state may be incomplete after an interrupted operation. Review and remove the marker only after restoring Installer inputs and .build\AppPackages. Marker: $markerPath"
-        }
-    }
-
-    try {
         # Capture native bytes and module provenance before staging the portable package.
         Write-RSDxUiModuleProvenance -RepoRoot $SolutionDir -ArtifactManifestDir $artifactManifestDir -Platform $Platform -Configuration $Configuration -SdkInput $sdkInput
         $sdkRecordPath=if($null -ne $sdkInput){Write-RSDxUiSdkBuildRecord -RepoRoot $SolutionDir -BuildOutputDir $buildOutputDir -SdkInput $sdkInput -MSBuildPath $msbuildPath -Platform $Platform}else{$null}
@@ -1098,7 +1105,8 @@ function Assert-BuildOutputProcessNotRunning {
             $zipStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
             try {
-                & $zipScript -Configuration $Configuration -Platform $Platform -BuildNumber $versionContext.BuildNumber
+                & $zipScript -Configuration $Configuration -Platform $Platform -BuildNumber $versionContext.BuildNumber `
+                    -CanonicalPackageDirectory:$CanonicalPackageDirectory
             }
             catch {
                 $zipStopwatch.Stop()
@@ -1125,7 +1133,7 @@ function Assert-BuildOutputProcessNotRunning {
             Write-Host ""
             Write-Host "Generating winget manifest..." -ForegroundColor Yellow
 
-            $appPackagesDir = Join-Path -Path $SolutionDir -ChildPath ".build\\AppPackages"
+            $appPackagesDir = $appPackagesEvidenceRoot
             $packageVersion = $versionContext.PackagingVersion
             $ZipPath = Join-Path $appPackagesDir "RedSalamander-$packageVersion-x64-Portable.zip"
             $Arm64ZipPath = Join-Path $appPackagesDir "RedSalamander-$packageVersion-ARM64-Portable.zip"
@@ -1135,6 +1143,7 @@ function Assert-BuildOutputProcessNotRunning {
                     BuildNumber = $versionContext.BuildNumber
                     ZipPath = $ZipPath
                     Arm64ZipPath = $Arm64ZipPath
+                    CanonicalPackageDirectory = $CanonicalPackageDirectory
                 }
 
                 & $wingetScript @wingetParams
@@ -1161,7 +1170,7 @@ function Assert-BuildOutputProcessNotRunning {
 
     if ($Zip -or $GenerateWingetManifest) {
         if (-not (Test-Path -LiteralPath $appPackagesEvidenceRoot -PathType Container)) {
-            throw "Requested packaging produced no AppPackages directory: $appPackagesEvidenceRoot"
+            throw "Requested packaging produced no output directory: $appPackagesEvidenceRoot"
         }
         # The packaging lease is released here: check only, never delete. The in-lease check
         # already checked the newly produced portable ZIP.

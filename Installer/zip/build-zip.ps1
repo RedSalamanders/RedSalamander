@@ -10,14 +10,16 @@
     Target platform (x64 or ARM64). Default: x64.
 .PARAMETER BuildNumber
     Required positive build number identifying the already compiled profile.
+.PARAMETER CanonicalPackageDirectory
+    Write to .build/packages for the root package command and hosted production.
 .EXAMPLE
     .\Installer\zip\build-zip.ps1 -Configuration Release -Platform x64 -BuildNumber 184
 .OUTPUTS
-    None. Writes the portable ZIP beneath .build\AppPackages.
+    None. Writes the portable ZIP beneath .build\AppPackages or .build\packages.
 .NOTES
     Mutates shared packaging outputs while holding the repository-wide packaging
     coordination lock. Interrupted packaging fails closed until a reviewer restores
-    Installer inputs and .build\AppPackages and removes the reported marker.
+    Installer inputs and package roots and removes the reported marker.
 #>
 [CmdletBinding()]
 param(
@@ -27,7 +29,9 @@ param(
     [ValidateSet('x64', 'ARM64')]
     [string]$Platform = 'x64',
 
-    [int]$BuildNumber = 0
+    [int]$BuildNumber = 0,
+
+    [switch]$CanonicalPackageDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,8 +50,8 @@ $PortablePackageSmokeModule = Join-Path $RepoRoot "Tools\Modules\Packaging\Porta
 $ReleaseArtifactPolicyModule = Join-Path $RepoRoot "Tools\Modules\Packaging\ReleaseArtifactPolicy.psm1"
 $BuildOutputDir = Join-Path $RepoRoot ".build\$Platform\$Configuration"
 $PackageSmokeHarness = Join-Path $BuildOutputDir "PluginContractTests.exe"
-$PackageOutputDir = Join-Path $RepoRoot ".build\AppPackages"
-$TempDir = Join-Path $env:TEMP "RedSalamanderZip_$([Guid]::NewGuid())"
+$PackageRelativeRoot = if ($CanonicalPackageDirectory) { '.build\packages' } else { '.build\AppPackages' }
+$PackageOutputDir = Join-Path $RepoRoot $PackageRelativeRoot
 
 if (-not (Test-Path $VersioningModule)) {
     throw "Version helper module not found: $VersioningModule"
@@ -80,12 +84,12 @@ Import-Module $RuntimeDependencyModule -Force -ErrorAction Stop
 Import-Module $PortablePackageSmokeModule -Force -ErrorAction Stop
 Import-Module $ReleaseArtifactPolicyModule -Force -ErrorAction Stop
 
-# Reject a pre-existing .build or AppPackages reparse path before lock metadata
+# Reject a pre-existing reparse path before lock metadata
 # or package output can be redirected outside the repository. Missing components
 # are created only after the packaging lease is held.
 $PackageOutputDir = Resolve-RSGuardedRepositoryPath `
     -RepoRoot $RepoRoot `
-    -GuardedRelativeRoot '.build\AppPackages' `
+    -GuardedRelativeRoot $PackageRelativeRoot `
     -Path $PackageOutputDir
 $ArtifactProfileScope = @{
     kind = 'packaging-input'
@@ -131,7 +135,7 @@ try {
     if ($PackagingLock.WasAbandoned) {
         [void](Set-RSArtifactOperationContaminated `
                 -RepoRoot $RepoRoot `
-                -Reason 'The previous packaging owner exited while mutating shared installer inputs or AppPackages outputs.' `
+                -Reason 'The previous packaging owner exited while mutating shared installer inputs or package outputs.' `
                 -AbandonedOwner $PackagingLock.AbandonedOwner `
                 -Scope $PackagingScope)
     }
@@ -142,12 +146,12 @@ try {
         $MarkerPath = Get-RSArtifactContaminationMarkerPath `
             -RepoRoot $RepoRoot `
             -Scope $PackagingScope
-        throw "Shared packaging state may be incomplete after an interrupted operation. Review and restore Installer inputs and .build\AppPackages, then remove the marker explicitly. Marker: $MarkerPath"
+        throw "Shared packaging state may be incomplete after an interrupted operation. Review and restore Installer inputs and the package roots .build\packages and .build\AppPackages, then remove the marker explicitly. Marker: $MarkerPath"
     }
 
     $PackageOutputDir = Resolve-RSGuardedRepositoryPath `
         -RepoRoot $RepoRoot `
-        -GuardedRelativeRoot '.build\AppPackages' `
+        -GuardedRelativeRoot $PackageRelativeRoot `
         -Path $PackageOutputDir `
         -CreateDirectory
 
@@ -181,7 +185,9 @@ if (-not (Test-Path -LiteralPath $PackageSmokeHarness -PathType Leaf)) {
 }
 
 # Create temp directory
-New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
+$TempDir = Resolve-RSGuardedRepositoryPath `
+    -RepoRoot $RepoRoot -GuardedRelativeRoot $PackageRelativeRoot `
+    -Path (Join-Path $PackageOutputDir ('.stage-' + [Guid]::NewGuid().ToString('N'))) -CreateDirectory
 
 try {
     # Copy main executables
@@ -306,7 +312,8 @@ https://github.com/RedSalamanders/RedSalamander
     # Create and validate a unique same-directory archive before publishing it.
     # The prior complete ZIP remains untouched until the final atomic operation.
     Write-Host "Compressing files..." -ForegroundColor Cyan
-    Compress-Archive -Path "$TempDir\*" -DestinationPath $StagedZipPath
+    $payload = @(Get-ChildItem -LiteralPath $TempDir | ForEach-Object FullName)
+    Compress-Archive -LiteralPath $payload -DestinationPath $StagedZipPath
 
     # A Release ZIP is distributable, so it must not carry an ENABLE_TESTS surface. Debug ZIPs are
     # diagnostic only and the release workflow rejects them independently.
@@ -321,6 +328,7 @@ https://github.com/RedSalamanders/RedSalamander
         -BuildOutputDir $BuildOutputDir `
         -Configuration $Configuration `
         -Platform $Platform `
+        -ScratchRoot (Join-Path $TempDir '.smoke') `
         -SkipExecution:(-not $HostCanExecutePackage)
     if ($SmokeResult.ExecutionSkipped) {
         Write-Host "  Portable package dependency closure validated; $Platform execution skipped on this host." -ForegroundColor Yellow
@@ -331,12 +339,12 @@ https://github.com/RedSalamanders/RedSalamander
     # Revalidate every component immediately before the atomic replacement.
     $PackageOutputDir = Resolve-RSGuardedRepositoryPath `
         -RepoRoot $RepoRoot `
-        -GuardedRelativeRoot '.build\AppPackages' `
+        -GuardedRelativeRoot $PackageRelativeRoot `
         -Path $PackageOutputDir `
         -CreateDirectory
     $ZipPath = Publish-RSGuardedRepositoryFile `
         -RepoRoot $RepoRoot `
-        -GuardedRelativeRoot '.build\AppPackages' `
+        -GuardedRelativeRoot $PackageRelativeRoot `
         -StagedPath $StagedZipPath `
         -DestinationPath $ZipPath
 
@@ -349,8 +357,9 @@ https://github.com/RedSalamanders/RedSalamander
 
 } finally {
     # Cleanup temp directory
-    if (Test-Path $TempDir) {
-        Remove-Item $TempDir -Recurse -Force
+    if (Test-Path -LiteralPath $TempDir -PathType Container) {
+        $cleanup = Resolve-RSGuardedRepositoryPath -RepoRoot $RepoRoot -GuardedRelativeRoot $PackageRelativeRoot -Path $TempDir
+        Remove-Item -LiteralPath $cleanup -Recurse -Force
     }
     if (-not [string]::IsNullOrEmpty($StagedZipPath) -and
         (Test-Path -LiteralPath $StagedZipPath -PathType Leaf)) {

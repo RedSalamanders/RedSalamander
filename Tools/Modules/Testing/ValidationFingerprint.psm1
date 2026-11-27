@@ -437,7 +437,7 @@ function Test-RSValidationWorkspacePathIncluded {
 
     $normalized = $Path.Replace('\', '/')
     if (-not (Test-RSValidationRelativePath -Path $normalized)) { throw "Git returned unsafe workspace path '$Path'." }
-    foreach ($prefix in @('.git/', '.build/', 'Specs/TestRuns/')) {
+    foreach ($prefix in @('.git/', '.build/', 'Specs/TestRuns/', 'Measurements/TestRuns/')) {
         if ($normalized.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return $false }
     }
     if ($normalized.EndsWith('.log', [StringComparison]::OrdinalIgnoreCase)) { return $false }

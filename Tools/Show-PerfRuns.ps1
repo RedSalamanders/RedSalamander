@@ -13,7 +13,7 @@
     and inclusive synchronous JSONL writer attribution.
 
 .PARAMETER RunsRoot
-    Selects the archived TestRuns root to inspect.
+    Selects an archive root. By default, searches Measurements/TestRuns and legacy Specs/TestRuns.
 
 .PARAMETER Scenario
     Filters records to one scenario identifier.
@@ -72,7 +72,7 @@
 
 param(
     [Parameter(Position = 0)]
-    [string]$RunsRoot = 'Specs\TestRuns',
+    [string]$RunsRoot,
 
     [string]$Scenario,
     [string]$Area,
@@ -375,7 +375,7 @@ function Show-Usage() {
     Write-Host '  -Trend      Shows metric evolution over time with detailed table then Unicode trend graphs.'
 
     Write-Section 'Filters'
-    Write-Host '  -RunsRoot   Root folder to scan for archived perf runs. Default: Specs\TestRuns'
+    Write-Host '  -RunsRoot   Archive root. Default: Measurements/TestRuns and legacy Specs/TestRuns'
     Write-Host '  -Area       Restrict discovery to one area, for example Commands, CompareDirectories, or FileOps.'
     Write-Host '  -Scenario   Filter metrics by scenario field from the JSONL records.'
     Write-Host '  -Metric     Filter to a single metric name.'
@@ -958,9 +958,14 @@ if ($Help) {
     exit 0
 }
 
-$runs = @(Get-RunFolders $RunsRoot)
+$archiveRoots = if ($PSBoundParameters.ContainsKey('RunsRoot')) {
+    @($RunsRoot)
+} else {
+    @('Measurements/TestRuns', 'Specs/TestRuns') | Where-Object { Test-Path -LiteralPath $_ -PathType Container }
+}
+$runs = @(foreach ($archiveRoot in $archiveRoots) { Get-RunFolders $archiveRoot })
 if (-not $runs) {
-    throw "No perf runs found under $RunsRoot"
+    throw 'No perf runs found in the selected archive roots.'
 }
 
 if ($Area) {

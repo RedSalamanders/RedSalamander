@@ -15,9 +15,7 @@
     This matches the MSBuild/CI layout (see Directory.Build.props) so builds never create
     a top-level `vcpkg_installed\` folder.
 
-    By default (no parameters), installs both supported triplets:
-      - x64-windows
-      - arm64-windows
+    By default, installs x64-windows. Use -Platform All for both supported triplets.
 
     The ASan Debug build configuration links against these same triplets and uses
     _DISABLE_VECTOR_ANNOTATION / _DISABLE_STRING_ANNOTATION to avoid MSVC STL
@@ -42,7 +40,7 @@
     hash, so the first install after a change rebuilds the packages.
 
 .PARAMETER Platform
-    Target platform (x64, ARM64, or All). Default is "All" which installs both platforms.
+    Target platform (x64, ARM64, or All). Default is x64. All installs both platforms.
 
 .PARAMETER Triplet
     Optional explicit vcpkg triplet (overrides -Platform). Use this to install
@@ -51,9 +49,9 @@
 
 .PARAMETER Clean
     Deletes only the selected triplet directories beneath their platform-scoped
-    canonical install and staging roots before installing. With the default
-    two-triplet selection, both supported triplets are cleaned. Unselected/custom
-    triplets and the other platform's install metadata are preserved.
+    canonical install and staging roots before installing. Use -Platform All to
+    clean both supported triplets. Unselected/custom triplets and each unselected
+    platform's install metadata are preserved.
 
 .PARAMETER ReuseCurrent
     Reuses a triplet installed by this script when its restore inputs match.
@@ -61,7 +59,7 @@
 
 .PARAMETER RepairInterrupted
     Repairs an interrupted installation for one canonical platform under its
-    dependency lock. Requires Clean. Clears the marker after a successful install.
+    dependency lock. Requires Clean and an explicit x64 or ARM64 Platform. Clears the marker after a successful install.
 
 .PARAMETER VcpkgExe
     Optional explicit path to vcpkg.exe (overrides automatic discovery). Use this if vcpkg
@@ -78,12 +76,11 @@
 
 .EXAMPLE
     .\vcpkg-install.ps1
-    Installs both supported triplets (default behavior):
-    x64-windows, arm64-windows
+    Installs x64-windows.
 
 .EXAMPLE
-    .\vcpkg-install.ps1 -Platform x64
-    Installs only x64-windows.
+    .\vcpkg-install.ps1 -Platform All
+    Installs x64-windows and arm64-windows.
 
 .EXAMPLE
     .\vcpkg-install.ps1 -Triplet x64-windows -Clean
@@ -91,7 +88,7 @@
 
 .EXAMPLE
     .\vcpkg-install.ps1 -VcpkgExe C:\tools\vcpkg\vcpkg.exe
-    Uses specific vcpkg.exe and installs the default triplets.
+    Uses the specified vcpkg.exe and installs x64-windows.
 
 .EXAMPLE
     .\vcpkg-install.ps1 -Platform ARM64 -VcpkgExe C:\tools\vcpkg\vcpkg.exe -VcpkgRoot C:\ports\vcpkg
@@ -119,8 +116,8 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(HelpMessage = "Target platform (x64, ARM64, or All). Default is All.")]
-    [string]$Platform = "All",
+    [Parameter(HelpMessage = "Target platform (x64, ARM64, or All). Default is x64.")]
+    [string]$Platform = "x64",
 
     [Parameter(HelpMessage = "Optional explicit x64 or ARM64 vcpkg triplet (overrides -Platform)")]
     [string]$Triplet = $null,
@@ -150,7 +147,7 @@ if ($Help) {
     return
 }
 
-if ($RepairInterrupted -and (-not $Clean -or $Platform -notin @('x64', 'ARM64') -or $Triplet)) {
+if ($RepairInterrupted -and (-not $Clean -or -not $PSBoundParameters.ContainsKey('Platform') -or $Platform -notin @('x64', 'ARM64') -or $Triplet)) {
     throw 'An interrupted dependency repair requires Clean and one explicit platform (x64 or ARM64) without a Triplet override.'
 }
 

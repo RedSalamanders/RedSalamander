@@ -107,9 +107,7 @@ if ($Phase -eq 'Static') {
     $baseCommit = Resolve-CiCommit $root $Base
     Run 'Tools/Test-Changelog.ps1' @('-Base',$baseCommit)
     foreach ($script in @('Tools/Verify-NoSubclassManager.ps1','Tools/Audit-ComctlReportSurfaces.ps1','Tools/Audit-VisibleNativeSurfaces.ps1')) { Run $script }
-    Run 'validate-skills.ps1'
-    Run 'Tools/Get-ToolInventory.ps1' @('-FailOnFindings','-Format','Json')
-    Run 'validate-specs.ps1'
+    Run 'validate.ps1'
     return
 }
 if ($Phase -ne 'Qualification') { $Configuration = 'Release' }
@@ -154,9 +152,9 @@ if ($Phase -eq 'Production') {
     $expected = @($testReceipt.artifacts | Where-Object { $_.path -ceq ".build/$Platform/Release/PluginContractTests.exe" })
     if ($expected.Count -ne 1 -or (Get-FileHash -LiteralPath $harness).Hash.ToLowerInvariant() -cne $expected[0].sha256) { throw 'Smoke harness does not match the tested artifact.' }
     Copy-Item -LiteralPath $harness -Destination (Join-Path $root ".build/$Platform/Release/PluginContractTests.exe")
-    Run 'Installer/zip/build-zip.ps1' ($profile + @('-BuildNumber',$number))
-    $archives = @(Get-ChildItem (Join-Path $root '.build/AppPackages') -Filter "*-$Platform-Portable.zip" -File | ForEach-Object FullName)
-    Write-CiProductionReceipt -Context $context -Archives $archives -TestModeDisabled $true -SmokePassed $true
+    Run 'Installer/zip/build-zip.ps1' ($profile + @('-BuildNumber',$number,'-CanonicalPackageDirectory'))
+    $archive = Join-Path $root ".build/packages/RedSalamander-$($context.batch.version)-$Platform-Portable.zip"
+    Write-CiProductionReceipt -Context $context -Archives @($archive) -TestModeDisabled $true -SmokePassed $true
     return
 }
 Import-Module (Join-Path $root 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Force

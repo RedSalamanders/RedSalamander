@@ -4,7 +4,7 @@ Status: **HOLD**. Owner: RedSalamander's DxUi build and test maintainer.
 
 This plan receives the RedHome D20 adoption scope for CV-5-06, CV-6-04 and CV-6-08. The product's current [DxUi lock](../../../Dependencies/DxUi.lock.json) identifies the selected dependency. I31 and H4 retain their earlier tooling and platform qualification records. [Convergence plan](https://github.com/RedSalamanders/RedHome/blob/main/Specs/Plans/WIP/Convergence_2026-11-17.md#decided) · [I31](DxUi_HostMessagesToolsetAndRestore_2026-10-01.md) · [H4](DxUi_DeferredPlatformQualification_2026-09-13.md)
 
-Owning contracts are the [DxUi integration guide](../../../docs/DxUi.md), [toolchain](../../Build/Build_Toolchain.md#pinned-dxui-consumption), [CI](../../Build/Build_UnifiedCI.md), [shared grid](../../UI/UI_DxUiSharedGrid.md), [shared helpers](../../Core/Core_SharedHelpers.md), and [validation evidence](../../Testing/Testing_ValidationEvidence.md).
+Owning contracts are the [DxUi integration guide](../../../docs/DxUi.md), [toolchain](../../Build/Build_Toolchain.md#pinned-dxui-consumption), [CI](../../Build/Build_UnifiedCI.md), [shared grid](../../UI/UI_DxUiSharedGrid.md), [shared helpers](../../Core/Core_SharedHelpers.md), and [validation evidence](../../Testing/Testing_RunEvidence.md).
 
 ## Adoption sequence
 

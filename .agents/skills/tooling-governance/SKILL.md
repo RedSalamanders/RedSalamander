@@ -23,7 +23,7 @@ Read [build coordination](../../../Specs/Build/Build_Toolchain.md) and [selftest
 - Prove process/path/start/operation ownership. Never terminate an independently launched application. Keep automatic cleanup within the launching operation's contained descendants.
 - Test paths are fail-closed beneath the selected existing marked sandbox. Parameters/environment are requests, not new-root authorization. Do not follow reparse points or expose unrelated paths/volumes.
 - Only RequiresInteractiveDesktop entries use the existing warning/desktop lease, after agreement to the time. Build/setup/archival do not justify a desktop takeover.
-- For affected/resume/receipt changes, read [validation evidence](../../../Specs/Testing/Testing_ValidationEvidence.md). Preserve exact source/artifact/environment/scope identity, artifact epochs, failed outcomes and explicitly pending gates; a digest refresh is not requalification.
+- For affected/resume/receipt changes, read [validation evidence](../../../Specs/Testing/Testing_RunEvidence.md). Preserve exact source/artifact/environment/scope identity, artifact epochs, failed outcomes and explicitly pending gates; a digest refresh is not requalification.
 
 ## Keep the full dependency closure
 

@@ -11,7 +11,14 @@ Affected (default), Full, or PrePush.
 .PARAMETER Full
 Selects the full local obligation. Equivalent to Mode Full.
 .PARAMETER BaseRef
-Local comparison revision; defaults to origin/HEAD, the remote's recorded default branch. No fetch is performed.
+Local comparison revision. The canonical runner defaults to origin/HEAD. The shared runner
+uses the default branch in the scope manifest. The comparison uses local refs.
+.PARAMETER Scopes
+Runs explicit shared scopes in Affected mode. Accepts names or comma-separated strings.
+.PARAMETER Force
+Uses the shared runner and bypasses successful scope reuse and its iteration baseline.
+.PARAMETER ParallelSuites
+Selects the shared runner. RedSalamander's product-owned native profiles require one lane.
 .PARAMETER Configuration
 Debug, Release or ASan Debug.
 .PARAMETER Platform
@@ -62,6 +69,8 @@ through the canonical runner; no second evidence cache or desktop lease is intro
 .EXAMPLE
 ./test.ps1 -Mode PrePush
 .EXAMPLE
+./test.ps1 -Scopes CompilerFreeValidation,standalone.crash-handling -Explain
+.EXAMPLE
 ./test.ps1 -Full -Interactive -AllowAlternateVolumeTestRoot -TestRoot E:\RedSalamander.Perf
 #>
 [CmdletBinding(DefaultParameterSetName='Mode')]
@@ -83,7 +92,10 @@ param(
     [Parameter(ParameterSetName='Mode')][ValidateSet('','Commands','Compare','FileOps')][string]$Suite='',
     [Parameter(ParameterSetName='Mode')][string]$CaseFilter='',
     [Parameter(ParameterSetName='Mode')][string]$CommandsFamily='',
-    [Parameter(ParameterSetName='Mode', DontShow)][switch]$CanonicalProfile
+    [Parameter(ParameterSetName='Mode', DontShow)][switch]$CanonicalProfile,
+    [Parameter(ParameterSetName='Mode')][string[]]$Scopes=@(),
+    [Parameter(ParameterSetName='Mode')][Parameter(ParameterSetName='Full')][switch]$Force,
+    [Parameter(ParameterSetName='Mode')][Parameter(ParameterSetName='Full')][ValidateRange(1,8)][int]$ParallelSuites=1
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
@@ -98,9 +110,13 @@ $useCanonicalRunner = $CanonicalProfile -or $Interactive -or $ResumeFrom -or $Al
 if ($Mode -eq 'PrePush' -and ($PSBoundParameters.ContainsKey('Platform') -or $PSBoundParameters.ContainsKey('Configuration'))) {
     $useCanonicalRunner = $true
 }
-if ($Mode -in @('Full', 'PrePush') -and -not $useCanonicalRunner) {
+$useSharedOptions = $Scopes -or $Force -or $PSBoundParameters.ContainsKey('ParallelSuites')
+if ($useSharedOptions -and ($useCanonicalRunner -or $Suite)) {
+    throw 'Scopes, Force and ParallelSuites require the unattended shared runner without product-specific execution options.'
+}
+if ($useSharedOptions -or ($Mode -in @('Full', 'PrePush') -and -not $useCanonicalRunner)) {
     $binding = Join-Path $PSScriptRoot '.ci-engine/Tools/Modules/Ci.EngineBinding.psm1'
-    if (-not [IO.File]::Exists($binding)) { throw 'Full and PrePush require the .ci-engine checkout pinned by .ci/project.json.' }
+    if (-not [IO.File]::Exists($binding)) { throw 'The shared runner requires the .ci-engine checkout pinned by .ci/project.json.' }
     Import-Module $binding -Scope Local
     $command = Resolve-CiPinnedEngineCommand -ProjectRoot $PSScriptRoot -Name 'Test-Changes.ps1'
     $engineArguments = @('-NoProfile', '-NonInteractive', '-File', $command, '-Root', $PSScriptRoot, '-Mode', $Mode)
@@ -109,7 +125,14 @@ if ($Mode -in @('Full', 'PrePush') -and -not $useCanonicalRunner) {
             [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ceq 'Arm64') { $Platform = 'ARM64' }
         $engineArguments += @('-Platform', $Platform, '-Configuration', $Configuration)
     }
+    if ($Mode -eq 'Affected') {
+        if ($PSBoundParameters.ContainsKey('Platform')) { $engineArguments += @('-Platform', $Platform) }
+        if ($PSBoundParameters.ContainsKey('Configuration')) { $engineArguments += @('-Configuration', $Configuration) }
+    }
     if ($PSBoundParameters.ContainsKey('BaseRef') -and $BaseRef) { $engineArguments += @('-BaseRef', $BaseRef) }
+    if ($Scopes) { $engineArguments += @('-Scopes', ($Scopes -join ',')) }
+    if ($Force) { $engineArguments += '-Force' }
+    if ($PSBoundParameters.ContainsKey('ParallelSuites')) { $engineArguments += @('-ParallelSuites', [string]$ParallelSuites) }
     if ($SkipBuild) { $engineArguments += '-SkipBuild' }
     if ($Explain) { $engineArguments += '-Explain' }
     & (Join-Path $PSHOME 'pwsh.exe') @engineArguments

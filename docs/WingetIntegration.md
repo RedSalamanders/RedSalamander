@@ -1,56 +1,26 @@
 # Winget Integration
 
-RedSalamander keeps Winget manifest templates under `Installer/winget/`.
-Generated manifests are written to `.build\AppPackages\winget-manifest` by
-default.
-
-## Files
-
-| Path | Purpose |
-| --- | --- |
-| `Installer/winget/generate-manifest.ps1` | Generates versioned manifests from templates and package hashes. |
-| `Installer/winget/WingetValidation.ps1` | Wraps `winget validate` and normalizes known schema-header warning behavior. |
-| `Installer/winget/templates/RedSalamanders.RedSalamander.yaml` | Package version manifest template. |
-| `Installer/winget/templates/RedSalamanders.RedSalamander.locale.en-US.yaml` | English package metadata template. |
-| `Installer/winget/templates/RedSalamanders.RedSalamander.installer.yaml` | Installer architecture and archive metadata template. |
-
-## Generate manifests
-
-Build or obtain the x64 and ARM64 portable archives first, then run:
+Build or obtain matching x64 and ARM64 portable ZIPs. The root command finds
+each archive in `.build/packages` or `.build/AppPackages` and generates the
+manifest for the specified version.
 
 ```powershell
-.\Installer\winget\generate-manifest.ps1 `
-  -Version 7.0.183 `
-  -ZipPath .build\AppPackages\RedSalamander-7.0.183-x64-Portable.zip `
-  -Arm64ZipPath .build\AppPackages\RedSalamander-7.0.183-ARM64-Portable.zip
+.\winget-manifest.ps1 -Version 7.0.183
 ```
 
-If `-Version` is omitted, pass a positive `-BuildNumber`; the script constructs
-the version from `Common\Version.h` without reading or allocating repository
-version state. Both ZIP inputs are mandatory and must use the exact selected
-version in their x64/ARM64 portable filenames.
+The command validates the staged manifest with WinGet and writes the three files to
+`.build/packages/winget-manifest/7.0.183`. Use `-X64ZipPath` and `-Arm64ZipPath`
+to select archives elsewhere, or `-SkipValidation` to generate files on a host
+without WinGet. The ZIP filenames must include the selected version and architecture.
 
-The generator replaces:
+`Installer/winget/generate-manifest.ps1` retains its existing arguments and
+defaults to `.build/AppPackages/winget-manifest`.
 
-- `{VERSION}`
-- `{ZIP_SHA256}`
-- `{ARM64_ZIP_SHA256}`
-- `{RELEASE_DATE}`
-
-## Validate
-
-Use the helper when possible:
+For a local install check, enable LocalManifestFiles on the test host, then point
+WinGet at the generated version directory.
 
 ```powershell
-. .\Installer\winget\WingetValidation.ps1
-Invoke-RSWingetManifestValidation -ManifestPath .build\AppPackages\winget-manifest
-```
-
-Or call Winget directly:
-
-```powershell
-winget validate --manifest .build\AppPackages\winget-manifest
-winget install --manifest .build\AppPackages\winget-manifest
+winget install --manifest .build/packages/winget-manifest/7.0.183
 ```
 
 ## Hosted publication

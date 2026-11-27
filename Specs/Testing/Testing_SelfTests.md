@@ -26,7 +26,7 @@ selection uses those bindings before compilation and verifies the complete selec
 runtime receipt afterward; Fresh Full and exact Resume retain their full profile.
 No-build/zero-entry decisions perform only applicable compiler-free ownership checks
 and return NOT_EVALUATED without a native artifact lease or a reusable test seal.
-The owning acceptance rules are in [Testing_ValidationEvidence.md](Testing_ValidationEvidence.md)
+The owning acceptance rules are in [Testing_RunEvidence.md](Testing_RunEvidence.md)
 and [Build_Toolchain.md](../Build/Build_Toolchain.md).
 
 Runner console diagnostics announce File Operations profile allocation, test-owned
@@ -431,7 +431,7 @@ Related documents:
 - `Specs/Testing/Testing_TestCoverage.md` — coverage policy and required risk map
 - `Specs/Testing/Testing_SelfTestRemoteCredentials.md`
 - `Specs/Testing/Testing_PerformanceValidation.md`
-- `Specs/TestRuns/README.md`
+- [Curated run evidence](../../Measurements/TestRuns/README.md) and [historical archive](../TestRuns/README.md)
 - `Tests/README.md` — central test infrastructure index
 - `Tools/Run-AllTests.ps1` — unified test runner with summary reporting
 
@@ -541,7 +541,7 @@ and one schema-valid fingerprint for every planned entry. It MUST acquire and pu
 post-entry snapshot after every normal entry and quarantine repair, plus a final
 snapshot. A mismatch from the initial snapshot is a blocking source mutation even when
 the test itself passed. Runner evidence under `.build`, archived evidence under
-`Specs/TestRuns`, Git metadata, and logs are excluded to prevent self-invalidation;
+`Measurements/TestRuns`, `Specs/TestRuns`, Git metadata, and logs are excluded to prevent self-invalidation;
 ordinary untracked source and tooling files remain included.
 
 Each fingerprint MUST bind the plan/entry semantics, workspace and input identities,

@@ -66,7 +66,7 @@ Any new feature, hot-path change, or optimization that can affect responsiveness
 - scenario definition,
 - instrumentation,
 - deterministic selftest coverage,
-- archived perf evidence under `Specs/TestRuns/`
+- curated run evidence under `Measurements/TestRuns/` and historical archives under `Specs/TestRuns/`
 
 from the beginning. Follow the [performance and resource contract](Specs/Core/Core_PerformanceAndResources.md) and the [performance validation procedures](Specs/Testing/Testing_PerformanceValidation.md). Use RedHome's `test-evidence` workflow to record validation evidence.
 
@@ -101,7 +101,7 @@ paths with thin compatibility shims when they may have external consumers.
   block disjoint profile lifecycles or worktrees. MSBuild/vcpkg phases also use
   the narrower repository+platform dependency lock because configurations share
   one triplet; packaging alone uses a repository-wide lock because platforms
-  share installer inputs and `.build/AppPackages`. Process names alone are never ownership evidence. An independently
+  share installer inputs and `.build/packages` or `.build/AppPackages`. Process names alone are never ownership evidence. An independently
   launched executable at an exact output path blocks
   replacement with diagnostics but is never killed; automatic termination is
   limited to descendants contained by the launching operation. The session-wide
@@ -195,7 +195,7 @@ Use `build.ps1` for command-line builds. The [build toolchain contract](Specs/Bu
 .\build.ps1 -ProjectName RedSalamander   # Build specific project
 ```
 
-Use `test.ps1 -Explain` and affected execution while editing. Use `test.ps1 -Mode PrePush` for the full local obligation. Use `.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Fresh` when Full is explicitly requested or required for the changed behavior's qualification; `-SkipBuild` requires a byte-verified compatible receipt. Exact Full continuation uses `-ValidationMode Resume -ResumeFrom <run-id>`. An affected/family pass or pending CI never establishes complete repository qualification. See `Specs/Testing/Testing_ValidationEvidence.md` and `Tests/README.md` for the current acceptance and reuse boundaries.
+Use `test.ps1 -Explain` and affected execution while editing. Use `test.ps1 -Mode PrePush` for the full local obligation. Use `.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Fresh` when Full is explicitly requested or required for the changed behavior's qualification; `-SkipBuild` requires a byte-verified compatible receipt. Exact Full continuation uses `-ValidationMode Resume -ResumeFrom <run-id>`. An affected/family pass or pending CI never establishes complete repository qualification. See `Specs/Testing/Testing_RunEvidence.md` and `Tests/README.md` for the current acceptance and reuse boundaries.
 
 ## Dependencies
 
@@ -229,7 +229,7 @@ When working with this codebase:
 Use `test.ps1 -Explain` and the affected default while editing. Use `-Mode PrePush` for the full local
 obligation and `-Full` to request canonical Full acceptance. Pull request checks are compiler-free. Active native
 test files use `Scope.Tests.Something.h/.cpp` and the native file inventory. Reuse exact prior evidence only under
-[the validation contract](Specs/Testing/Testing_ValidationEvidence.md) and follow [the test guide](Tests/README.md).
+[the validation contract](Specs/Testing/Testing_RunEvidence.md) and follow [the test guide](Tests/README.md).
 
 ## Interactive desktop tests
 

@@ -2,8 +2,10 @@
 
 ## Scope
 
-This specification defines the fail-closed portable ZIP contract implemented by
-`Installer/zip/build-zip.ps1` for Release and diagnostic Debug packages.
+The root `package.ps1` builds and smoke-tests a portable Release ZIP for x64 or ARM64.
+Root packaging and hosted production write to `.build/packages`. `build.ps1 -Zip` and
+standalone `Installer/zip/build-zip.ps1` keep their `.build/AppPackages` default.
+They use the same packager, which also supports diagnostic Debug ZIPs.
 
 ## Runtime dependency source of truth
 
@@ -25,6 +27,8 @@ This specification defines the fail-closed portable ZIP contract implemented by
 The ZIP contains the shipping launchers and applications, root runtime DLLs, `Plugins\`, `Lang\`, `Themes\`, the
 settings schema, license, third-party notices (`THIRD-PARTY-NOTICES.md`), and portable README. Build/link artifacts and the package-smoke test executable are not
 shipped. The Microsoft Visual C++ runtime for the target architecture is bundled app-locally.
+The runtime manifest stages the ViewerWeb license and NOTICE files under `Plugins/Licenses/ViewerWeb/`.
+The clean-extraction smoke requires all four files.
 
 Before compression, packaging validates the build output through `Tools/Modules/Packaging/RuntimeDependencies.psm1`. A missing
 required runtime dependency or retained obsolete dependency aborts packaging and names the offending path.
@@ -36,7 +40,7 @@ only, are never published, and are not subject to this check; the release workfl
 
 The standalone ZIP entrypoint holds the selected artifact-profile lease before
 reading build output, then acquires the repository-wide packaging coordination
-scope before publishing beneath `.build\AppPackages`. It holds both through
+scope before publishing beneath the selected package root. It holds both through
 compression, clean-extraction smoke, and the final archive read, and releases
 packaging before the profile lease. Calls nested under `build.ps1 -Zip` reenter
 the same locks on the owning thread. An abandoned packaging owner records
@@ -44,11 +48,11 @@ repository-wide contamination and fails closed with the marker path; packaging
 never clears that marker automatically.
 
 Before acquiring locks, the ZIP entrypoint rejects any already-existing reparse
-component at the repository, `.build`, or `.build\AppPackages` boundary so lock or
+component at the repository or selected package output boundary so lock or
 package output cannot be redirected. Under the packaging lease it creates missing
 output directories component-by-component through the guarded repository-path
-helper. Compression writes a unique same-directory staged ZIP; clean-extraction
-smoke validates that staged archive. Immediately before publication, the entrypoint
+helper. Assembly and smoke extraction use a unique staging directory in the selected package root.
+Compression writes a unique same-directory staged ZIP that the clean-extraction smoke validates. Immediately before publication, the entrypoint
 revalidates the output directory, staged file, final path, and every ancestor, then
 uses guarded atomic move/replace. A failure before or during publication preserves
 the previous complete final ZIP, and final-file reparse points are rejected.

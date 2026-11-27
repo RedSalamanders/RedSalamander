@@ -254,6 +254,8 @@ https://github.com/aws/aws-sdk-cpp
 
 -------------------------------------------------------------------------------
 
+The portable ZIP carries the full ViewerWeb license and jsoneditor NOTICE texts in `Plugins/Licenses/ViewerWeb/`.
+
 ### highlight.js (ViewerWeb plugin)
 
 - Version: 11.11.1
