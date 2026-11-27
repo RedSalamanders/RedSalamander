@@ -12,9 +12,9 @@ Describe 'HWND render-target resource contracts' {
 
     It 'owns the common factory target and brush lifecycle in one narrow helper' {
         $sharedSource | Should Match 'struct\s+HwndRenderTargetResources'
-        $sharedSource | Should Match 'wil::com_ptr<ID2D1Factory>\s+d2dFactory'
-        $sharedSource | Should Match 'wil::com_ptr<ID2D1HwndRenderTarget>\s+target'
-        $sharedSource | Should Match 'wil::com_ptr<ID2D1SolidColorBrush>\s+solidBrush'
+        $sharedSource | Should Match 'wil::com_ptr_nothrow<ID2D1Factory>\s+d2dFactory'
+        $sharedSource | Should Match 'wil::com_ptr_nothrow<ID2D1HwndRenderTarget>\s+target'
+        $sharedSource | Should Match 'wil::com_ptr_nothrow<ID2D1SolidColorBrush>\s+solidBrush'
         $sharedSource | Should Match 'void\s+ResetTarget\(\)\s+noexcept\s*\{\s*solidBrush\.reset\(\);\s*target\.reset\(\);'
         $sharedSource | Should Match '\[\[nodiscard\]\]\s+bool\s+EnsureD2dFactory\(\)\s+noexcept'
         $sharedSource | Should Match '\[\[nodiscard\]\]\s+bool\s+EnsureTarget\(HWND hwnd, UINT dpi\)\s+noexcept'
@@ -29,8 +29,8 @@ Describe 'HWND render-target resource contracts' {
             $source | Should Match 'resources\.EnsureTarget\(hwnd, resources\.dpi\)'
             $source | Should Match 'resources\.ResetTarget\(\)'
             $source | Should Not Match 'CreateHwndRenderTarget\('
-            $source | Should Not Match 'wil::com_ptr<ID2D1HwndRenderTarget>\s+target'
-            $source | Should Not Match 'wil::com_ptr<ID2D1SolidColorBrush>\s+solidBrush'
+            $source | Should Not Match 'wil::com_ptr(?:_nothrow)?<ID2D1HwndRenderTarget>\s+target'
+            $source | Should Not Match 'wil::com_ptr(?:_nothrow)?<ID2D1SolidColorBrush>\s+solidBrush'
         }
     }
 
