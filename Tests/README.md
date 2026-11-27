@@ -651,6 +651,8 @@ An endpoint without exact file binding skips the case after corroboration.
 `FileOps_SmbCorroboratedRenameProvider` uses the same live sandbox to check the F2 worker, Keep both,
 case-only spelling, cancel before dispatch, and 100 independent no-replace provider operations.
 It skips if exact binding is available.
+`Phase7_DeleteItemsNestedRootsWake` runs without activation and checks that parallel Local Delete
+retires all four selected roots with one successful completion per root in each of twenty rounds.
 
 ## Product documentation captures
 

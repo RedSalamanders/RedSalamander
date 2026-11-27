@@ -168,7 +168,8 @@ function Get-RSTestRunPlan {
              $CaseFilter -ceq 'FileOps_SmbMixedMove' -or
              $CaseFilter -ceq 'C0_CurlCommittedMutationResponseLost' -or
              $CaseFilter -ceq 'Delete_IdentityLessPinnedTreeChangedEntry' -or
-             $CaseFilter -ceq 'Delete_IdentityLessPinnedTreeArchiveWriter') -and
+             $CaseFilter -ceq 'Delete_IdentityLessPinnedTreeArchiveWriter' -or
+             $CaseFilter -ceq 'Phase7_DeleteItemsNestedRootsWake') -and
             [string]::IsNullOrEmpty($SelfTestFlakyProofCase) -and
             [string]::IsNullOrEmpty($SelfTestOrderProofCase)
         $ownedProductGallery = $Suite -eq 'Commands' -and $CaseFilter -ceq 'cmd_product_documentation_gallery' -and

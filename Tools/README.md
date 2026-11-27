@@ -333,7 +333,8 @@ The exact FileOps-only `FileOps_IdentityInterlockWaiting`, `FileOps_ReviewRemedi
 `FileOps_SmbExactRenameProvider` and `FileOps_SmbCorroboratedRenameProvider` storage and route regressions
 run without activation or a desktop
 lease, alongside `FileOps_RepeatDecisionContracts`, `FileOps_AlertOverlayUxAccessibility` and the reviewed folder-progress
-witnesses. The exact `FileOps_DeferredExitRefusesNewWork` case verifies the deferred-close ingress
+witnesses. The exact `Phase7_DeleteItemsNestedRootsWake` case uses only owned files and a joined Local Delete
+worker, so it also runs without a desktop lease. The exact `FileOps_DeferredExitRefusesNewWork` case verifies the deferred-close ingress
 gates using owned windows. The exact `FileOps_ClearCompletedScope` case uses a private popup.
 The exact `C0_CurlCommittedMutationResponseLost` case uses a loopback FTP fixture and no desktop lease.
 The exact `FileOps_ProviderCapabilityMatrix` case uses owned providers and task controls.

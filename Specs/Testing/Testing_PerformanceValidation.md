@@ -1186,6 +1186,12 @@ two-second assertion remains a failed native result and makes the hosted diagnos
 the candidate measurements and comparison remain useful diagnostic evidence. Missing evidence,
 other failed assertions and candidate timing failures cannot be classified as timing-only RED.
 
+The exact `Phase7_DeleteItemsNestedRootsWake` x64 Release witness records the time spent in twenty
+fixture and parallel Delete rounds in `FileOps.SelfTest.DeleteItemsNestedRootsWake`. The metric stores
+round count in `value0`, roots per round in `value1`, and the terminal HRESULT. The fixture requires
+one successful completion per root and bounded return for every round. This sample is diagnostic
+for the nested-root scheduler and does not measure standalone disk throughput.
+
 R0e-OR1 fixed-volume Local reader cancellation evidence uses the test-enabled Release Commands case
 `cmd_pane_fileops_local_blocked_reader_cancel_is_bounded`. One real Local `Win32FileReader` issues an
 overlapped one-byte read against a connected outbound byte pipe whose server produces no bytes. The
