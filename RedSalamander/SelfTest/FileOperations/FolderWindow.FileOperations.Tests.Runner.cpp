@@ -16084,10 +16084,10 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         ! hasBytes(caseOnly, kSourceBytes))
         return reject(L"the case-only F2 Rename did not verify its stored spelling");
 
-    const auto pauseBeforeDispatch = [&](const std::filesystem::path& destination, uint64_t& taskId) noexcept
+    const auto pauseBeforeDispatch = [&](const std::filesystem::path& from, const std::filesystem::path& destination, uint64_t& taskId) noexcept
     {
         SetFileOpsInlineRenameBeforeMutationPauseForSelfTest(true);
-        if (! start(caseOnly, destination, taskId))
+        if (! start(from, destination, taskId))
             return false;
         const auto blocked = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept {
             return HasFileOpsInlineRenameBeforeMutationPauseEnteredForSelfTest();
@@ -16101,7 +16101,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     };
     const auto canceled   = nested / L"cancel-not-published.txt";
     uint64_t canceledTask = 0u;
-    if (! pauseBeforeDispatch(canceled, canceledTask))
+    if (! pauseBeforeDispatch(caseOnly, canceled, canceledTask))
         return false;
     task = operations->FindTask(canceledTask);
     if (! task)
@@ -16117,7 +16117,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     const auto stale                               = nested / L"stale-not-published.txt";
     constexpr std::string_view kChangedSourceBytes = "I66 source changed while paused";
     uint64_t staleTask                             = 0u;
-    if (! pauseBeforeDispatch(stale, staleTask))
+    if (! pauseBeforeDispatch(caseOnly, stale, staleTask))
         return false;
     if (! SelfTest::WriteTextFile(caseOnly, kChangedSourceBytes))
         return reject(L"could not change the owned source while its captured task waited");
@@ -16127,6 +16127,49 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         hasExactLeaf(stale))
         return reject(L"an edited source must produce a pre-dispatch revision refusal and preserve its new bytes");
     Debug::Perf::Emit(L"FileOps.Smb.CorroboratedRenameControlUs", L"host stale source before dispatch", Debug::Perf::ElapsedUs(staleStart), 1u, 0u, S_OK);
+
+    const auto namespaceParent = nested / L"namespace";
+    const auto movedParent     = nested / L"namespace-moved";
+    const auto namespaceSource = namespaceParent / L"source.txt";
+    const auto namespaceTarget = namespaceParent / L"qualified.txt";
+    const auto parentDecoy     = nested / namespaceTarget.filename();
+    const auto rootDecoy       = fixture / namespaceTarget.filename();
+    if (! std::filesystem::create_directory(namespaceParent, error) || ! SelfTest::WriteTextFile(namespaceSource, kSourceBytes) ||
+        ! SelfTest::WriteTextFile(parentDecoy, kOccupantBytes) || ! SelfTest::WriteTextFile(rootDecoy, kChangedSourceBytes))
+        return reject(L"could not seed the owned namespace and same-name decoys");
+
+    const auto namespaceStart = std::chrono::steady_clock::now();
+    uint64_t namespaceTask    = 0u;
+    if (! start(namespaceSource, namespaceTarget, namespaceTask) || ! waitFor(namespaceTask, S_OK) || ! hasExactLeaf(namespaceTarget) ||
+        ! hasBytes(namespaceTarget, kSourceBytes) || hasExactLeaf(namespaceSource) || ! hasBytes(parentDecoy, kOccupantBytes) ||
+        ! hasBytes(rootDecoy, kChangedSourceBytes))
+        return reject(L"Rename left its captured directory or changed a same-name decoy");
+    Debug::Perf::Emit(L"FileOps.Smb.CorroboratedRenameControlUs", L"same-name decoys in owned ancestors", Debug::Perf::ElapsedUs(namespaceStart), 1u, 0u, S_OK);
+
+    const auto refusedTarget   = namespaceParent / L"unpublished.txt";
+    const auto movedLeaf       = movedParent / namespaceTarget.filename();
+    uint64_t changedParentTask = 0u;
+    if (! pauseBeforeDispatch(namespaceTarget, refusedTarget, changedParentTask))
+        return false;
+
+    // Put the same file back at its captured path through a different directory.
+    // A check of the file alone would still encounter the original object.
+    if (! MoveFileExW(namespaceParent.c_str(), movedParent.c_str(), 0u) || ! std::filesystem::create_directory(namespaceParent, error) ||
+        ! MoveFileExW(movedLeaf.c_str(), namespaceTarget.c_str(), 0u) || ! SelfTest::WriteTextFile(movedLeaf, kOccupantBytes))
+        return reject(L"could not replace the owned parent and restore the original file while F2 waited");
+
+    const auto changedParentStart = std::chrono::steady_clock::now();
+    releaseDispatch();
+    if (! waitFor(changedParentTask, HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH)))
+        return false;
+    const auto& changedParent = state.completedTasks.at(changedParentTask).sourceItemResults;
+    if (changedParent.size() != 1u || ! changedParent.front().has_value() ||
+        changedParent.front().value().publication != FileOperations::PublicationState::NotAttempted || ! hasBytes(namespaceTarget, kSourceBytes) ||
+        ! hasBytes(movedLeaf, kOccupantBytes) || hasExactLeaf(refusedTarget) || hasExactLeaf(movedParent / refusedTarget.filename()) ||
+        ! hasBytes(parentDecoy, kOccupantBytes) || ! hasBytes(rootDecoy, kChangedSourceBytes))
+        return reject(L"F2 must refuse a replaced parent before dispatch and preserve the original and decoys");
+    Debug::Perf::Emit(
+        L"FileOps.Smb.CorroboratedRenameControlUs", L"host changed parent before dispatch", Debug::Perf::ElapsedUs(changedParentStart), 1u, 0u, S_OK);
 
     for (unsigned int index = 0u; index < kCount; ++index)
     {
