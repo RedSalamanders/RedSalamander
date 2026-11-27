@@ -1,0 +1,1 @@
+- Enable the standard MSVC preprocessor for first-party C++ builds.

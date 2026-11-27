@@ -104,7 +104,7 @@
 
   <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
     <ClCompile>
-      <AdditionalOptions>/FS %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/FS /Zc:preprocessor %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>WINVER=0x0A00;_WIN32_WINNT=0x0A00;NTDDI_VERSION=NTDDI_WIN11_GE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>EnableAllWarnings</WarningLevel>
       <SDLCheck>true</SDLCheck>
