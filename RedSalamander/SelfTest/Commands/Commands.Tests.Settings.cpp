@@ -14920,6 +14920,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
                                                               [](std::wstring_view name) noexcept { return name == L"tree" || name == L"peer.txt"; });
 
+        std::optional<RedSalamander::TestSupport::ScopedEnvironmentVariable> changedAncestorIdentity;
         const bool mutate = scenario.change != TreeChange::None && scenario.change != TreeChange::Cancel;
         auto& gate        = FolderWindowFileOperationsStateInternal::g_fileOpsPackBeforePublishPausePoint;
         if (mutate && ! state.Require(gate.ArmForSource(target.native()), L"Arm the Pack tree publication boundary."))
@@ -15008,20 +15009,35 @@ struct StoredZipDeclaredEntryForCommandSelfTest
             else
             {
                 const auto previousParent = root / L"previous-pack-parent";
-                std::filesystem::rename(parent, previousParent, ec);
-                if (! state.Require(! ec && SelfTest::EnsureDirectory(parent), L"Replace the owned ancestor directory while the archive is staged."))
-                    return false;
-                std::filesystem::rename(previousParent / L"tree", tree, ec);
-                if (! state.Require(! ec, L"Place the original selected tree in the replacement ancestor."))
-                    return false;
-                std::filesystem::rename(previousParent / L"peer.txt", peer, ec);
-                if (! state.Require(! ec, L"Place the original selected sibling in the replacement ancestor."))
-                    return false;
+                if (MoveFileExW(parent.c_str(), previousParent.c_str(), MOVEFILE_WRITE_THROUGH) != FALSE)
+                {
+                    if (! state.Require(SelfTest::EnsureDirectory(parent), L"Create a new directory at the original ancestor path."))
+                        return false;
+                    std::filesystem::rename(previousParent / L"tree", tree, ec);
+                    if (! state.Require(! ec, L"Place the original selected tree in the replacement ancestor."))
+                        return false;
+                    std::filesystem::rename(previousParent / L"peer.txt", peer, ec);
+                    if (! state.Require(! ec, L"Place the original selected sibling in the replacement ancestor."))
+                        return false;
+                }
+                else
+                {
+                    const DWORD renameError = GetLastError();
+                    if (! state.Require((renameError == ERROR_ACCESS_DENIED || renameError == ERROR_SHARING_VIOLATION) &&
+                                            ! SelfTest::PathExists(previousParent),
+                                        std::format(L"The retained tree can refuse an ancestor move with a sharing or access error. Got {}.", renameError)))
+                        return false;
+                    // Windows can prevent the real swap while the descendants are open. Change only the
+                    // identity observed by subsequent binds so the worker still exercises its preflight check.
+                    changedAncestorIdentity.emplace(L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_NAMESPACE_PATH", parent.native());
+                    Debug::Perf::EmitCounter(L"archive.pack.cleanup_tree_ancestor_identity_fixture", renameError);
+                }
             }
             gate.Release();
         }
 
-        const auto result      = waitForArchiveResult();
+        const auto result = waitForArchiveResult();
+        changedAncestorIdentity.reset();
         const HRESULT expected = scenario.change == TreeChange::Cancel ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
                                  : mutate                              ? HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH)
                                                                        : S_OK;
