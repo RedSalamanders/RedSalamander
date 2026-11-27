@@ -152,9 +152,9 @@ if ($Phase -eq 'Production') {
     $expected = @($testReceipt.artifacts | Where-Object { $_.path -ceq ".build/$Platform/Release/PluginContractTests.exe" })
     if ($expected.Count -ne 1 -or (Get-FileHash -LiteralPath $harness).Hash.ToLowerInvariant() -cne $expected[0].sha256) { throw 'Smoke harness does not match the tested artifact.' }
     Copy-Item -LiteralPath $harness -Destination (Join-Path $root ".build/$Platform/Release/PluginContractTests.exe")
-    Run 'Installer/zip/build-zip.ps1' ($profile + @('-BuildNumber',$number))
-    $archives = @(Get-ChildItem (Join-Path $root '.build/AppPackages') -Filter "*-$Platform-Portable.zip" -File | ForEach-Object FullName)
-    Write-CiProductionReceipt -Context $context -Archives $archives -TestModeDisabled $true -SmokePassed $true
+    Run 'Installer/zip/build-zip.ps1' ($profile + @('-BuildNumber',$number,'-CanonicalPackageDirectory'))
+    $archive = Join-Path $root ".build/packages/RedSalamander-$($context.batch.version)-$Platform-Portable.zip"
+    Write-CiProductionReceipt -Context $context -Archives @($archive) -TestModeDisabled $true -SmokePassed $true
     return
 }
 Import-Module (Join-Path $root 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Force

@@ -395,6 +395,7 @@ function Get-RSArtifactOperationScopeInfo {
             $fileStem = "packaging-$hash"
             $artifactRoots = @(
                 [System.IO.Path]::GetFullPath((Join-Path $normalizedRoot '.build\AppPackages')),
+                [System.IO.Path]::GetFullPath((Join-Path $normalizedRoot '.build\packages')),
                 [System.IO.Path]::GetFullPath((Join-Path $normalizedRoot 'Installer\winget'))
             )
         }

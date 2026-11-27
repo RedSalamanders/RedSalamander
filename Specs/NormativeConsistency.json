@@ -305,7 +305,7 @@
       "path": "Specs/Installer/WingetIntegration.md",
       "status": "VERIFIED_MATCH",
       "contractOwner": "Winget publication tooling",
-      "implementationAnchors": [".github/workflows/publish.yml", ".ci/project.json", "Installer/winget/generate-manifest.ps1", "Installer/winget/WingetValidation.ps1", "Installer/winget/templates/RedSalamanders.RedSalamander.installer.yaml"],
+      "implementationAnchors": [".github/workflows/publish.yml", ".ci/project.json", "Installer/winget/generate-manifest.ps1", "Installer/winget/WingetValidation.ps1", "winget-manifest.ps1"],
       "testAnchors": ["Tools/Tests/WingetValidation.Tests.ps1"],
       "siblingSpecs": ["Specs/Installer/Installer_PortableZip.md"],
       "reviewedSections": ["all normative sections"],

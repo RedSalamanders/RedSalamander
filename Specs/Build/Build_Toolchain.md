@@ -291,6 +291,12 @@ but local success does not replace official identity evidence.
 
 ## Pinned bootstrap packages
 
+The root `restore.ps1` verifies the pinned RedMonitor client, prepares the selected DxUi profile,
+and restores the architecture's vcpkg inputs through the managed tool and registry bootstrap.
+The default target is x64 and the default DxUi configuration is Debug. The standalone
+`vcpkg-install.ps1` also defaults to x64 and accepts explicit `-Platform All` for both triplets.
+An interrupted repair requires an explicit single architecture and `-Clean -RepairInterrupted`.
+
 Official GitHub Actions jobs install reviewed Chocolatey package versions rather than
 accepting the mutable latest package:
 
@@ -943,7 +949,7 @@ checks are required after download. Offline runs use the verified cache. Partial
 The retry applies to the dependency download. [curl retry contract](https://curl.se/docs/manpage.html#--retry)
 
 Packaging has a separate repository-wide coordination scope because x64 and
-ARM64 packaging can both publish beneath `.build\AppPackages`. The lock is acquired
+ARM64 packaging can both publish beneath `.build/packages` or `.build/AppPackages`. The lock is acquired
 only after compilation succeeds and is held through portable ZIP and Winget manifest
 generation; ordinary builds and tests do not hold it. Standalone packaging entrypoints that mutate those locations MUST enter
 the same scope, so invoking a child from `build.ps1` is a balanced same-thread
@@ -954,7 +960,7 @@ explicitly removes the marker; a build-profile rebuild cannot silently clear it.
 A standalone packager that reads `.build\<platform>\<configuration>` acquires
 that artifact profile before packaging and releases packaging before the profile.
 The portable ZIP packager uses the same artifact-profile then packaging lock order.
-Caller-selected package destinations stay beneath this repository's `.build\AppPackages`.
+Package destinations stay beneath the canonical `.build/packages` or compatibility `.build/AppPackages` root.
 A package failure or process interruption leaves an abandoned-operation diagnostic for
 review; a build-profile rebuild cannot clear it. A repository lock does not authorize an
 arbitrary external path.

@@ -180,21 +180,40 @@ Describe 'Winget shared publication route' {
         $transport | Should Match 'default_branch_only=\$true'
         $transport | Should Match "method POST|Method POST"
     }
-    It 'keeps local optional ReleaseDate parsing deterministic and does not add a rerun date to shared manifests' {
+    It 'passes the resolved local date and leaves hosted rendering bound to the qualification' {
         $generator = Get-Content (Join-Path $repoRoot 'Installer/winget/generate-manifest.ps1') -Raw
         $generator | Should Match 'function Resolve-WingetReleaseDate'
-        $generator | Should Not Match '\$ReleaseDate = Get-Date -Format'
-        $source = Get-Content (Join-Path $engine 'Tools/Modules/Ci.Publication.psm1') -Raw
-        $source | Should Not Match 'ReleaseDate:|Get-Date -Format'
-        $source | Should Match 'NestedInstallerFiles:'
-        $source | Should Match 'PortableCommandAlias:'
+        $generator | Should Match 'New-CiWingetManifest -Plan \$plan -Directory \$StageDir -ReleaseDate \$ReleaseDate'
+        $source = Get-Content -LiteralPath (Join-Path $engine 'Tools/Invoke-Publication.ps1') -Raw
+        $source | Should Match 'New-CiWingetManifest \$plan'
+        $source | Should Not Match '(?m)^.*New-CiWingetManifest.*-ReleaseDate'
     }
 }
 
-Describe 'Winget manifest template' {
+Describe 'Generated WinGet package manifest' {
     BeforeAll {
-        $installerTemplatePath = Join-Path $repoRoot 'Installer\winget\templates\RedSalamanders.RedSalamander.installer.yaml'
-        $installerTemplate = Get-Content -Path $installerTemplatePath -Raw
+        $binding = Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.EngineBinding.psm1'
+        Import-Module $binding -ErrorAction Stop
+        $publication = Resolve-CiPinnedEngineModule -ProjectRoot $repoRoot -Name 'Publication.psm1'
+        Import-Module $publication -ErrorAction Stop
+        $project = Get-Content -LiteralPath (Join-Path $repoRoot '.ci/project.json') -Raw | ConvertFrom-Json -AsHashtable
+        $version = '7.0.184'
+        $assets = @(foreach ($platform in 'x64', 'ARM64') {
+            $leaf = "RedSalamander-$version-$platform-Portable.zip"
+            $path = Join-Path $TestDrive $leaf
+            $zip = [IO.Compression.ZipFile]::Open($path, [IO.Compression.ZipArchiveMode]::Create)
+            try {
+                foreach ($executable in 'RedLauncher.exe', 'red.exe') {
+                    $stream = $zip.CreateEntry($executable).Open()
+                    try { $stream.WriteByte([byte]$platform.Length) } finally { $stream.Dispose() }
+                }
+            } finally { $zip.Dispose() }
+            @{ platform = $platform; file = $leaf; path = $path; sha256 = (Get-FileHash -LiteralPath $path).Hash }
+        })
+        $plan = @{ project = $project; batch = @{ version = $version }; tag = "v$version"; assets = $assets }
+        $manifest = New-CiWingetManifest -Plan $plan -Directory (Join-Path $TestDrive 'manifests') -ReleaseDate '2026-11-27'
+        $installerTemplate = Get-Content -LiteralPath (Join-Path $manifest 'RedSalamanders.RedSalamander.installer.yaml') -Raw
+        $localeManifest = Get-Content -LiteralPath (Join-Path $manifest 'RedSalamanders.RedSalamander.locale.en-US.yaml') -Raw
         $directoryBuildPropsPath = Join-Path $repoRoot 'Directory.Build.props'
         $directoryBuildProps = Get-Content -Path $directoryBuildPropsPath -Raw
         $zipScriptPath = Join-Path $repoRoot 'Installer\zip\build-zip.ps1'
@@ -216,15 +235,28 @@ Describe 'Winget manifest template' {
         $minimumOsSource | Should Match 'TryGetWindowsBuildRevision'
         $minimumOsSource | Should Match 'CurrentVersion'
         $zipScript | Should Match 'Windows 11 build 22000\.2600'
-        [regex]::Matches($installerTemplate, '(?m)^NestedInstallerFiles:\r?$').Count | Should Be 1
-        [regex]::Matches($installerTemplate, '(?m)^\s+- RelativeFilePath: RedLauncher\.exe\r?\n\s+PortableCommandAlias: RedSalamander\r?$').Count | Should Be 1
-        [regex]::Matches($installerTemplate, '(?m)^\s+- RelativeFilePath: red\.exe\r?\n\s+PortableCommandAlias: red\r?$').Count | Should Be 1
-        $installerTemplate | Should Match '(?ms)^Commands:\s*\r?\n\s+- RedSalamander\r?\n\s+- red\r?\n'
+        [regex]::Matches($installerTemplate, '(?m)^  NestedInstallerFiles:\r?$').Count | Should Be 2
+        [regex]::Matches($installerTemplate, "(?m)^  - RelativeFilePath: 'RedLauncher\.exe'\r?\n    PortableCommandAlias: 'RedSalamander'\r?$").Count | Should Be 2
+        [regex]::Matches($installerTemplate, "(?m)^  - RelativeFilePath: 'red\.exe'\r?\n    PortableCommandAlias: 'red'\r?$").Count | Should Be 2
+        $installerTemplate | Should Match "(?m)^Commands:\r?\n- 'RedSalamander'\r?\n- 'red'\r?$"
     }
 
     It 'marks the launcher executables as launch files in installation metadata' {
-        $installerTemplate | Should Match '(?ms)^InstallationMetadata:\s*\r?\n\s+Files:\s*\r?\n\s+- RelativeFilePath: RedLauncher\.exe\r?\n\s+FileType: launch\r?\n\s+DisplayName: RedSalamander'
-        $installerTemplate | Should Match '(?ms)^InstallationMetadata:.*\r?\n\s+- RelativeFilePath: red\.exe\r?\n\s+FileType: launch\r?\n\s+DisplayName: red'
+        [regex]::Matches($installerTemplate, "(?m)^    - RelativeFilePath: 'RedLauncher\.exe'\r?\n      FileType: launch\r?\n      DisplayName: 'RedSalamander'\r?$").Count | Should Be 2
+        [regex]::Matches($installerTemplate, "(?m)^    - RelativeFilePath: 'red\.exe'\r?\n      FileType: launch\r?\n      DisplayName: 'red'\r?$").Count | Should Be 2
+    }
+
+    It 'binds the architecture hashes and configured release metadata' {
+        $installerTemplate | Should Match '(?m)^ReleaseDate: 2026-11-27\r?$'
+        foreach ($asset in $assets) {
+            $architecture = $asset.platform.ToLowerInvariant()
+            $sha = $asset.sha256
+            $installerTemplate | Should Match "(?m)^- Architecture: $architecture\r?\n  InstallerUrl: [^\r\n]+\r?\n  InstallerSha256: $sha\r?$"
+        }
+        $localeManifest | Should Match '"red-salamander"'
+        $localeManifest | Should Match '/blob/main/LICENSE\.txt'
+        $localeManifest | Should Match '/blob/main/docs/README\.md'
+        $localeManifest | Should Match 'ReleaseNotesUrl: https://github.com/RedSalamanders/RedSalamander/releases/tag/v7\.0\.184'
     }
 
     It 'copies RedLauncher.exe and its red.exe alias into the portable ZIP root' {

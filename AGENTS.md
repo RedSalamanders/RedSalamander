@@ -101,7 +101,7 @@ paths with thin compatibility shims when they may have external consumers.
   block disjoint profile lifecycles or worktrees. MSBuild/vcpkg phases also use
   the narrower repository+platform dependency lock because configurations share
   one triplet; packaging alone uses a repository-wide lock because platforms
-  share installer inputs and `.build/AppPackages`. Process names alone are never ownership evidence. An independently
+  share installer inputs and `.build/packages` or `.build/AppPackages`. Process names alone are never ownership evidence. An independently
   launched executable at an exact output path blocks
   replacement with diagnostics but is never killed; automatic termination is
   limited to descendants contained by the launching operation. The session-wide

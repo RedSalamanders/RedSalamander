@@ -359,7 +359,8 @@ Describe 'Declarative runtime dependency graph' {
 
     It 'publishes portable ZIPs through guarded same-directory atomic replacement' {
         $packageScript = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\zip\build-zip.ps1') -Raw
-        $packageScript | Should Match '(?s)Resolve-RSGuardedRepositoryPath.+?-GuardedRelativeRoot\s+''\.build\\AppPackages''.+?-CreateDirectory'
+        $packageScript | Should Match '(?s)Resolve-RSGuardedRepositoryPath.+?-GuardedRelativeRoot\s+\$PackageRelativeRoot.+?-CreateDirectory'
+        $packageScript | Should Match 'CanonicalPackageDirectory.+\.build\\packages.+\.build\\AppPackages'
         $packageScript | Should Match '(?s)\$StagedZipPath\s*=\s*Join-Path\s+\$PackageOutputDir.+?\.tmp\.zip.+?NewGuid'
         $packageScript | Should Match '(?s)Compress-Archive.+?-DestinationPath\s+\$StagedZipPath.+?Test-RSPortablePackage.+?-ZipPath\s+\$StagedZipPath'
         $packageScript | Should Match '(?s)Publish-RSGuardedRepositoryFile.+?-StagedPath\s+\$StagedZipPath.+?-DestinationPath\s+\$ZipPath'
@@ -657,6 +658,81 @@ exit 0
     }
 }
 
+Describe 'Root portable entry points' {
+    BeforeAll {
+        $fixture = Join-Path $TestDrive 'portable-entry-points'
+        New-Item -ItemType Directory -Path (Join-Path $fixture 'Tools/Modules/Build') -Force | Out-Null
+        $pwsh = (Get-Process -Id $PID).Path
+        foreach ($command in 'restore.ps1', 'package.ps1', 'vcpkg-install.ps1') {
+            Copy-Item -LiteralPath (Join-Path $repoRoot $command) -Destination (Join-Path $fixture $command)
+        }
+
+        "Write-Output 'client'" | Set-Content -LiteralPath (Join-Path $fixture 'Verify-RedMonitorClient.ps1')
+        @'
+param([string]$Platform, [string]$Configuration)
+Write-Output "DxUi $Platform $Configuration"
+if ($env:RS_PORTABLE_ENTRY_TEST_FAIL -eq '1') { exit 19 }
+'@ | Set-Content -LiteralPath (Join-Path $fixture 'Tools/Restore-DxUi.ps1')
+        @'
+function Initialize-RSVcpkgToolContext([string]$RepoRoot) {
+    [pscustomobject]@{ Executable = 'pinned-tool'; RegistryRoot = 'pinned-registry' }
+}
+'@ | Set-Content -LiteralPath (Join-Path $fixture 'Tools/Modules/Build/VcpkgInstallSafety.psm1')
+        Move-Item -LiteralPath (Join-Path $fixture 'vcpkg-install.ps1') -Destination (Join-Path $fixture 'repair-guard.ps1')
+        @'
+param([string]$Platform, [string]$VcpkgExe, [string]$VcpkgRoot, [switch]$ReuseCurrent)
+Write-Output "vcpkg $Platform $VcpkgExe $VcpkgRoot $($ReuseCurrent.IsPresent)"
+'@ | Set-Content -LiteralPath (Join-Path $fixture 'vcpkg-install.ps1')
+        @'
+param([string]$Configuration, [string]$Platform, [int]$BuildNumber, [switch]$Zip, [switch]$CanonicalPackageDirectory)
+Write-Output "build $Configuration $Platform $BuildNumber $($Zip.IsPresent) $($CanonicalPackageDirectory.IsPresent)"
+'@ | Set-Content -LiteralPath (Join-Path $fixture 'build.ps1')
+    }
+
+    It 'verifies RedMonitor and forwards the requested profile through the pinned restore sequence' {
+        $command = Join-Path $fixture 'restore.ps1'
+        $default = @(& $pwsh -NoProfile -File $command)
+        $LASTEXITCODE | Should Be 0
+        ($default -join '|') | Should Be 'client|DxUi x64 Debug|vcpkg x64 pinned-tool pinned-registry True'
+
+        $arm = @(& $pwsh -NoProfile -File $command -Platform ARM64 -Configuration Release)
+        $LASTEXITCODE | Should Be 0
+        ($arm -join '|') | Should Be 'client|DxUi ARM64 Release|vcpkg ARM64 pinned-tool pinned-registry True'
+    }
+
+    It 'stops before the vcpkg stage and propagates a DxUi restore failure' {
+        $previous = $env:RS_PORTABLE_ENTRY_TEST_FAIL
+        try {
+            $env:RS_PORTABLE_ENTRY_TEST_FAIL = '1'
+            $output = @(& $pwsh -NoProfile -File (Join-Path $fixture 'restore.ps1'))
+            $LASTEXITCODE | Should Be 19
+            ($output -join '|') | Should Be 'client|DxUi x64 Debug'
+        } finally {
+            $env:RS_PORTABLE_ENTRY_TEST_FAIL = $previous
+        }
+    }
+
+    It 'preserves the packaging version while routing the requested Release architecture to the canonical path' {
+        $command = Join-Path $fixture 'package.ps1'
+        $packaged = @(& $pwsh -NoProfile -File $command -Platform ARM64 -BuildNumber 184)
+        $LASTEXITCODE | Should Be 0
+        ($packaged -join '|') | Should Be 'build Release ARM64 184 True True'
+    }
+
+    It 'requires an explicit architecture for interrupted repair even with the x64 default' {
+        $command = Join-Path $fixture 'repair-guard.ps1'
+        $tokens = $null
+        $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile($command, [ref]$tokens, [ref]$errors)
+        $errors.Count | Should Be 0
+        $parameter = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Platform' }
+        $parameter.DefaultValue.Value | Should Be 'x64'
+        $output = @(& $pwsh -NoProfile -File $command -Clean -RepairInterrupted 2>&1)
+        ($LASTEXITCODE -ne 0) | Should Be $true
+        ($output -join ' ') | Should Match 'requires Clean and one explicit platform'
+    }
+}
+
 Describe 'ZIP and winget packaging source contracts' {
     It 'rejects ZIP packaging with ProductionOnly before importing build modules' {
         $buildPath = Join-Path $repoRoot 'build.ps1'
@@ -730,7 +806,7 @@ Describe 'ZIP and winget packaging source contracts' {
             $source | Should Match 'Read-RSArtifactOperationContamination|Test-RSArtifactOperationContaminated'
             $source | Should Match 'Get-RSArtifactContaminationMarkerPath'
             $source | Should Match '(?s)finally\s*\{.*?Exit-RSArtifactOperationLock\s+-Lock\s+\$[A-Za-z]*PackagingLock'
-            $source | Should Match '(?i)review.+restore.+Installer inputs.+\.build\\AppPackages.+remove the marker explicitly'
+            $source | Should Match '(?i)review.+restore.+Installer inputs.+\.build\\packages.+\.build\\AppPackages.+remove the marker explicitly'
             $source | Should Not Match 'Clear-RSArtifactOperationContaminated'
             $source | Should Match '(?im)^\s*\.OUTPUTS\s*$'
             $source | Should Match '(?im)^\s*\.NOTES\s*$'

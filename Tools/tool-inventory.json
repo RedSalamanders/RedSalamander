@@ -630,6 +630,7 @@
       "usedBy": [
         "Developers",
         "build.ps1",
+        "restore.ps1",
         ".github/workflows/nightly-flake.yml"
       ],
       "prerequisites": [
@@ -2210,6 +2211,7 @@
       "usedBy": [
         "vcpkg-install.ps1",
         "build.ps1",
+        "restore.ps1",
         "Tests/vcpkg-merge-synthetic-test.ps1",
         ".github/workflows/build-reusable.yml",
         "Tools/Invoke-ProjectCi.ps1",

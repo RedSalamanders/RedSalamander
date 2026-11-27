@@ -63,6 +63,33 @@
       }
     ],
     "license": "MIT",
-    "minimumOSVersion": "10.0.22000.2600"
+    "minimumOSVersion": "10.0.22000.2600",
+    "releaseNotes": true,
+    "localeMetadata": {
+      "PublisherUrl": "https://github.com/RedSalamanders",
+      "PublisherSupportUrl": "https://github.com/RedSalamanders/RedSalamander/issues",
+      "Author": "RedSalamanders",
+      "LicenseUrl": "https://github.com/RedSalamanders/RedSalamander/blob/main/LICENSE.txt",
+      "ShortDescription": "Windows file manager with advanced features and plugin support",
+      "Description": "RedSalamander is a Windows-native dual-pane file manager with plugin-based virtual file systems, advanced text visualization, and real-time debugging capabilities. Features include:\n- Dual-pane file management with virtual file system support\n- Plugin architecture for custom file systems (7z, S3, cloud drives)\n- Advanced text viewer with Direct2D rendering\n- Comparison tools and search capabilities",
+      "Moniker": "red-salamander",
+      "Tags": [
+        "file-manager",
+        "dual-pane",
+        "file-explorer",
+        "file-viewer",
+        "direct2d",
+        "cpp23",
+        "windows",
+        "plugins"
+      ],
+      "InstallationNotes": "RedSalamander installed.\nRun RedSalamander from a new terminal.",
+      "Documentations": [
+        {
+          "DocumentLabel": "Getting Started",
+          "DocumentUrl": "https://github.com/RedSalamanders/RedSalamander/blob/main/docs/README.md"
+        }
+      ]
+    }
   }
 }

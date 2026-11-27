@@ -392,17 +392,17 @@ Notes:
 
 ### Portable ZIP and Winget
 
-Build the portable Release ZIP for the selected architecture:
+Build the portable Release ZIP under `.build/packages` for the selected architecture.
 
 ```powershell
-.\build.ps1 -Configuration Release -Zip
+.\package.ps1 -Platform x64
+.\package.ps1 -Platform ARM64
 ```
 
-The ZIP is written beneath `.build\AppPackages\`. Generate a Winget manifest
-from the matching x64 and ARM64 archives with:
+Generate and validate a WinGet manifest from archives with matching versions.
 
 ```powershell
-.\build.ps1 -Configuration Release -GenerateWingetManifest
+.\winget-manifest.ps1 -Version 7.0.183
 ```
 
 The manual trusted-main publication workflow promotes ZIPs from a selected
@@ -415,8 +415,18 @@ and [`Specs/Installer/WingetIntegration.md`](Specs/Installer/WingetIntegration.m
 
 ### Installing dependencies
 
-Install all libraries from `vcpkg.json` into `.build\vcpkg_installed\<platform>\<triplet>`. Each platform has a
-private vcpkg metadata root so an ARM64 manifest install cannot purge x64 packages, or vice versa. The vcpkg executable itself must come from a
+Run the root restore command to verify the pinned RedMonitor client and prepare
+the pinned DxUi and vcpkg inputs for the selected architecture. It defaults to x64
+and prepares DxUi for Debug. Select `-Configuration` for another profile.
+
+```powershell
+.\restore.ps1
+.\restore.ps1 -Platform ARM64 -Configuration Release
+```
+
+The standalone vcpkg installer also defaults to x64. Use `-Platform All` for both
+architectures. Libraries from `vcpkg.json` are installed under `.build/vcpkg_installed/<platform>/<triplet>`.
+Each platform keeps its own install metadata. The vcpkg executable itself must come from a
 managed Git checkout at the exact commit in vcpkg-tool.json. Prepare the independent tool and registry pins through the canonical helper:
 
 ```powershell

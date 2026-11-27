@@ -15,7 +15,7 @@ Use the exact version, archive names, and SHA-256 values recorded for that quali
 
 ## Manifest Shape
 
-RedSalamander uses a multi-file manifest under `Installer/winget/templates/`:
+The pinned CI engine renders the three-file manifest from the `winget` settings in `.ci/project.json`.
 
 ```text
 RedSalamanders.RedSalamander.installer.yaml
@@ -23,39 +23,13 @@ RedSalamanders.RedSalamander.locale.en-US.yaml
 RedSalamanders.RedSalamander.yaml
 ```
 
-The installer manifest uses schema `1.12.0` and models the portable archive as:
-
-```yaml
-InstallerType: zip
-MinimumOSVersion: 10.0.22000.2600
-NestedInstallerType: portable
-NestedInstallerFiles:
-  - RelativeFilePath: RedLauncher.exe
-    PortableCommandAlias: RedSalamander
-  - RelativeFilePath: red.exe
-    PortableCommandAlias: red
-InstallationMetadata:
-  Files:
-    - RelativeFilePath: RedLauncher.exe
-      FileType: launch
-      DisplayName: RedSalamander
-    - RelativeFilePath: red.exe
-      FileType: launch
-      DisplayName: red
-Installers:
-  - Architecture: x64
-    InstallerUrl: https://github.com/RedSalamanders/RedSalamander/releases/download/v{VERSION}/RedSalamander-{VERSION}-x64-Portable.zip
-    InstallerSha256: {ZIP_SHA256}
-  - Architecture: arm64
-    InstallerUrl: https://github.com/RedSalamanders/RedSalamander/releases/download/v{VERSION}/RedSalamander-{VERSION}-ARM64-Portable.zip
-    InstallerSha256: {ARM64_ZIP_SHA256}
-```
+The installer manifest uses schema `1.12.0`. It declares the Windows minimum version and ZIP installer type. Each architecture entry owns its package URL, SHA-256, nested aliases and launch metadata.
 
 Do not use `InstallerType: portable` for a ZIP archive. ZIP archives require `InstallerType: zip` plus `NestedInstallerType: portable`.
 
 RedSalamander requires Windows 11 build 22000.2600 or later. Keep the Winget manifest's `MinimumOSVersion: 10.0.22000.2600` aligned with the runtime gates in the launch executables. The shared MSBuild Windows SDK target remains `10.0.26100.0` as the compile-time SDK baseline. Runtime gates compare the OS major/minor/build from `RtlGetVersion`; when the OS build equals `22000`, they also read the Windows `UBR` registry value to enforce the `.2600` update-build revision.
 
-Declare `NestedInstallerFiles` at the manifest root because the executable paths are identical in x64 and ARM64 ZIPs. The alias targets are launcher shims, not `RedSalamander.exe`: Winget creates command aliases under its `Links` directory, and launching a symlinked executable directly can make the Windows loader search that alias directory before the package root. `RedLauncher.exe` is a dependency-free static-CRT console-subsystem shim with a detached console allocation manifest where supported; `red.exe` is the build-produced byte-for-byte alias copy of `RedLauncher.exe`. Both resolve their own final symlink target, find the package root, and start the real package-root `RedSalamander.exe` by absolute path so `Common.dll`, `yyjson.dll`, and other app-local DLLs are found without a console flash. Normal GUI launches, including diagnostic flags such as `--etw` and `--perf`, return control to the console immediately. Foreground self-test invocations use the same launcher implementation, wait for the app process, and propagate the real app exit code. Keep `InstallationMetadata.Files` with `FileType: launch` pointing at `RedLauncher.exe` and `red.exe` so Winget's repository validation has explicit launch executables to locate after installation.
+Each architecture declares `NestedInstallerFiles` using actual paths from that ZIP. The archive must contain one file for each configured launcher name. The alias targets are launcher shims, not `RedSalamander.exe`: Winget creates command aliases under its `Links` directory, and launching a symlinked executable directly can make the Windows loader search that alias directory before the package root. `RedLauncher.exe` is a dependency-free static-CRT console-subsystem shim with a detached console allocation manifest where supported; `red.exe` is the build-produced byte-for-byte alias copy of `RedLauncher.exe`. Both resolve their own final symlink target, find the package root, and start the real package-root `RedSalamander.exe` by absolute path so `Common.dll`, `yyjson.dll`, and other app-local DLLs are found without a console flash. Normal GUI launches, including diagnostic flags such as `--etw` and `--perf`, return control to the console immediately. Foreground self-test invocations use the same launcher implementation, wait for the app process, and propagate the real app exit code. Keep `InstallationMetadata.Files` with `FileType: launch` pointing at `RedLauncher.exe` and `red.exe` so Winget's repository validation has explicit launch executables to locate after installation.
 
 Use Winget's `Architecture` field for CPU selection: `x64` is the Intel/AMD 64-bit build, and `arm64` is the native Windows on ARM build. By default Winget chooses from the installers compatible with the current machine; users can override that choice with `winget install --architecture x64` or `winget install --architecture arm64`.
 
@@ -67,56 +41,31 @@ Winget has `Icons` metadata for PNG/JPEG/ICO package logos, but `winget validate
 
 ## Local Manifest Generation
 
-Generate a manifest from an existing portable ZIP:
+Run the root command with the exact portable package version.
 
 ```powershell
-.\Installer\winget\generate-manifest.ps1 `
-  -Version 7.0.183 `
-  -ZipPath .\.build\AppPackages\RedSalamander-7.0.183-x64-Portable.zip `
-  -Arm64ZipPath .\.build\AppPackages\RedSalamander-7.0.183-ARM64-Portable.zip `
-  -OutputDir .build\AppPackages\winget-manifest
+.\winget-manifest.ps1 -Version 7.0.183
 ```
 
-Standalone manifest generation requires either the complete three-part `Version`
-or `BuildNumber 1..65535`. It never reads saved repository context or allocates a
-local counter; `build.ps1 -GenerateWingetManifest` passes its resolved build number,
-while publication automation supplies the release version explicitly.
-Both archive inputs are mandatory existing files whose basenames exactly match
-`RedSalamander-<version>-x64-Portable.zip` and
-`RedSalamander-<version>-ARM64-Portable.zip`; stale or mixed-version archives fail
-before any manifest is written.
+The command looks for each versioned ZIP under `.build/packages` first, then under
+`.build/AppPackages`. Supply `-X64ZipPath` and `-Arm64ZipPath` to select explicit files.
+Each input must have the exact architecture and version in its portable ZIP name.
+Outputs default to `.build/packages/winget-manifest/<version>`. The root command runs
+`winget validate` on staged manifests by default. `-SkipValidation` permits rendering
+on a host without WinGet.
 
-The standalone generator holds the repository-wide packaging coordination
-scope from the first package hash through the last manifest write. It uses
-`Release|x64` as required diagnostic evidence; the packaging key itself is
-repository-wide because the manifest consumes both architectures. Calls nested
-under `build.ps1 -GenerateWingetManifest` reenter safely. Abandoned ownership
-records contamination and fails closed with the marker path; the generator does
-not clear it automatically.
-`OutputDir` is normalized and accepted only beneath this repository's
-`.build\AppPackages`. Every existing component from the repository through the
-destination must be non-reparse, including after directory creation, so lexical
-containment cannot redirect writes outside the guarded root. The repository-wide
-lease therefore covers every generated manifest destination.
+The legacy `Installer/winget/generate-manifest.ps1` accepts the original explicit ZIP paths,
+`-OutputDir` and either `-Version` or `-BuildNumber 1..65535`. It uses the same renderer
+and defaults to `.build/AppPackages/winget-manifest`. `build.ps1 -GenerateWingetManifest`
+passes the build's resolved version and uses the selected package layout. An explicit
+`-ReleaseDate` uses calendar format `yyyy-MM-dd`. The local command defaults to today's date.
 
-Generate after a local release ZIP build:
-
-```powershell
-.\build.ps1 -Configuration Release -Zip -GenerateWingetManifest
-```
-
-Validate and smoke-test locally before submission:
-
-```powershell
-winget validate --manifest .build\AppPackages\winget-manifest
-winget settings --enable LocalManifestFiles
-winget install --manifest .build\AppPackages\winget-manifest
-winget uninstall RedSalamanders.RedSalamander
-```
-
-`winget install --manifest` requires the `LocalManifestFiles` feature setting to be enabled before local manifest installation. Enabling that setting may require an administrator shell on developer machines.
-
-`Installer\winget\WingetValidation.ps1` is the supported local helper for validating a generated manifest. Hosted validation is owned by the pinned publication engine recorded in `.ci/project.json`.
+The repository-wide packaging lease covers input hashing, rendering, validation and publication.
+Calls from `build.ps1 -GenerateWingetManifest` reenter that lease. The guarded output root is
+`.build/packages` for the root command or `.build/AppPackages` for compatibility. Each existing
+path component must be non-reparse. The renderer stages all three manifest files and validates
+them before publication when validation is enabled. Each file is published through an atomic
+same-directory replacement. Review the contamination marker after abandoned ownership.
 
 ## Hosted Publication Entry Point
 
