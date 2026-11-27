@@ -1255,8 +1255,10 @@ the same synchronous reporter and counter path as the pointer overload.
   after Skip. Cleanup verifies the file contents and removes only that file and its empty parent. A missing or
   unreachable registration is an environment skip.
   `FileOps_SmbMixedMove` uses one fresh child of `path.smb.primary` and the marked Local sandbox.
-  It skips before mutation when exact SMB identity is unavailable. It uses direct task controls to
-  check the two typed Move results, both destination payloads, source removal and nonrecursive SMB fixture cleanup.
+  When the SMB source opens without exact identity, it verifies the provider's corroborated source
+  facts before admission. It uses direct task controls to check the Native Local and Managed SMB
+  results, both destination payloads, source removal and nonrecursive SMB fixture cleanup.
+  The metric records whether the SMB source had exact identity or corroborated facts.
   The provider capability matrix uses private providers, owned data and direct task controls.
   its managed cleanup witness checks Retry for sharing, access and disk-full failures and verifies that a path-length failure offers Skip and Cancel;
   the exact cadence case uses a private nonactivating popup and preserves its existing
