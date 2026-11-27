@@ -15061,8 +15061,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         wil::com_ptr<IFileReader> reader;
         std::array<char, archiveBytes.size()> bytes{};
         unsigned long count = 0u;
-        if (! state.Require(archive && SUCCEEDED(archive.query_to(io.put())) && SUCCEEDED(io->CreateFileReader(L"/tree/nested/data.txt", reader.put())) &&
-                                reader && SUCCEEDED(reader->Read(bytes.data(), static_cast<unsigned long>(bytes.size()), &count)) &&
+        if (! state.Require(archive && SUCCEEDED(archive->QueryInterface(IID_PPV_ARGS(io.addressof()))) &&
+                                SUCCEEDED(io->CreateFileReader(L"/tree/nested/data.txt", reader.put())) && reader &&
+                                SUCCEEDED(reader->Read(bytes.data(), static_cast<unsigned long>(bytes.size()), &count)) && count == bytes.size() &&
                                 std::string_view(bytes.data(), count) == archiveBytes,
                             L"The published archive must contain the original approved nested payload."))
             return false;

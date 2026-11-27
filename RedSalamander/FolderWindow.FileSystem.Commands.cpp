@@ -43,6 +43,7 @@
 #include <fstream>
 #include <limits>
 #include <map>
+#include <set>
 #include <span>
 #include <string>
 #include <system_error>
@@ -7052,7 +7053,7 @@ struct PackTreeBindings final
                                         FileOperations::BoundObjectAuthority& authority) noexcept
 {
     wil::com_ptr<IFileSystemBoundDirectory> directory;
-    RETURN_IF_FAILED(parent.boundObject.query_to(directory.put()));
+    RETURN_IF_FAILED(parent.boundObject->QueryInterface(IID_PPV_ARGS(directory.addressof())));
     wil::com_ptr<IFileSystemBoundObject> child;
     const HRESULT bind = directory->BindChild(path.filename().c_str(), flags, child.put());
     if (bind != S_OK)
@@ -7090,8 +7091,9 @@ struct PackTreeBindings final
     }
 
     const auto flags = static_cast<FileSystemBindFlags>(kArchiveDirectoryFlags | (expected ? FILESYSTEM_BIND_PIN_DIRECTORY : 0u));
-    for (const auto& path : pending | std::views::reverse)
+    for (auto item = pending.rbegin(); item != pending.rend(); ++item)
     {
+        const auto& path = *item;
         RETURN_IF_FAILED(checkpoint(ArchiveWorkCheckpoint::Work));
         FileOperations::BoundObjectAuthority authority;
         if (path == volume)
@@ -7127,6 +7129,10 @@ struct PackTreeBindings final
 {
     struct VisitContext final
     {
+        VisitContext(std::unordered_set<std::wstring>& names, const ArchiveCheckpoint& work) noexcept : remaining(names), checkpoint(work)
+        {
+        }
+
         std::unordered_set<std::wstring>& remaining;
         const ArchiveCheckpoint& checkpoint;
     };
@@ -7140,7 +7146,7 @@ struct PackTreeBindings final
         return S_OK;
     };
     wil::com_ptr<IFileSystemBoundDirectory> directory;
-    RETURN_IF_FAILED(parent.boundObject.query_to(directory.put()));
+    RETURN_IF_FAILED(parent.boundObject->QueryInterface(IID_PPV_ARGS(directory.addressof())));
     const HRESULT listing = directory->VisitChildren(visitor, &context);
     if (listing != S_OK)
         return FAILED(listing) ? listing : E_UNEXPECTED;
@@ -7160,6 +7166,7 @@ struct PackTreeBindings final
 
     current.entries.reserve(inventory.entries.size());
     std::unordered_map<std::wstring, size_t> boundDirectories;
+    std::set<std::vector<std::byte>> identities;
     std::vector<std::unordered_set<std::wstring>> children(inventory.entries.size());
     size_t rootCount = 0u;
     for (const auto& entry : inventory.entries)
@@ -7195,6 +7202,10 @@ struct PackTreeBindings final
             (selected != roots.sources.end() && authority.identity != selected->second) ||
             (expected && authority.identity != expected->entries[current.entries.size()].identity))
             return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+
+        // Multiple names for the same object cannot each hold an exclusive Delete binding.
+        if (! identities.insert(authority.identity.objectId).second)
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
 
         if (expected)
         {
@@ -7239,8 +7250,9 @@ struct PackTreeBindings final
 [[nodiscard]] HRESULT DeletePackTree(PackTreeBindings& strict, const ArchiveCheckpoint& checkpoint, uint64_t& removed) noexcept
 {
     // The archive's sorted inventory visits each directory before its descendants.
-    for (auto& entry : strict.entries | std::views::reverse)
+    for (auto item = strict.entries.rbegin(); item != strict.entries.rend(); ++item)
     {
+        auto& entry = *item;
         RETURN_IF_FAILED(checkpoint(ArchiveWorkCheckpoint::Work));
         FileSystemConditionalMutationResult result{sizeof(FileSystemConditionalMutationResult), FALSE, TRUE, FALSE};
         const HRESULT status = entry.boundObject->DeleteIfUnchanged(FILESYSTEM_FLAG_NONE, nullptr, &result);
