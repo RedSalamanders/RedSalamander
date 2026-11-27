@@ -253,6 +253,7 @@ struct DebugSnapshot
     BOOL scriptsEnabled                   = FALSE;
     BOOL privateOrigin                    = FALSE;
     BOOL stagedFileTracked                = FALSE;
+    BOOL webViewCreated                   = FALSE;
     BOOL navigationCompleted              = FALSE;
     BOOL navigationSucceeded              = FALSE;
     BOOL generatedOutputRejected          = FALSE;
