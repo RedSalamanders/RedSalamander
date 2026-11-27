@@ -1362,6 +1362,7 @@ BEGIN
     IDS_ARCHIVE_PACKER_LABEL                             "Balič:"
     IDS_ARCHIVE_PACK_DELETE_AFTER                        "Po zabalení do archívu odstráňte súbory z disku"
     IDS_MSG_ARCHIVE_PACK_SOURCES_KEPT                    "Zabalenie je neúplné. Pôvodné položky boli zachované."
+    IDS_FMT_ARCHIVE_PACK_ORIGINALS_KEPT                "Archív {0} bol vytvorený. Pôvodné položky boli zachované."
     IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED                "Archív {0} bol vytvorený, ale odstránenie pôvodných súborov zlyhalo.\r\n\r\nChyba: 0x{1:08X}"
     IDS_ARCHIVE_UNPACK_ARCHIVE_FMT                       "Rozbaľte archív „{0}“ do"
     IDS_ARCHIVE_UNPACKER_LABEL                           "Rozbaľovač:"
