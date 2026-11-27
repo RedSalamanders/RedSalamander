@@ -7192,7 +7192,7 @@ struct PackTreeBindings final
         if (current.ancestors.size() + inventory.entries.size() > kMaxPackCleanupBindings)
             return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
 
-        auto flags = entry.directory ? kArchiveDirectoryFlags : kArchiveReadBindFlags;
+        auto flags = entry.directory ? static_cast<FileSystemBindFlags>(kArchiveDirectoryFlags | FILESYSTEM_BIND_READ_CONTENT) : kArchiveReadBindFlags;
         if (expected)
             flags = static_cast<FileSystemBindFlags>(flags | FILESYSTEM_BIND_DELETE | (entry.directory ? FILESYSTEM_BIND_PIN_DIRECTORY : 0u));
         FileOperations::BoundObjectAuthority authority;

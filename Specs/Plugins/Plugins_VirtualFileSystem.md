@@ -1526,7 +1526,9 @@ for an individual binding.
 
 Local bound directories expose the optional `IFileSystemBoundDirectory` interface. It visits
 exact immediate names with their attribute flags, including hidden names, on the retained directory
-object. Each borrowed name is valid only for the callback. A visitor result other than `S_OK`
+object. The directory needs a x60FILESYSTEM_BIND_READ_CONTENTx60 or x60FILESYSTEM_BIND_PIN_DIRECTORYx60 grant.
+The Local provider serializes the cursor on each bound object and refuses a second simultaneous
+listing with x60ERROR_BUSYx60. Each borrowed name is valid only for the callback. A visitor result other than `S_OK`
 ends enumeration and is returned unchanged. Child binding accepts one leaf and opens it relative
 to that same directory without following a reparse point. Local traversal refuses reparse entries.
 A successful child binding returns one owned object whose identity and optional revision follow the

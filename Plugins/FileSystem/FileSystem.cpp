@@ -3819,8 +3819,15 @@ public:
         if (! visitor)
             return E_INVALIDARG;
 
-        wil::unique_handle listing;
-        RETURN_IF_FAILED(ReopenPlainDirectory(listing));
+        if ((_grantedFlags & (FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_PIN_DIRECTORY)) == 0u)
+            return E_ACCESSDENIED;
+        if (_directoryListingActive.test_and_set(std::memory_order_acquire))
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        const auto endListing = wil::scope_exit([&]() noexcept { _directoryListingActive.clear(std::memory_order_release); });
+        if (! BeginWitnessRead())
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+        const auto endRead = wil::scope_exit([&]() noexcept { EndWitnessRead(); });
+        RETURN_IF_FAILED(CheckPlainDirectory());
         constexpr DWORD bufferBytes = 64u * 1024u;
         std::unique_ptr<std::byte[]> storage(new (std::nothrow) std::byte[bufferBytes]);
         if (! storage)
@@ -3829,7 +3836,7 @@ public:
         auto informationClass = FileFullDirectoryRestartInfo;
         for (;;)
         {
-            if (! GetFileInformationByHandleEx(listing.get(), informationClass, storage.get(), bufferBytes))
+            if (! GetFileInformationByHandleEx(_file.get(), informationClass, storage.get(), bufferBytes))
             {
                 const DWORD error = GetLastError();
                 return error == ERROR_NO_MORE_FILES ? S_OK : HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
@@ -3874,10 +3881,12 @@ public:
         if ((flags & FILESYSTEM_BIND_DELETE) != 0u && MatchesPersistentTestPath(path.c_str(), kBindDeleteAccessDeniedPathEnvVar))
             return E_ACCESSDENIED;
 #endif
-        wil::unique_handle parent;
-        RETURN_IF_FAILED(ReopenPlainDirectory(parent));
+        if (! BeginWitnessRead())
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+        const auto endRead = wil::scope_exit([&]() noexcept { EndWitnessRead(); });
+        RETURN_IF_FAILED(CheckPlainDirectory());
         wil::unique_handle child;
-        RETURN_IF_FAILED(OpenLocalChildNoFollow(parent.get(), name, LocalBindingAccess(flags), LocalBindingShareMode(flags), 0u, child));
+        RETURN_IF_FAILED(OpenLocalChildNoFollow(_file.get(), name, LocalBindingAccess(flags), LocalBindingShareMode(flags), 0u, child));
 
         FILE_ATTRIBUTE_TAG_INFO attributes{};
         if (! GetFileInformationByHandleEx(child.get(), FileAttributeTagInfo, &attributes, sizeof(attributes)))
@@ -3957,13 +3966,12 @@ public:
     }
 
 private:
-    [[nodiscard]] HRESULT ReopenPlainDirectory(wil::unique_handle& listing) noexcept
+    [[nodiscard]] HRESULT CheckPlainDirectory() const noexcept
     {
-        if (_kind != FILESYSTEM_BOUND_DIRECTORY)
+        if (_kind != FILESYSTEM_BOUND_DIRECTORY || ! _file)
             return HRESULT_FROM_WIN32(ERROR_DIRECTORY);
-        RETURN_IF_FAILED(ReopenExactFile(_file.get(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES, listing));
         FILE_ATTRIBUTE_TAG_INFO attributes{};
-        if (! GetFileInformationByHandleEx(listing.get(), FileAttributeTagInfo, &attributes, sizeof(attributes)))
+        if (! GetFileInformationByHandleEx(_file.get(), FileAttributeTagInfo, &attributes, sizeof(attributes)))
             return HRESULT_FROM_WIN32(GetLastError());
         return (attributes.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == FILE_ATTRIBUTE_DIRECTORY
                    ? S_OK
@@ -5441,6 +5449,7 @@ private:
     FileSystemBindFlags _grantedFlags = FILESYSTEM_BIND_NO_FOLLOW;
     bool _ownedStage                  = false;
     const bool _consumableReadWitness = false;
+    std::atomic_flag _directoryListingActive{};
     std::mutex _witnessMutex;
     size_t _witnessReaders = 0u;
     std::wstring _path;

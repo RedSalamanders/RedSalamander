@@ -1476,8 +1476,9 @@ interface __declspec(uuid("7c1f5d0e-3b7a-4f0c-9a55-2e8d6b41c3f7")) __declspec(no
 using FileSystemBoundChildVisitor = HRESULT(STDMETHODCALLTYPE*)(const wchar_t* name, uint32_t nameLength, uint32_t attributes, void* context) noexcept;
 
 // Optional traversal of an exact bound directory. VisitChildren visits immediate names only,
-// including hidden entries, and returns the first non-S_OK visitor result. BindChild resolves one
-// leaf relative to the bound handle without following reparse points. Mutation still requires
+// including hidden entries, and returns the first non-S_OK visitor result. Enumeration requires a directory granted
+// READ_CONTENT or PIN_DIRECTORY. The provider can refuse a concurrent enumeration on the same object.
+// BindChild resolves one leaf relative to the bound handle without following reparse points. Mutation still requires
 // FILESYSTEM_BIND_DELETE on the child. A successful bind returns a non-null bound object.
 interface __declspec(uuid("cf9213e4-bdc1-461c-9cbb-053833da8246")) __declspec(novtable) IFileSystemBoundDirectory : public IUnknown
 {
