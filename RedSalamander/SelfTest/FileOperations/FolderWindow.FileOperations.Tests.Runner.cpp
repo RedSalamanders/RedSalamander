@@ -15392,7 +15392,8 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
 [[nodiscard]] HRESULT RunRemoteInlineRenameForSelfTest(const wil::com_ptr<IFileSystem>& fileSystem,
                                                        std::wstring_view pluginId,
                                                        const std::filesystem::path& source,
-                                                       std::wstring_view destinationLeaf) noexcept
+                                                       std::wstring_view destinationLeaf,
+                                                       bool verifyScheduledRenameRefusal = false) noexcept
 {
     RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
     if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
@@ -15411,6 +15412,29 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     if (! information || information->GetMetaData(&metadata) != S_OK || ! metadata || ! metadata->shortId)
         return E_UNEXPECTED;
     RETURN_IF_FAILED(owner.SetFileSystemInstanceForPane(pane, fileSystem, std::wstring(pluginId), metadata->shortId, L"remote-rename-selftest"));
+
+    if (verifyScheduledRenameRefusal)
+    {
+        // The Files menu and both shortcut ingresses must agree on the live provider.
+        // Stop before invoking either command if that provider now supports scheduled Rename.
+        if (owner.CanScheduleRename(pane))
+            return E_UNEXPECTED;
+        const auto verifyRefusal = [&](std::wstring_view command, auto&& invoke) noexcept
+        {
+            const auto started = std::chrono::steady_clock::now();
+            invoke();
+            FolderView::AlertOverlayDebugSnapshot alert{};
+            const bool refused =
+                owner.DebugGetPaneAlertSnapshot(pane, alert) && alert.visible && ! alert.blocksInput && alert.hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            Debug::Perf::Emit(L"FileOps.SelfTest.SftpScheduledRenameRefusalUs", command, Debug::Perf::ElapsedUs(started), 1u, 0u, refused ? S_OK : E_FAIL);
+            owner.DismissPaneAlertOverlay(pane);
+            return refused;
+        };
+        if (! verifyRefusal(L"Batch Rename", [&] { owner.CommandBatchRename(pane, source.parent_path(), {source}); }) ||
+            ! verifyRefusal(L"Change Case", [&] { owner.CommandChangeCase(pane); }))
+            return E_UNEXPECTED;
+        AppendLog(L"Live SFTP Batch Rename and Change Case refused before showing a prompt.");
+    }
 
     auto* operations = owner.DebugGetFileOperationState();
     if (! operations)
@@ -15523,9 +15547,9 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
             return reject(L"occupied-name refusal did not keep both exact files before dispatch", collision);
         source.reset();
 
-        const HRESULT renamedHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdSftp, original, L"renamed.txt");
+        const HRESULT renamedHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdSftp, original, L"renamed.txt", /*verifyScheduledRenameRefusal=*/true);
         if (renamedHr != S_OK || ! notFound(original) || ! hasBytes(renamed, fileBytes))
-            return reject(L"scheduled file Rename did not prove the new name and exact bytes", renamedHr);
+            return reject(L"scheduled Rename refusals or Inline Rename did not prove the required results and bytes", renamedHr);
         const HRESULT caseHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdSftp, renamed, L"Renamed.txt");
         if (caseHr != S_OK || ! notFound(renamed) || ! hasBytes(caseOnly, fileBytes))
             return reject(L"case-only Rename did not prove the exact spelling and bytes", caseHr);

@@ -477,6 +477,11 @@ authority. A committed Rename or uncertain dispatch closes the token. The `fileo
 and `fileops.curl.probed_rename_us` metrics record capture and worker durations.
 FTP and SCP have separate live qualification requirements for the scheduled interface.
 
+For Connection Manager SFTP profiles, the Files menu disables Batch Rename and Change Case
+because these commands require exact item binding. Invoking either shortcut shows a non-blocking
+pane warning before any dialog, task admission or endpoint mutation. Inline F2 uses the
+single-item token described above.
+
 ### Conditional publication and identity-safe recovery
 
 - FTP `RNFR`/`RNTO` does not expose an atomic publish-if-absent operation or an
