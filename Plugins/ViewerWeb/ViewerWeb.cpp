@@ -2853,6 +2853,7 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
         snapshot->route                         = _documentRoute;
         snapshot->privateOrigin                 = _internalDocumentUrl.has_value() ? TRUE : FALSE;
         snapshot->stagedFileTracked             = _tempExtractedPath.has_value() ? TRUE : FALSE;
+        snapshot->webViewCreated                = _webView ? TRUE : FALSE;
         snapshot->navigationCompleted           = _navigationCompleted ? TRUE : FALSE;
         snapshot->navigationSucceeded           = _navigationSucceeded ? TRUE : FALSE;
         snapshot->generatedOutputRejected       = _generatedOutputRejected ? TRUE : FALSE;

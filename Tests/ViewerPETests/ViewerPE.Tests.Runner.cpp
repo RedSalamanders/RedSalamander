@@ -4529,17 +4529,32 @@ private:
           success);
 
     ViewerWebSecurity::DebugSnapshot acceptedSnapshot{};
-    const bool observedPrivateOrigin = acceptedWindow && PumpUntil(
-                                                             [&]() noexcept
+    const auto readAcceptedSnapshot = [&]() noexcept
     {
         acceptedSnapshot = {};
-        const LRESULT snapshotResult =
-            SendMessageW(acceptedWindow, ViewerWebSecurity::GetDebugSnapshotMessage(), 0u, reinterpret_cast<LPARAM>(&acceptedSnapshot));
-        return snapshotResult == TRUE && acceptedSnapshot.route == ViewerWebSecurity::DocumentRoute::RawHtmlPrivateOrigin &&
-               ViewerWebSecurity::StartsWithNoCase(acceptedSnapshot.webViewSourceUrl.data(), ViewerWebSecurity::kInternalDocumentOrigin);
+        return SendMessageW(acceptedWindow, ViewerWebSecurity::GetDebugSnapshotMessage(), 0u, reinterpret_cast<LPARAM>(&acceptedSnapshot)) == TRUE;
+    };
+    const bool webViewCreated =
+        acceptedWindow && PumpUntil([&]() noexcept { return readAcceptedSnapshot() && acceptedSnapshot.webViewCreated != FALSE; }, 30000ms);
+    Check(webViewCreated, std::format(L"ViewerWeb initializes the raw HTML controller (status='{}')", acceptedSnapshot.statusMessage.data()), success);
+    const bool observedPrivateOrigin = webViewCreated && PumpUntil(
+                                                             [&]() noexcept
+    {
+        if (! readAcceptedSnapshot() || acceptedSnapshot.route != ViewerWebSecurity::DocumentRoute::RawHtmlPrivateOrigin)
+            return false;
+        const std::wstring_view expected(acceptedSnapshot.allowedDocumentUrl.data());
+        return ViewerWebSecurity::StartsWithNoCase(expected, ViewerWebSecurity::kInternalDocumentOrigin) &&
+               std::wstring_view(acceptedSnapshot.webViewSourceUrl.data()) == expected;
     },
                                                              12000ms);
-    Check(observedPrivateOrigin, L"ViewerWeb WebView2 source observes the private viewer origin", success);
+    Check(observedPrivateOrigin,
+          std::format(L"ViewerWeb observes the exact private document URL (expected='{}', source='{}', completed={}, succeeded={}, status='{}')",
+                      acceptedSnapshot.allowedDocumentUrl.data(),
+                      acceptedSnapshot.webViewSourceUrl.data(),
+                      acceptedSnapshot.navigationCompleted != FALSE,
+                      acceptedSnapshot.navigationSucceeded != FALSE,
+                      acceptedSnapshot.statusMessage.data()),
+          success);
     checkIsolatedBrowserProfile(acceptedSnapshot, L"ViewerWeb raw HTML");
     Check(acceptedSnapshot.scriptsEnabled == FALSE, L"ViewerWeb disables the actual WebView2 script setting for raw HTML", success);
     Check(acceptedSnapshot.privateOrigin != FALSE, L"ViewerWeb classifies hostile HTML as private-origin content", success);
