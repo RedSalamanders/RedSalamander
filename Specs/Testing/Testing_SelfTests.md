@@ -1245,16 +1245,20 @@ the same synchronous reporter and counter path as the pointer overload.
   `Phase16_RemoteOneDrivePersonalInlineRename` uses saved sign-in and a fresh test-only fixture child, with exact file and folder Rename, case-only spelling, occupied-name refusal, and Recycle verification;
   `Phase16_RemoteSftpInlineRename` requires saved sign-in and the approved existing SFTP test folder.
   It creates one fresh child and verifies occupied-name refusal and scheduled file, case-only and
-  folder Rename. Cleanup verifies every generated payload and removes only the named fixture entries
-  nonrecursively.
+  folder Rename from Inline F2 admission. The same live provider disables both scheduled command
+  commands. Direct Batch Rename and Change Case must warn before any dialog. The subsequent
+  Inline Rename verifies the source and occupant bytes. Cleanup verifies each generated payload
+  and removes only the named fixture entries nonrecursively.
   `FileOps_SmbRecycleRefusal` uses one fresh child of `path.smb.primary`. It checks that the guarded Local Shell route
   reports a known non-commit on the share, offers one item-specific permanent-delete decision on the independently
   probed exact or by-name route and retains the same bytes
   after Skip. Cleanup verifies the file contents and removes only that file and its empty parent. A missing or
   unreachable registration is an environment skip.
   `FileOps_SmbMixedMove` uses one fresh child of `path.smb.primary` and the marked Local sandbox.
-  It skips before mutation when exact SMB identity is unavailable. It uses direct task controls to
-  check the two typed Move results, both destination payloads, source removal and nonrecursive SMB fixture cleanup.
+  When the SMB source opens without exact identity, it verifies the provider's corroborated source
+  facts before admission. It uses direct task controls to check the Native Local and Managed SMB
+  results, both destination payloads, source removal and nonrecursive SMB fixture cleanup.
+  The metric records whether the SMB source had exact identity or corroborated facts.
   The provider capability matrix uses private providers, owned data and direct task controls.
   its managed cleanup witness checks Retry for sharing, access and disk-full failures and verifies that a path-length failure offers Skip and Cancel;
   the exact cadence case uses a private nonactivating popup and preserves its existing
