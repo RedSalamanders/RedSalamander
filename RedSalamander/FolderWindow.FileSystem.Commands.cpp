@@ -43,6 +43,7 @@
 #include <fstream>
 #include <limits>
 #include <map>
+#include <set>
 #include <span>
 #include <string>
 #include <system_error>
@@ -6141,6 +6142,7 @@ struct ArchiveEntrySource final
     std::wstring entryName;
     bool directory    = false;
     uint64_t fileSize = 0u;
+    wil::com_ptr<IFileSystemBoundObject> boundSource;
 };
 
 struct ArchiveSourceInventory final
@@ -6373,9 +6375,12 @@ enum class ArchiveTargetDecision : uint8_t
 constexpr auto kArchiveReadBindFlags =
     static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_REVISION);
 
+constexpr auto kArchiveDirectoryFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+
 [[nodiscard]] HRESULT CaptureArchiveCleanupSources(FileOperations::ArchiveCleanupReceipt& receipt,
                                                    std::span<const std::filesystem::path> paths,
-                                                   std::wstring_view metric) noexcept
+                                                   std::wstring_view metric,
+                                                   bool allowDirectory = false) noexcept
 {
     const auto started = std::chrono::steady_clock::now();
     HRESULT status     = S_OK;
@@ -6389,12 +6394,16 @@ constexpr auto kArchiveReadBindFlags =
             break;
         }
         auto bound = FileOperations::BindObjectAuthority(receipt.fileSystem.get(), path.native(), route.snapshot.pathProfileId, kArchiveReadBindFlags);
-        if (bound.state != FileOperations::ObjectBindingState::Bound || bound.authority.kind != FILESYSTEM_BOUND_REGULAR_FILE ||
-            bound.authority.identity.objectId.empty() || bound.authority.identity.revisionId.empty())
+        if (allowDirectory && bound.state == FileOperations::ObjectBindingState::Unsupported)
+            bound = FileOperations::BindObjectAuthority(receipt.fileSystem.get(), path.native(), route.snapshot.pathProfileId, kArchiveDirectoryFlags);
+        const bool directory   = bound.authority.kind == FILESYSTEM_BOUND_DIRECTORY && allowDirectory;
+        const bool regularFile = bound.authority.kind == FILESYSTEM_BOUND_REGULAR_FILE && ! bound.authority.identity.revisionId.empty();
+        if (bound.state != FileOperations::ObjectBindingState::Bound || (! directory && ! regularFile) || bound.authority.identity.objectId.empty())
         {
             status = FAILED(bound.status) ? bound.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
             break;
         }
+        receipt.containsDirectory = receipt.containsDirectory || directory;
         if (! receipt.sources.emplace(path.native(), std::move(bound.authority.identity)).second)
         {
             status = E_INVALIDARG;
@@ -6403,7 +6412,10 @@ constexpr auto kArchiveReadBindFlags =
     }
     Debug::Perf::Emit(metric, SUCCEEDED(status) ? L"bound" : L"kept", Debug::Perf::ElapsedUs(started), receipt.sources.size(), paths.size(), status);
     if (FAILED(status))
+    {
         receipt.sources.clear();
+        receipt.containsDirectory = false;
+    }
     return status;
 }
 
@@ -6452,6 +6464,18 @@ constexpr auto kArchiveReadBindFlags =
         return FAILED(bound.status) ? bound.status : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
     source = std::move(bound.authority.boundObject);
     return S_OK;
+}
+
+[[nodiscard]] HRESULT BindPackSourceForRead(const FileOperations::ArchiveCleanupReceipt* receipt,
+                                            const ArchiveEntrySource& entry,
+                                            wil::com_ptr<IFileSystemBoundObject>& source) noexcept
+{
+    if (entry.boundSource)
+    {
+        source = entry.boundSource;
+        return S_OK;
+    }
+    return BindArchiveSourceForRead(receipt, entry.sourcePath, source);
 }
 
 // Delete-after reads from the bound object whose identity will be checked by the worker.
@@ -6903,7 +6927,7 @@ private:
 }
 
 [[nodiscard]] HRESULT StreamFileIntoZip(HANDLE archiveFile,
-                                        const std::filesystem::path& sourcePath,
+                                        const ArchiveEntrySource& entry,
                                         const FileOperations::ArchiveCleanupReceipt* cleanup,
                                         const ArchiveCheckpoint& checkpoint,
                                         uint32_t& outCrc32,
@@ -6913,10 +6937,9 @@ private:
     outSize  = 0u;
 
     wil::com_ptr<IFileSystemBoundObject> source;
-    if (const HRESULT hr = BindArchiveSourceForRead(cleanup, sourcePath, source); FAILED(hr))
-        return hr;
+    RETURN_IF_FAILED(BindPackSourceForRead(cleanup, entry, source));
     ArchiveReadInput sourceFile;
-    if (const HRESULT hr = sourceFile.Open(sourcePath, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, source.get()); FAILED(hr))
+    if (const HRESULT hr = sourceFile.Open(entry.sourcePath, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, source.get()); FAILED(hr))
         return hr;
 
     std::array<std::byte, 64u * 1024u> buffer{};
@@ -7001,10 +7024,260 @@ private:
     return WriteArchiveBytes(archiveFile, eocd);
 }
 
+// Both the read proof and complete mutation preflight retain one exact handle per member.
+constexpr size_t kMaxPackCleanupBindings = 4096u;
+
+struct PackTreeBindings final
+{
+    std::vector<FileOperations::BoundObjectAuthority> entries;
+    std::unordered_map<std::wstring, FileOperations::BoundObjectAuthority> ancestors;
+};
+
+[[nodiscard]] std::filesystem::path PackTreeVolumeRoot(const std::filesystem::path& path)
+{
+    if (! Common::Paths::IsUncWindowsPath(path.native()))
+        return path.root_path();
+
+    const std::wstring_view text = path.native();
+    const size_t serverStart     = Common::Paths::IsExtendedWindowsPath(text) ? 8u : 2u;
+    const size_t serverEnd       = text.find_first_of(L"\\/", serverStart);
+    if (serverEnd == std::wstring_view::npos)
+        return {};
+    const size_t shareEnd = text.find_first_of(L"\\/", serverEnd + 1u);
+    return std::filesystem::path(text.substr(0u, shareEnd));
+}
+
+[[nodiscard]] HRESULT BindPackTreeChild(const FileOperations::BoundObjectAuthority& parent,
+                                        const std::filesystem::path& path,
+                                        FileSystemBindFlags flags,
+                                        FileOperations::BoundObjectAuthority& authority) noexcept
+{
+    wil::com_ptr<IFileSystemBoundDirectory> directory;
+    RETURN_IF_FAILED(parent.boundObject->QueryInterface(IID_PPV_ARGS(directory.addressof())));
+    wil::com_ptr<IFileSystemBoundObject> child;
+    const HRESULT bind = directory->BindChild(path.filename().c_str(), flags, child.put());
+    if (bind != S_OK)
+        return FAILED(bind) ? bind : E_UNEXPECTED;
+    auto current = FileOperations::CaptureReturnedObjectAuthority(std::move(child), parent.identity.pathProfileId);
+    authority    = std::move(current.authority);
+    return current.status;
+}
+
+[[nodiscard]] HRESULT BindPackTreeAncestors(IFileSystem* fileSystem,
+                                            const std::filesystem::path& parent,
+                                            std::wstring_view profile,
+                                            const ArchiveCheckpoint& checkpoint,
+                                            const PackTreeBindings* expected,
+                                            PackTreeBindings& current) noexcept
+{
+    if (current.ancestors.contains(parent.native()))
+        return S_OK;
+    if (! Common::Paths::IsFullyAbsoluteWindowsPath(parent.native()))
+        return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+
+    const auto volume = PackTreeVolumeRoot(parent);
+    if (volume.empty())
+        return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+    std::vector<std::filesystem::path> pending;
+    for (auto path = parent; ! current.ancestors.contains(path.native()); path = path.parent_path())
+    {
+        if (path.empty() || pending.size() + current.ancestors.size() + current.entries.size() >= kMaxPackCleanupBindings)
+            return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+        pending.push_back(path);
+        if (path == volume)
+            break;
+        if (path == path.parent_path())
+            return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+    }
+
+    const auto flags = static_cast<FileSystemBindFlags>(kArchiveDirectoryFlags | (expected ? FILESYSTEM_BIND_PIN_DIRECTORY : 0u));
+    for (auto item = pending.rbegin(); item != pending.rend(); ++item)
+    {
+        const auto& path = *item;
+        RETURN_IF_FAILED(checkpoint(ArchiveWorkCheckpoint::Work));
+        FileOperations::BoundObjectAuthority authority;
+        if (path == volume)
+        {
+            auto bound = FileOperations::BindObjectAuthority(fileSystem, path.native(), profile, flags);
+            if (bound.state != FileOperations::ObjectBindingState::Bound)
+                return FAILED(bound.status) ? bound.status : E_UNEXPECTED;
+            authority = std::move(bound.authority);
+        }
+        else
+        {
+            const auto prior = current.ancestors.find(path.parent_path().native());
+            if (prior == current.ancestors.end())
+                return E_UNEXPECTED;
+            RETURN_IF_FAILED(BindPackTreeChild(prior->second, path, flags, authority));
+        }
+        if (authority.kind != FILESYSTEM_BOUND_DIRECTORY || authority.identity.pathProfileId != profile)
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        if (expected)
+        {
+            const auto prior = expected->ancestors.find(path.native());
+            if (prior == expected->ancestors.end() || prior->second.identity != authority.identity)
+                return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        }
+        current.ancestors.emplace(path.native(), std::move(authority));
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT VerifyPackTreeChildren(const FileOperations::BoundObjectAuthority& parent,
+                                             std::unordered_set<std::wstring>& expected,
+                                             const ArchiveCheckpoint& checkpoint) noexcept
+{
+    struct VisitContext final
+    {
+        VisitContext(std::unordered_set<std::wstring>& names, const ArchiveCheckpoint& work) noexcept : remaining(names), checkpoint(work)
+        {
+        }
+
+        std::unordered_set<std::wstring>& remaining;
+        const ArchiveCheckpoint& checkpoint;
+    };
+    VisitContext context{expected, checkpoint};
+    const auto visitor = [](const wchar_t* name, uint32_t length, uint32_t attributes, void* opaque) noexcept -> HRESULT
+    {
+        auto& visit = *static_cast<VisitContext*>(opaque);
+        RETURN_IF_FAILED(visit.checkpoint(ArchiveWorkCheckpoint::Work));
+        if (! name || length == 0u || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u || visit.remaining.erase(std::wstring(name, length)) != 1u)
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        return S_OK;
+    };
+    wil::com_ptr<IFileSystemBoundDirectory> directory;
+    RETURN_IF_FAILED(parent.boundObject->QueryInterface(IID_PPV_ARGS(directory.addressof())));
+    const HRESULT listing = directory->VisitChildren(visitor, &context);
+    if (listing != S_OK)
+        return FAILED(listing) ? listing : E_UNEXPECTED;
+    return expected.empty() ? S_OK : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+}
+
+[[nodiscard]] HRESULT BindPackTree(const ArchiveSourceInventory& inventory,
+                                   const FileOperations::ArchiveCleanupReceipt& roots,
+                                   const ArchiveCheckpoint& checkpoint,
+                                   const PackTreeBindings* expected,
+                                   PackTreeBindings& current) noexcept
+{
+    if (! inventory.complete)
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    if (inventory.entries.size() > kMaxPackCleanupBindings)
+        return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+
+    current.entries.reserve(inventory.entries.size());
+    std::unordered_map<std::wstring, size_t> boundDirectories;
+    std::set<std::vector<std::byte>> identities;
+    std::vector<std::unordered_set<std::wstring>> children(inventory.entries.size());
+    size_t rootCount = 0u;
+    for (const auto& entry : inventory.entries)
+    {
+        RETURN_IF_FAILED(checkpoint(ArchiveWorkCheckpoint::Work));
+        const auto parentPath                              = entry.sourcePath.parent_path();
+        const auto selected                                = roots.sources.find(entry.sourcePath.native());
+        const FileOperations::BoundObjectAuthority* parent = nullptr;
+        if (selected != roots.sources.end())
+        {
+            RETURN_IF_FAILED(BindPackTreeAncestors(roots.fileSystem.get(), parentPath, selected->second.pathProfileId, checkpoint, expected, current));
+            parent = &current.ancestors.at(parentPath.native());
+            ++rootCount;
+        }
+        else
+        {
+            const auto parentIndex = boundDirectories.find(parentPath.native());
+            if (parentIndex == boundDirectories.end() || ! children[parentIndex->second].insert(entry.sourcePath.filename().native()).second)
+                return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+            parent = &current.entries[parentIndex->second];
+        }
+
+        if (current.ancestors.size() + inventory.entries.size() > kMaxPackCleanupBindings)
+            return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+
+        auto flags = entry.directory ? static_cast<FileSystemBindFlags>(kArchiveDirectoryFlags | FILESYSTEM_BIND_READ_CONTENT) : kArchiveReadBindFlags;
+        if (expected)
+            flags = static_cast<FileSystemBindFlags>(flags | FILESYSTEM_BIND_DELETE | (entry.directory ? FILESYSTEM_BIND_PIN_DIRECTORY : 0u));
+        FileOperations::BoundObjectAuthority authority;
+        RETURN_IF_FAILED(BindPackTreeChild(*parent, entry.sourcePath, flags, authority));
+        if (authority.kind != (entry.directory ? FILESYSTEM_BOUND_DIRECTORY : FILESYSTEM_BOUND_REGULAR_FILE) ||
+            (! entry.directory && (authority.identity.revisionId.empty() || authority.committedSizeBytes != entry.fileSize)) ||
+            (selected != roots.sources.end() && authority.identity != selected->second) ||
+            (expected && authority.identity != expected->entries[current.entries.size()].identity))
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+
+        // Multiple names for the same object cannot each hold an exclusive Delete binding.
+        if (! identities.insert(authority.identity.objectId).second)
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
+        if (expected)
+        {
+            FileSystemBasicInformation basic{};
+            basic.sizeBytes = sizeof(basic);
+            RETURN_IF_FAILED(authority.boundObject->GetBasicInformation(&basic));
+            if ((basic.attributes & (FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u)
+                return E_ACCESSDENIED;
+        }
+        if (entry.directory && ! boundDirectories.emplace(entry.sourcePath.native(), current.entries.size()).second)
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        current.entries.push_back(std::move(authority));
+    }
+    if (rootCount != roots.sources.size())
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    for (const auto& [path, index] : boundDirectories)
+        RETURN_IF_FAILED(VerifyPackTreeChildren(current.entries[index], children[index], checkpoint));
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT CapturePackTreeArtifacts(const ArchiveSourceInventory& inventory,
+                                               const FileOperations::ArchiveCleanupReceipt& roots,
+                                               const PackTreeBindings& bindings,
+                                               std::vector<std::filesystem::path>& paths,
+                                               FileOperationArtifacts::TouchGuardRequest& request) noexcept
+{
+    FileOperations::ArchiveCleanupReceipt artifacts{};
+    artifacts.fileSystem      = roots.fileSystem;
+    artifacts.pluginId        = roots.pluginId;
+    artifacts.instanceContext = roots.instanceContext;
+    for (size_t index = 0u; index < inventory.entries.size(); ++index)
+    {
+        const auto& path = inventory.entries[index].sourcePath;
+        if (! FileOperationArtifacts::HasPossibleArtifactName(path.filename().native()))
+            continue;
+        paths.push_back(path);
+        artifacts.sources.emplace(path.native(), bindings.entries[index].identity);
+    }
+    return CaptureArchiveArtifactTouch(artifacts, paths, request);
+}
+
+[[nodiscard]] HRESULT DeletePackTree(PackTreeBindings& strict, const ArchiveCheckpoint& checkpoint, uint64_t& removed) noexcept
+{
+    // The archive's sorted inventory visits each directory before its descendants.
+    for (auto item = strict.entries.rbegin(); item != strict.entries.rend(); ++item)
+    {
+        auto& entry = *item;
+        RETURN_IF_FAILED(checkpoint(ArchiveWorkCheckpoint::Work));
+        FileSystemConditionalMutationResult result{sizeof(FileSystemConditionalMutationResult), FALSE, TRUE, FALSE};
+        const HRESULT status = entry.boundObject->DeleteIfUnchanged(FILESYSTEM_FLAG_NONE, nullptr, &result);
+        switch (FileOperations::ClassifyManagedCleanupMutation({.status               = status,
+                                                                .outcomeKnown         = result.outcomeKnown == TRUE,
+                                                                .mutationCommitted    = result.mutationCommitted == TRUE,
+                                                                .originalStillPresent = result.originalStillPresent == TRUE}))
+        {
+            case FileOperations::ManagedCleanupAttemptDisposition::Removed:
+                entry.boundObject.reset();
+                ++removed;
+                break;
+            case FileOperations::ManagedCleanupAttemptDisposition::Retained: return FAILED(status) ? status : E_UNEXPECTED;
+            case FileOperations::ManagedCleanupAttemptDisposition::Indeterminate: return HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+            case FileOperations::ManagedCleanupAttemptDisposition::ProviderContractViolation: return E_UNEXPECTED;
+        }
+    }
+    return S_OK;
+}
+
 [[nodiscard]] bool ArchiveInventoryMatchesCleanup(const ArchiveSourceInventory& inventory, const FileOperations::ArchiveCleanupReceipt* cleanup) noexcept
 {
-    return ! cleanup || (inventory.complete && inventory.entries.size() == cleanup->sources.size() &&
-                         std::ranges::all_of(inventory.entries, [&](const ArchiveEntrySource& entry) noexcept {
+    return ! cleanup || cleanup->containsDirectory ||
+           (inventory.complete && inventory.entries.size() == cleanup->sources.size() &&
+            std::ranges::all_of(inventory.entries, [&](const ArchiveEntrySource& entry) noexcept {
         return ! entry.directory && cleanup->sources.contains(entry.sourcePath.native());
     }));
 }
@@ -7104,7 +7377,7 @@ private:
         uint32_t storedSize = 0u;
         if (! source.directory)
         {
-            result.hr = StreamFileIntoZip(archiveFile, source.sourcePath, cleanup, checkpoint, crc32, storedSize);
+            result.hr = StreamFileIntoZip(archiveFile, source, cleanup, checkpoint, crc32, storedSize);
             if (FAILED(result.hr))
             {
                 return result;
@@ -7263,20 +7536,19 @@ void SetArchivePropVariantFileTime(PROPVARIANT* value, const FILETIME& fileTime)
 class SevenZipPackFileInStream final : public ISequentialInStream
 {
 public:
-    static HRESULT Create(const std::filesystem::path& path,
+    static HRESULT Create(const ArchiveEntrySource& entry,
                           const FileOperations::ArchiveCleanupReceipt* cleanup,
                           const ArchiveCheckpoint& checkpoint,
                           wil::com_ptr<ISequentialInStream>& out) noexcept
     {
         out.reset();
-        if (path.empty())
+        if (entry.sourcePath.empty())
             return E_INVALIDARG;
 
         wil::com_ptr<IFileSystemBoundObject> source;
-        if (const HRESULT hr = BindArchiveSourceForRead(cleanup, path, source); FAILED(hr))
-            return hr;
+        RETURN_IF_FAILED(BindPackSourceForRead(cleanup, entry, source));
         ArchiveReadInput input;
-        if (const HRESULT hr = input.Open(path, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, source.get()); FAILED(hr))
+        if (const HRESULT hr = input.Open(entry.sourcePath, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, source.get()); FAILED(hr))
             return hr;
 
         auto* impl = new (std::nothrow) SevenZipPackFileInStream(std::move(input), checkpoint);
@@ -7621,6 +7893,14 @@ public:
                 break;
             case kpidAttrib:
             {
+                if (source.boundSource)
+                {
+                    FileSystemBasicInformation info{};
+                    info.sizeBytes = sizeof(info);
+                    RETURN_IF_FAILED(source.boundSource->GetBasicInformation(&info));
+                    SetArchivePropVariantUInt32(value, info.attributes);
+                    break;
+                }
                 DWORD attributes = GetFileAttributesW(source.sourcePath.c_str());
                 if (attributes == INVALID_FILE_ATTRIBUTES)
                 {
@@ -7631,6 +7911,14 @@ public:
             }
             case kpidMTime:
             {
+                if (source.boundSource)
+                {
+                    FileSystemBasicInformation info{};
+                    info.sizeBytes = sizeof(info);
+                    RETURN_IF_FAILED(source.boundSource->GetBasicInformation(&info));
+                    SetArchivePropVariantFileTime(value, FileTimeFromTicks(info.lastWriteTime));
+                    break;
+                }
                 WIN32_FILE_ATTRIBUTE_DATA data{};
                 if (GetFileAttributesExW(source.sourcePath.c_str(), GetFileExInfoStandard, &data) != FALSE)
                 {
@@ -7664,7 +7952,7 @@ public:
 
         RETURN_IF_FAILED(_checkpoint(ArchiveWorkCheckpoint::Work));
         wil::com_ptr<ISequentialInStream> stream;
-        const HRESULT hr = SevenZipPackFileInStream::Create(source.sourcePath, _cleanup, _checkpoint, stream);
+        const HRESULT hr = SevenZipPackFileInStream::Create(source, _cleanup, _checkpoint, stream);
         if (FAILED(hr))
         {
             _resultHr = hr;
@@ -12354,13 +12642,60 @@ HRESULT FolderWindow::FileOperationState::Task::ExecutePackArchive(const FileOpe
             L"archive.pack.prepare_us", request.format, Debug::Perf::ElapsedUs(prepareStartedAt), inventory.entries.size(), _sourcePaths.size(), result.hr);
     }
 
-    if (SUCCEEDED(result.hr))
+    const auto* roots               = request.cleanup.get();
+    const bool treeCleanupRequested = roots && roots->containsDirectory;
+    const auto* fileCleanup         = treeCleanupRequested ? nullptr : roots;
+    PackTreeBindings approvedTree;
+    std::vector<std::filesystem::path> artifactPaths;
+    std::optional<FileOperationArtifacts::TouchGuardReceipt> treeTouch;
+    bool treeApproved = false;
+    if (SUCCEEDED(result.hr) && treeCleanupRequested)
     {
-        const auto* cleanup             = request.cleanup.get();
-        auto* const retainedPublication = cleanup ? std::addressof(_archiveTask->publishedArchive) : nullptr;
+        const auto started = std::chrono::steady_clock::now();
+        HRESULT captured   = BindPackTree(inventory, *roots, checkpoint, nullptr, approvedTree);
+        FileOperationArtifacts::TouchGuardRequest touch;
+        if (captured == S_OK)
+            captured = CapturePackTreeArtifacts(inventory, *roots, approvedTree, artifactPaths, touch);
+        Debug::Perf::Emit(L"archive.pack.cleanup_tree_capture_us",
+                          request.format,
+                          Debug::Perf::ElapsedUs(started),
+                          approvedTree.entries.size(),
+                          approvedTree.ancestors.size(),
+                          captured);
+        if (captured == S_OK)
+        {
+            const std::wstring selection = _sourcePaths.size() == 1u ? _sourcePaths.front().native() : _sourcePaths.front().parent_path().native();
+            result.hr                    = ConfirmPackTreeCleanup(inventory.entries.size(), selection, touch.items.size());
+            if (result.hr == S_OK && ! touch.items.empty())
+            {
+                FileOperationArtifacts::TouchGuardReceipt accepted;
+                result.hr = FileOperationArtifacts::AcceptTouchGuard(touch, accepted);
+                if (result.hr == S_OK)
+                    treeTouch = std::move(accepted);
+            }
+            treeApproved = result.hr == S_OK;
+        }
+        else if (captured == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+        {
+            result.hr = captured;
+        }
+        if (treeApproved)
+        {
+            for (size_t index = 0u; index < inventory.entries.size(); ++index)
+                inventory.entries[index].boundSource = approvedTree.entries[index].boundObject;
+        }
+        else
+        {
+            approvedTree = {};
+        }
+    }
+
+    if (result.hr == S_OK)
+    {
+        auto* const retainedPublication = fileCleanup || treeApproved ? std::addressof(_archiveTask->publishedArchive) : nullptr;
         if (request.storedZip)
         {
-            result = CreateStoredZipArchive(inventory.entries, plan.targetPath, request.overwrite, cleanup, checkpoint, retainedPublication);
+            result = CreateStoredZipArchive(inventory.entries, plan.targetPath, request.overwrite, fileCleanup, checkpoint, retainedPublication);
         }
         else
         {
@@ -12369,7 +12704,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecutePackArchive(const FileOpe
                 .classId        = request.classId,
                 .hasClassId     = true,
             };
-            result = CreateSevenZipArchive(inventory.entries, plan.targetPath, request.overwrite, packer, cleanup, checkpoint, retainedPublication);
+            result = CreateSevenZipArchive(inventory.entries, plan.targetPath, request.overwrite, packer, fileCleanup, checkpoint, retainedPublication);
         }
         result.published = SUCCEEDED(result.hr);
 #ifdef ENABLE_TESTS
@@ -12378,11 +12713,50 @@ HRESULT FolderWindow::FileOperationState::Task::ExecutePackArchive(const FileOpe
 #endif
     }
 
+    if (result.published && treeApproved)
+    {
+        const auto started = std::chrono::steady_clock::now();
+        PackTreeBindings strict;
+        result.cleanupHr = _archiveTask->publishedArchive ? BindPackTree(inventory, *roots, checkpoint, &approvedTree, strict) : E_UNEXPECTED;
+        if (result.cleanupHr == S_OK && treeTouch.has_value())
+        {
+            result.cleanupHr = FileOperationArtifacts::RevalidateProviderTouchGuard(
+                roots->fileSystem.get(), roots->pluginId, roots->instanceContext, treeTouch.value(), artifactPaths);
+        }
+        Debug::Perf::Emit(L"archive.pack.cleanup_tree_preflight_us",
+                          request.format,
+                          Debug::Perf::ElapsedUs(started),
+                          strict.entries.size(),
+                          strict.ancestors.size(),
+                          result.cleanupHr);
+        // The strict handles now own the exact grant. Close the readers and their original
+        // identity witnesses before a legacy delete disposition needs the last open to close.
+        for (auto& entry : inventory.entries)
+            entry.boundSource.reset();
+        approvedTree = {};
+
+        uint64_t removed         = 0u;
+        const auto deleteStarted = std::chrono::steady_clock::now();
+        if (result.cleanupHr == S_OK)
+            result.cleanupHr = DeletePackTree(strict, checkpoint, removed);
+        Debug::Perf::Emit(
+            L"archive.pack.cleanup_tree_delete_us", request.format, Debug::Perf::ElapsedUs(deleteStarted), removed, inventory.entries.size(), result.cleanupHr);
+        if (result.cleanupHr != S_OK)
+        {
+            result.hr = FAILED(result.cleanupHr) ? result.cleanupHr : E_UNEXPECTED;
+            LogDiagnostic(DiagnosticSeverity::Error,
+                          result.hr,
+                          L"archive.pack.cleanupTree",
+                          L"The archive was created, but source cleanup stopped.",
+                          _sourcePaths.front().native());
+        }
+    }
+
     result.sourceSelectionComplete = inventory.complete;
     const bool canceled            = CancelRequestedDurable();
     if (! result.published && canceled)
         result.hr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
-    if (result.published && request.deleteAfter && (! result.sourceSelectionComplete || ! request.cleanup || canceled))
+    if (result.published && request.deleteAfter && ! treeApproved && (! result.sourceSelectionComplete || ! fileCleanup || canceled))
         result.hr = S_FALSE;
 
     for (size_t index = 0u; index < _sourcePaths.size(); ++index)
@@ -12581,12 +12955,13 @@ void FolderWindow::CommandPack(Pane pane)
     if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, IDS_CMD_PACK))
         return;
 
-    HRESULT cleanupCapture = deleteSourcesAfterPack ? CaptureArchiveCleanupSources(cleanupReceipt, selectedPaths, L"archive.pack.cleanup_capture_us") : S_OK;
+    HRESULT cleanupCapture =
+        deleteSourcesAfterPack ? CaptureArchiveCleanupSources(cleanupReceipt, selectedPaths, L"archive.pack.cleanup_capture_us", true) : S_OK;
     FileOperationArtifacts::TouchGuardRequest artifactRequest;
-    if (deleteSourcesAfterPack && SUCCEEDED(cleanupCapture))
+    if (deleteSourcesAfterPack && SUCCEEDED(cleanupCapture) && ! cleanupReceipt.containsDirectory)
         cleanupCapture = CaptureArchiveArtifactTouch(cleanupReceipt, selectedPaths, artifactRequest);
 
-    if (deleteSourcesAfterPack && SUCCEEDED(cleanupCapture))
+    if (deleteSourcesAfterPack && SUCCEEDED(cleanupCapture) && ! cleanupReceipt.containsDirectory)
     {
         HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
         if (! ownerWindow)
@@ -12689,11 +13064,34 @@ void FolderWindow::CommandPack(Pane pane)
 
         if (request.deleteAfter)
         {
-            PaneState& cleanupState  = pane == Pane::Left ? _leftPane : _rightPane;
             const auto* exactCleanup = request.cleanup.get();
-            if (event.hr != S_OK || completed.hr != S_OK || ! exactCleanup || ! publishedArchive ||
-                cleanupState.fileSystem.get() != exactCleanup->fileSystem.get() || cleanupState.pluginId != exactCleanup->pluginId ||
-                cleanupState.instanceContext != exactCleanup->instanceContext)
+            const bool treeCleanup   = exactCleanup && exactCleanup->containsDirectory;
+            if (treeCleanup && completed.hr != S_FALSE)
+            {
+                for (const auto& path : sources)
+                {
+                    for (PaneState* viewState : {&_leftPane, &_rightPane})
+                    {
+                        if (IsFilePluginShortId(viewState->pluginShortId))
+                            RefreshFolderViewIfPathMatches(viewState->folderView, path.parent_path());
+                    }
+                }
+            }
+            if (FAILED(completed.cleanupHr))
+            {
+                ShowArchiveOverlay(*this,
+                                   pane,
+                                   IDS_CMD_PACK,
+                                   FolderView::OverlaySeverity::Warning,
+                                   ArchiveFailureMessage(IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED, completed.archivePath, completed.cleanupHr),
+                                   completed.cleanupHr);
+                return;
+            }
+
+            PaneState& cleanupState         = pane == Pane::Left ? _leftPane : _rightPane;
+            const bool fileCleanupAvailable = exactCleanup && publishedArchive && cleanupState.fileSystem.get() == exactCleanup->fileSystem.get() &&
+                                              cleanupState.pluginId == exactCleanup->pluginId && cleanupState.instanceContext == exactCleanup->instanceContext;
+            if (event.hr != S_OK || completed.hr != S_OK || (! treeCleanup && ! fileCleanupAvailable))
             {
                 const std::wstring message = completed.sourceSelectionComplete
                                                  ? FormatStringResource(nullptr, IDS_FMT_ARCHIVE_PACK_ORIGINALS_KEPT, completed.archivePath.wstring())
@@ -12702,26 +13100,29 @@ void FolderWindow::CommandPack(Pane pane)
                 return;
             }
 
-            FolderView::FileOperationRequest deleteRequest{};
-            deleteRequest.operation                       = FILESYSTEM_DELETE;
-            deleteRequest.origin                          = FolderView::FileOperationRequest::Origin::PackCleanup;
-            deleteRequest.sourcePaths                     = sources;
-            deleteRequest.flags                           = FILESYSTEM_FLAG_NONE;
-            deleteRequest.archiveDeleteAfterConfirmed     = true;
-            FileOperations::ArchiveCleanupReceipt cleanup = *exactCleanup;
-            cleanup.publishedArchive                      = std::make_shared<const wil::unique_hfile>(std::move(publishedArchive));
-            const HRESULT deleteHr                        = StartFileOperationFromFolderView(pane, std::move(deleteRequest), &cleanup);
-            if (deleteHr == kFileOperationRefusedForPendingExit)
-                return;
-            if (FAILED(deleteHr))
+            if (! treeCleanup)
             {
-                ShowArchiveOverlay(*this,
-                                   pane,
-                                   IDS_CMD_PACK,
-                                   FolderView::OverlaySeverity::Warning,
-                                   ArchiveFailureMessage(IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED, completed.archivePath, deleteHr),
-                                   deleteHr);
-                return;
+                FolderView::FileOperationRequest deleteRequest{};
+                deleteRequest.operation                       = FILESYSTEM_DELETE;
+                deleteRequest.origin                          = FolderView::FileOperationRequest::Origin::PackCleanup;
+                deleteRequest.sourcePaths                     = sources;
+                deleteRequest.flags                           = FILESYSTEM_FLAG_NONE;
+                deleteRequest.archiveDeleteAfterConfirmed     = true;
+                FileOperations::ArchiveCleanupReceipt cleanup = *exactCleanup;
+                cleanup.publishedArchive                      = std::make_shared<const wil::unique_hfile>(std::move(publishedArchive));
+                const HRESULT deleteHr                        = StartFileOperationFromFolderView(pane, std::move(deleteRequest), &cleanup);
+                if (deleteHr == kFileOperationRefusedForPendingExit)
+                    return;
+                if (FAILED(deleteHr))
+                {
+                    ShowArchiveOverlay(*this,
+                                       pane,
+                                       IDS_CMD_PACK,
+                                       FolderView::OverlaySeverity::Warning,
+                                       ArchiveFailureMessage(IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED, completed.archivePath, deleteHr),
+                                       deleteHr);
+                    return;
+                }
             }
         }
 

@@ -1,0 +1,1 @@
+- Pack with Delete after now confirms and removes verified local directory trees after complete ZIP or 7z publication. Pack rechecks every approved member and keeps unproved originals.

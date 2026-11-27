@@ -1206,6 +1206,7 @@ enum FileSystemBindFlags : uint32_t
     FILESYSTEM_BIND_RENAME        = 0x10,
     FILESYSTEM_BIND_PUBLICATION   = 0x20,
     FILESYSTEM_BIND_READ_REVISION = 0x40, // Require an immutable version snapshot for this regular file.
+    FILESYSTEM_BIND_PIN_DIRECTORY = 0x80, // Bind a plain directory with listing access and deny write and delete sharing.
 };
 
 enum FileSystemLinkKind : uint32_t
@@ -1469,6 +1470,20 @@ interface __declspec(uuid("7c1f5d0e-3b7a-4f0c-9a55-2e8d6b41c3f7")) __declspec(no
                                                                   IFileSystemBoundObject** published) noexcept                 = 0;
     virtual HRESULT STDMETHODCALLTYPE ReadUnidentifiedMetadataFeatures(
         const wchar_t* path, const FileSystemOptions* options, uint32_t* presentFeatures) noexcept = 0;
+};
+
+// The borrowed name is one exact directory entry and need not be NUL-terminated.
+using FileSystemBoundChildVisitor = HRESULT(STDMETHODCALLTYPE*)(const wchar_t* name, uint32_t nameLength, uint32_t attributes, void* context) noexcept;
+
+// Optional traversal of an exact bound directory. VisitChildren visits immediate names only,
+// including hidden entries, and returns the first non-S_OK visitor result. Enumeration requires a directory granted
+// READ_CONTENT or PIN_DIRECTORY. The provider can refuse a concurrent enumeration on the same object.
+// BindChild resolves one leaf relative to the bound handle without following reparse points. Mutation still requires
+// FILESYSTEM_BIND_DELETE on the child. A successful bind returns a non-null bound object.
+interface __declspec(uuid("cf9213e4-bdc1-461c-9cbb-053833da8246")) __declspec(novtable) IFileSystemBoundDirectory : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE VisitChildren(FileSystemBoundChildVisitor visitor, void* context) noexcept                         = 0;
+    virtual HRESULT STDMETHODCALLTYPE BindChild(const wchar_t* leaf, FileSystemBindFlags flags, IFileSystemBoundObject** bound) noexcept = 0;
 };
 
 // Optional bounded transfer of a directory metadata witness to an already-held

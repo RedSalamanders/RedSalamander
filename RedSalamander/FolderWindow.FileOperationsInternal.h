@@ -405,14 +405,15 @@ struct QualifiedSourceItem
     std::optional<ProviderIdentitySnapshot> ingressSnapshot;
 };
 
-// The archive command snapshots the original regular files before consent.
-// The Delete task copies the snapshots into its selected source items.
+// The archive command snapshots the selected roots. Ordinary archive cleanup copies a
+// regular-file receipt into Delete. Pack expands a directory receipt on its scheduled worker.
 struct ArchiveCleanupReceipt final
 {
     wil::com_ptr<IFileSystem> fileSystem;
     std::wstring pluginId;
     std::wstring instanceContext;
     std::unordered_map<std::wstring, ProviderIdentitySnapshot> sources;
+    bool containsDirectory = false;
     std::optional<FileOperationArtifacts::TouchGuardReceipt> artifactTouch;
     std::shared_ptr<const wil::unique_hfile> publishedArchive;
 };
@@ -420,6 +421,7 @@ struct ArchiveCleanupReceipt final
 struct ArchiveOperationResult final
 {
     HRESULT hr                   = S_OK;
+    HRESULT cleanupHr            = S_OK;
     bool sourceSelectionComplete = true;
     bool published               = false;
     bool outputInsideSource      = false;
@@ -2285,6 +2287,7 @@ struct FolderWindow::FileOperationState
         [[nodiscard]] HRESULT PrepareTransferDestinationNames(const FileOperations::FileOperationPlanGroup& plans) noexcept;
         HRESULT RunSameHostOverlapAdvisory() noexcept;
         HRESULT RunPermanentDeleteConfirmation() noexcept;
+        HRESULT ConfirmPackTreeCleanup(size_t itemCount, std::wstring_view selection, size_t leftoverCount) noexcept;
         // C10: pins the identity of a native-authority delete root through IFileSystemIdentityDelete
         // (S_OK without a pin when the provider has no such contract). I35 R7.3: requireContract pins
         // the corroboration facts of an identity-less Local root and fails without the contract.
