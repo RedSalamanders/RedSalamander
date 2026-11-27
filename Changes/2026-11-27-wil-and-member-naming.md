@@ -1,1 +1,0 @@
-- Apply the shared WIL warning scope to the remaining active product and test includes, use nonthrowing COM ownership for file-system route queries, Change Case and bar rendering, and configure Clang-Tidy for private and protected member names.

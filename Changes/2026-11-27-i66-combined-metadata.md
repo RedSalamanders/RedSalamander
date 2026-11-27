@@ -1,1 +1,0 @@
-- Show one File Operations question when a transfer will lose both EFS encryption and sparse allocation.
