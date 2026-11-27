@@ -305,3 +305,55 @@ PR #381 passed the required checks and merged at `e72f5f02ff619264b6c3b2db7297a4
 ### Hosted qualification during the archive reader merge
 
 At 20:58 CET, both native regression jobs on `bcc3f42e2` were still at the actual regression and Release assertion step. The Pack and combined metadata merge runs remained queued. [x64 job](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244/job/140671267975) [ARM64 job](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244/job/140671268108)
+
+### Hosted native failure on the pre-directory candidate
+
+Both native jobs in run `46027552244` on `bcc3f42e2e114953556605f3ef54e30919ada1bc` failed. The combined test gate and production jobs skipped. [Hosted qualification](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244)
+
+**x64 Release.** The aggregate reported 3,045 passes, one failure and 72 skips. Commands passed 965 with five skips. File Operations passed 293 with 37 skips. Tooling failed its original-negative-exit witness in both attempts with 1,518 passes. Its assertion expected the Commands case boundary row to follow containment closure. [x64 job](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244/job/140671267975)
+
+**ARM64 Release.** The original Tooling attempt reported 1,518 passes and the same witness failure. Its retry passed all 1,519. A foreign console was in front at desktop retirement. The boundary preserved that console and ended the native job before its complete aggregate. The recorded process was PID 884 with image path digest `95a9bdfa9774cbec665bce075b37ff65cb5cf6f70e0286eabad32eb453fdfbd1`. Its parent was unavailable. [ARM64 job](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244/job/140671268108)
+
+The exported failed-step logs are retained in `20261127T215313Z-67324-3779e546dc064f278be27deaecaf2c5e` under `artifacts/selftest/last_run`. x64 SHA-256 `30e77cbb6a6c742dc25b0dad22930a8c3ebe62f34c46d7ee2d78ac1002da8980`. ARM64 SHA-256 `68296802faa1a0062e947d224a495c5c30c30dbe77cf34a453ab15987c599c66`. Run `46027552244` on `bcc3f42e2` predates the merged Commands trace freshness fix in PR #375. At 23:18 CET, both architectures in the follow-up on `651a700fc` had completed their Release builds and were running native regression. This run includes the trace fix. [Follow-up qualification](https://github.com/RedSalamanders/RedSalamander/actions/runs/46061664377)
+
+The local Pester 3.4.0 replay of the three Commands case-boundary checks passed 3/0/0. Run `20261127T215840Z-53720-fda843ee669345418be047ea99da7b0f`, log SHA-256 `d51ecb90cb3b78b2d7e54d8dbbedd7040326ce8d6be0228b5789d7360ab9df75`. The archived hosted verdict remains failed.
+
+### Exact Pack directory cleanup
+
+The first candidate `57e881f3644149a6bcb47387977b533ca9617f28` stopped at compilation before launching tests. The C++ diagnostics and interrupted runner evidence are retained in `20261127T215019Z-78340-9f4de4e0984e432186bf289ed99cefde`. [Pack directory PR #384](https://github.com/RedSalamanders/RedSalamander/pull/384)
+
+Candidate `4b2dbdfc1f9cbd830b207731fddcd545af65719a` built x64 Release with zero warnings and errors. Its three native repetitions failed before the new tree consent. The directory reopen returned `0x80070005` on the first child in each capture. Run `20261127T215511Z-80200-bf26980f2caa46c6927adbc8f00a4cd1`, native result SHA-256 `c524d669acb3ec48081e304a91f1d47c96d048d40e955f0eb22fc4144d0875bd`, raw metrics SHA-256 `8bf10c1c242e91ae897ed297b4ca9d132d40791c51bf014a19adbe1957878f74`.
+
+Candidate `1b2dd5db66813c97982fc3616e379617864aa48f` uses the retained directory handle for its cursor and relative opens. Its x64 Release build had zero warnings and errors on receipt `b98fe2d2848ccd311bf9fc1421237b686bbb74ad22750a3997870eeee9119364`. In all three repetitions both positive formats removed five of five approved entries, the Cancel control kept the previous output and tree, and late additions and same-size rewrites kept five of five approved originals after publication. The remaining test failed at the attempted ancestor move while the source handles were open. Run `20261127T220413Z-79000-2552e3d1f6be45efa70c73ebe7ffd820`, native result SHA-256 `c4592acfd0d4817af6ab199db89734dfffeff7d84e0fd52233fc0f264d7aa816`, raw metrics SHA-256 `52a45e23c1b833f5dd80ef0b3053728c90f9491efc57b046091aa0a149dd080d`. This run retains a failed verdict.
+
+The final exact candidate `af79501c8d7b0fd1c7ecc469f0e59316e74642a2` had zero warnings and errors in the test-enabled x64 Release build. Receipt `96a4e3da9f8bb0147d3eec1f70a0c1668003a02639bbcbadcfda342e3c90e35b`. Its canonical non-activating run `20261127T221543Z-82288-583e98b28f894d0a97c52b24cf6b9840` passed three repetitions with zero failures or skips. The native case times were 2,889, 2,905 and 3,080 ms. Native result SHA-256 `7f3bea4cda61c263ae9162ec6a9b987466de1c9b22fc8a36acfe795b33f2a497`. Raw metrics SHA-256 `26b922485afa853013e79bb56faeb630a3b7a209af0de84391587cf6a9b84771`. The filtered repository verdict is `NOT_EVALUATED`.
+
+Each format removed five approved entries and the test read the approved nested bytes back from the published archive. Cancel preserved the previous archive and the entire tree. The late addition and same-size rewrite controls retained the published archive and every source. Windows refused all three physical ancestor moves with error 5 while the retained tree was open. The existing Local identity namespace then changed the fresh ancestor's reported identity. Preflight stopped at that ancestor with zero selected bindings and zero removals in each repetition. All nine post-publication change controls reported `0x8007051A` and removed zero entries.
+
+The approved five-entry shapes captured five entries and eleven ancestor bindings in 392–679 µs across 18 samples. Successful ZIP preflight took 493–709 µs and removal took 284–326 µs. Successful 7z preflight took 529–736 µs and removal took 286–335 µs. The earlier regular-file protection run `20261127T194823Z-73460-19917ccd9d6a4cbbbbc7e4cd3726d030` supplies the matched 16-entry, 23-byte retention control. ZIP median worker time was 4,885 µs on that baseline and 4,171 µs on the candidate, with six samples each. The 7z medians were 6,358 and 6,192 µs, with three samples each. The positive directory cleanup timings are an initial measurement for the new route.
+
+The same final receipt passed the non-activating `FileOps_ReviewRemediationContracts` selection in `20261127T222454Z-83668-9de769048e7c4ce19957eb2857e8b41a`. Setup, the 87,703 ms case and cleanup all passed with zero failures or skips. Native result SHA-256 `48b69ebfd938d072f8176438393ae2e35f5de937c335d44c6b49984cf77fa1cf`. Trace SHA-256 `cbba4ad401be434bedc94039ac1a76796dfbde1aa218ecb7f2866f8cabb82cee`. The filtered repository verdict is `NOT_EVALUATED`.
+
+PR #384 merged at `b632fbf29c318afc530755c1965a967f634863ff`. The required format, tooling, CI gate, dependency review and CodeQL checks passed on the tested head. Main contains the verified code, tests, specifications and user guide. [Merged Pack directory cleanup](https://github.com/RedSalamanders/RedSalamander/pull/384)
+
+### Follow-up live provider checks
+
+These non-activating x64 Release selections byte-verified receipt `b98fe2d2848ccd311bf9fc1421237b686bbb74ad22750a3997870eeee9119364` on `1b2dd5db66813c97982fc3616e379617864aa48f`. They used the already registered RubyGloom fixture and unchanged machine resource manifest. Every selection closed its contained process and kept the filtered repository verdict `NOT_EVALUATED`.
+
+| Case | Outcome | Run ID | Native result SHA-256 |
+|---|---|---|---|
+| RubyGloom Samba corroborated Rename | 3 passed including setup and cleanup | `20261127T221059Z-6780-fa54632c44a242f7ac55c04d0e98c058` | `05377e427c5182eb620471154d74d71b28830191ef15aab077d04ac65188bd0a` |
+| RubyGloom Samba mixed Local Native and SMB Managed Move | 3 passed including setup and cleanup | `20261127T221221Z-79620-a29c0abe7850425b89387d01ae389309` | `e7b364d086a9d75945c73dabcbd14a9fef98b5727a670a66ed1042d7463a1a47` |
+| SFTP F2 Rename | 2 passed, provider case skipped because the isolated runner could not find the connection profile | `20261127T221304Z-68276-a5461ad816ba475e909c20602aa5e45d` | `0763046c3b5c0705912b34c0e1ccf9e2b94981171720501272ec503f90048fb0` |
+| OneDrive Personal F2 Rename | 2 passed, provider case skipped because the isolated runner could not find the connection profile | `20261127T221347Z-21212-e0ce8e53e145417396a318d448a83df0` | `a29f63509b1bdfaaa3b9f29470b8c8046f9e0f2d6390b4b43791326554275d75` |
+
+The SFTP and OneDrive skips preserve the earlier successful qualification on dedicated profile copies. The current registry needed no changes for these selections. [Earlier live qualification](../2026-11-26_221027_live_mixed_smb/README.md#existing-live-route-rechecks)
+
+Both Windows SMB checks ran through the existing approved SINON fixture on the final candidate `af79501c8d7b0fd1c7ecc469f0e59316e74642a2`. The canonical runner verified receipt `96a4e3da9f8bb0147d3eec1f70a0c1668003a02639bbcbadcfda342e3c90e35b`. Each check passed setup, the live operation and cleanup without activation. The temporary fixture registration ended with the original C resource manifest restored byte for byte. Its SHA-256 is `1779448ad25c15b19c41f1cd0a1c81d68c7711cfe834df2b9ee7599a3bbd7a22`.
+
+| Case | Body duration | Run ID | Native result SHA-256 |
+|---|---:|---|---|
+| Windows SMB exact Rename | 1,297 ms | `20261127T222303Z-58080-cccbd2e315364d7998b1ddd5730912f3` | `a03c7e9136b841a6d525bbccd55f8ecfec31686eb6a0277608bb7443b0c3d6cb` |
+| Windows SMB mixed Local Native and SMB Managed Move | 110 ms | `20261127T222342Z-69648-9a70cbf8427746e98ea52ee5792cb0b3` | `bf6d38f945058f66ea88fd23391648bdb7c170795227eb248bc0bb2575bd22ab` |
+
+Both Windows SMB runs retain the filtered repository verdict `NOT_EVALUATED`.
