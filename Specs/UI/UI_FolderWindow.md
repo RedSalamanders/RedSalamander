@@ -223,7 +223,9 @@ FolderWindow responsibilities:
 - Function Bar key glyph, modifier, hit-test, and label measurement MUST use DirectWrite text formats / `DxUi.Typography` specs. The Function Bar must not create or select `HFONT` for app-owned visible text measurement.
 - The Function Bar visible paint path MUST NOT bind an `ID2D1DCRenderTarget` to a paint HDC for app-owned text/chrome. It uses the same Direct2D HWND-target model as the pane status bars so toggle/show operations cannot leave an unpainted child strip.
 - Function Bar and pane status-bar chrome share `Common::Rendering::HwndRenderTargetResources` for the exact
-  D2D factory, HWND render-target, and target-dependent solid-brush lifecycle. Surface-specific DirectWrite
+  D2D factory, HWND render-target, and target-dependent solid-brush lifecycle. The helper uses
+  `wil::com_ptr_nothrow` for all three references and returns failure when factory or target creation fails.
+  Surface-specific DirectWrite
   factories/formats, trimming, DPI invalidation policy, drawing, and HWND property ownership remain local.
   Ordinary paints retain all resources; size or device-loss invalidation releases the brush before its target
   while retaining the D2D factory, and HWND teardown releases the complete surface-owned resource aggregate.
