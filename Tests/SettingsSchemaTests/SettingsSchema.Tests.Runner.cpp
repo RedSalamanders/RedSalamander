@@ -738,16 +738,66 @@ void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
     const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
     const std::wstring extendedSettingsPath  = Common::Paths::ToExtendedWin32Path(settingsPath.native());
 
+    {
+        Common::Files::LocalFileTransaction staged;
+        constexpr std::string_view winner = "competing publication";
+        const bool ready =
+            SUCCEEDED(Common::Files::LocalFileTransaction::Create(settingsPath, Common::Files::ExistingTargetPolicy::FailIfExists, true, staged)) &&
+            SUCCEEDED(staged.Write("staged publication"));
+        const bool created   = ready && WriteTestBytes(settingsPath, winner);
+        const HRESULT result = created ? staged.Commit() : E_UNEXPECTED;
+        Check(created && FAILED(result) && ReadTestBytes(settingsPath) == winner,
+              L"settings create-only transaction: a destination created after staging is preserved",
+              success);
+    }
+    CleanupSettingsTestArtifacts(appId);
+
+#ifdef ENABLE_TESTS
+    {
+        struct RenameVisits
+        {
+            const std::filesystem::path& target;
+            bool preferred = false;
+            bool classic   = false;
+        };
+        RenameVisits visits{settingsPath};
+        const Common::Files::TargetRenameCheck check{
+            .context = &visits,
+            .verify  = [](void* context, FILE_INFO_BY_HANDLE_CLASS informationClass) noexcept -> HRESULT
+        {
+            auto& visit = *static_cast<RenameVisits*>(context);
+            if (informationClass == FileRenameInfoEx)
+            {
+                visit.preferred = true;
+                return S_OK;
+            }
+            visit.classic = WriteTestBytes(visit.target, "new revision");
+            return visit.classic ? HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) : E_FAIL;
+        },
+        };
+        Common::Files::LocalFileTransaction staged;
+        const bool ready = WriteTestBytes(settingsPath, "accepted revision") &&
+                           SUCCEEDED(Common::Files::LocalFileTransaction::Create(settingsPath, Common::Files::ExistingTargetPolicy::Replace, true, staged)) &&
+                           SUCCEEDED(staged.Write("staged publication"));
+        if (ready)
+        {
+            Common::Files::Testing::FailNextLocalFileTransactionRenameEx(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+            const HRESULT result = staged.Commit(std::nullopt, nullptr, nullptr, check);
+            Common::Files::Testing::g_nextRenameExFailure.store(S_OK, std::memory_order_relaxed);
+            Check(result == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && visits.preferred && visits.classic && ReadTestBytes(settingsPath) == "new revision",
+                  L"settings transaction: classic fallback rechecks the destination after the preferred rename is refused",
+                  success);
+        }
+        else
+        {
+            Check(false, L"settings transaction: prepare the classic fallback fixture", success);
+        }
+    }
+    CleanupSettingsTestArtifacts(appId);
+#endif
+
     Common::Settings::Settings seed{};
     seed.theme.currentThemeId = L"builtin/light";
-#ifdef ENABLE_TESTS
-    Common::Files::Testing::FailNextLocalFileTransactionPublish(HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS));
-    const HRESULT lateCollision = Common::Settings::SaveSettings(appId, seed);
-    static_cast<void>(Common::Files::Testing::TakeNextLocalFileTransactionPublishFailure());
-    Check(lateCollision == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && GetFileAttributesW(extendedSettingsPath.c_str()) == INVALID_FILE_ATTRIBUTES,
-          L"settings create-only publication: a late destination collision is a revision conflict",
-          success);
-#endif
     Check(Common::Settings::SaveSettings(appId, seed) == S_OK, L"settings CAS: baseline save succeeds", success);
 
     const std::string firstSavedBytes = ReadTestBytes(settingsPath);
@@ -772,6 +822,19 @@ void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
           L"settings CAS: independent snapshots load from the same revision",
           success);
     firstWriter.theme.currentThemeId = L"builtin/dark";
+    wil::unique_hfile outsideWriter(CreateFileW(extendedSettingsPath.c_str(),
+                                                GENERIC_WRITE,
+                                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                nullptr,
+                                                OPEN_EXISTING,
+                                                FILE_ATTRIBUTE_NORMAL,
+                                                nullptr));
+    const HRESULT heldResult = outsideWriter ? Common::Settings::SaveSettings(appId, firstWriter) : E_UNEXPECTED;
+    outsideWriter.reset();
+    Check(heldResult == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && ReadTestBytes(settingsPath) == firstSavedBytes &&
+              firstWriter.theme.currentThemeId == L"builtin/dark",
+          L"settings CAS: an outside writer prevents publication and preserves the pending change",
+          success);
     Check(Common::Settings::SaveSettings(appId, firstWriter) == S_OK, L"settings CAS: first writer publishes and advances its revision", success);
     staleWriter.theme.currentThemeId = L"builtin/highContrast";
     Check(Common::Settings::SaveSettings(appId, staleWriter) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),

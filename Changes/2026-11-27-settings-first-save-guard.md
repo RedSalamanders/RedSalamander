@@ -1,1 +1,1 @@
-- Preserve a settings file created by a competing writer during the first save and report the revision conflict to the caller.
+- Preserve a settings file created by a competing writer during the first save. Guard accepted existing settings revisions against outside writers and recheck the target stamp at both rename paths.

@@ -800,6 +800,12 @@ HRESULT WriteFileBytesAtomic(const std::filesystem::path& path,
         return hr;
     }
 
+    struct TargetGuard
+    {
+        const std::filesystem::path& path;
+        const std::optional<Common::Settings::SettingsFileStamp>* expected;
+        wil::unique_hfile file;
+    };
     SettingsCommitLock commitLock;
     if (expectedStamp)
     {
@@ -808,21 +814,56 @@ HRESULT WriteFileBytesAtomic(const std::filesystem::path& path,
         {
             return hr;
         }
+    }
 
-        std::optional<Common::Settings::SettingsFileStamp> currentStamp;
-        const HRESULT stampHr = TryGetFileStampForPath(path, currentStamp);
-        if (FAILED(stampHr))
+    TargetGuard guard{path, expectedStamp, {}};
+    Common::Files::TargetRenameCheck targetCheck{};
+    if (expectedStamp && expectedStamp->has_value())
+    {
+        guard.file.reset(CreateFileW(transaction.TargetPath().c_str(),
+                                     FILE_READ_ATTRIBUTES | DELETE,
+                                     FILE_SHARE_READ | FILE_SHARE_DELETE,
+                                     nullptr,
+                                     OPEN_EXISTING,
+                                     FILE_ATTRIBUTE_NORMAL,
+                                     nullptr));
+        if (! guard.file)
         {
-            return stampHr;
+            const DWORD error = GetLastError();
+            if (error == ERROR_SHARING_VIOLATION || error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
+                return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+            return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_OPEN_FAILED : error);
         }
-        if (currentStamp != *expectedStamp)
+        Common::Settings::SettingsFileStamp guardedStamp{};
+        hr = GetFileStampByHandle(guard.file.get(), guardedStamp);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        if (guardedStamp != expectedStamp->value())
         {
             return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
         }
+        targetCheck = {
+            .context = &guard,
+            .verify  = [](void* context, FILE_INFO_BY_HANDLE_CLASS informationClass) noexcept -> HRESULT
+        {
+            auto& target = *static_cast<TargetGuard*>(context);
+            // Classic rename requires a closed destination handle. Recheck the name after releasing it.
+            if (informationClass == FileRenameInfo)
+                target.file.reset();
+
+            std::optional<Common::Settings::SettingsFileStamp> currentStamp;
+            const HRESULT stampHr = TryGetFileStampForPath(target.path, currentStamp);
+            if (FAILED(stampHr))
+                return stampHr;
+            return currentStamp == *target.expected ? S_OK : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        },
+        };
     }
 
     BY_HANDLE_FILE_INFORMATION committedInformation{};
-    hr = transaction.Commit(bytes.size(), writtenStamp ? &committedInformation : nullptr);
+    hr = transaction.Commit(bytes.size(), writtenStamp ? &committedInformation : nullptr, nullptr, targetCheck);
     if (FAILED(hr))
     {
         return publicationStatus(hr);

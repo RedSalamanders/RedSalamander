@@ -114,8 +114,12 @@ Saving must be atomic and conflict-aware to prevent partial writes and stale-sna
    (`ERROR_NO_UNICODE_TRANSLATION`); it is never replaced by an empty JSON string.
 3. Stage the bytes through `Common::Files::LocalFileTransaction`, which creates a unique sibling in the same
    directory, uses the bounded zero-progress-safe handle writer, verifies the requested size, and flushes it.
-4. Under the per-target cross-process commit lock, compare the current target identity with the snapshot's
-   expected identity. A mismatch returns `ERROR_REVISION_MISMATCH` and leaves the target unchanged.
+4. Under the per-target cross-process commit lock, open the existing file with write sharing disabled and
+   compare its handle stamp with the snapshot. A missing target, held writer or changed stamp returns
+   `ERROR_REVISION_MISMATCH`. Recheck the path's stamp immediately before rename. The preferred rename retains
+   the guard. Classic handle rename closes the guard before its own final stamp check. The final
+   name-check-to-rename interval remains because the preferred rename shares delete and the classic rename
+   requires a closed destination handle.
 5. Publish the unique sibling through its open handle. When the snapshot expects a missing target, neither the
    preferred rename nor its compatibility fallback may replace a destination. A competing creation reports
    `ERROR_REVISION_MISMATCH` and preserves the other writer's file. The identity returned to the caller comes
