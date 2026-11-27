@@ -1,0 +1,1 @@
+- Pack and Unpack protect approved Local source revisions from overlapping content writes. A source that fails the revision read stays in place, and Pack keeps its prior archive.
