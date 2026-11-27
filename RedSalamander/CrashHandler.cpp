@@ -126,11 +126,13 @@ std::atomic<bool> g_installed{false};
 
 [[nodiscard]] size_t PruneOldReports(const std::filesystem::path& directory, std::wstring_view pendingDump = {})
 {
-    if (! directory.is_absolute())
+    const auto rootName = directory.root_name().native();
+    const auto root     = directory.root_path();
+    if (! directory.is_absolute() || rootName.size() != 2 || rootName[1] != L':' || GetDriveTypeW(root.c_str()) != DRIVE_FIXED)
         return 0;
 
     // Pin the path components without sharing delete so the scan and removal stay in this directory.
-    auto entered = directory.root_path();
+    auto entered = root;
     std::vector<wil::unique_hfile> ancestors;
     for (const auto& component : directory.relative_path())
     {
