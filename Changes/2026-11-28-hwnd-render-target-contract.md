@@ -1,0 +1,1 @@
+- Align the HWND render-target source checks with the shared factory, target and brush's nonthrowing COM ownership.
