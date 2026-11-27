@@ -18250,6 +18250,11 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 Fail(L"Staged Move metadata Skip did not preserve the source and existing destination.");
                 return true;
             }
+            if (! RunFileOpsCombinedPreContentConsentChecks(state))
+            {
+                Fail(L"Combined pre-content consent did not publish once and keep the source.");
+                return true;
+            }
             bool injectedFailureReached = false;
             if (RecordFileOpsPopupIdleTelemetry(state, true, &injectedFailureReached) || ! injectedFailureReached || state.retainTempRootOnFailure)
             {
