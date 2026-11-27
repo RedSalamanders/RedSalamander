@@ -4,7 +4,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027 28182) // WIL headers
 #include <wil/com.h>
+#pragma warning(pop)
 
 namespace FileOperationsSelfTest
 {

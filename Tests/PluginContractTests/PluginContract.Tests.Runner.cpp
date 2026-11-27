@@ -49,8 +49,11 @@
 #include "WslDistributionCatalog.h"
 #include "YyjsonHelpers.h"
 
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027 28182) // WIL headers
 #include <wil/com.h>
 #include <wil/resource.h>
+#pragma warning(pop)
 #include <yyjson.h>
 
 namespace

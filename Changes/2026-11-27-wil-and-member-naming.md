@@ -1,0 +1,1 @@
+- Apply the shared WIL warning scope to the remaining active product and test includes and configure Clang-Tidy for private and protected member names.

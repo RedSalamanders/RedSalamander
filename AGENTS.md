@@ -60,6 +60,11 @@ Use RedHome's shared `native-build` package for build, restore and packaging. Us
 
 ### RAII is Mandatory
 All Windows resources MUST use WIL RAII wrappers. Manual cleanup (`DestroyIcon`, `DeleteObject`, `EndPaint`, etc.) is **PROHIBITED** (see `RedHome`'s `wil-raii` skill).
+Keep direct WIL COM and resource includes inside a local warning push and pop with the shared vendor warning list.
+
+### Member naming
+
+Private and protected non-static data members use `_camelCase`, with a lowercase ASCII letter immediately after `_`. Public struct data members use `camelCase`. The root `.clang-tidy` enforces private and protected member naming and checks reserved identifiers in first-party code.
 
 ### Performance Validation is Mandatory
 Any new feature, hot-path change, or optimization that can affect responsiveness, throughput, queueing, rendering, startup, search, Compare Directories, File Operations, plugin I/O, or memory retention MUST integrate:
