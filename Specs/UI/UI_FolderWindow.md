@@ -419,7 +419,7 @@ Detailed mode (v1) is multi-line per item: name + a single details line.
 
 ## Persistence
 
-FolderWindow state is persisted in settings (see `Specs/Core/Core_SettingsStore.md`):
+FolderWindow state is persisted in settings (see `Specs/Core/Core_Settings.md`):
 
 - `folders.active`
 - `folders.layout.splitRatio`

@@ -25,7 +25,7 @@ Planned at 2026-10-19. Each row was read at the listed commit:
 Drift check before each slice. The output must be empty, or each change must be reconciled here:
 
 ```powershell
-git -C Z:\src\RedSalamander diff --stat 30c6cce0b..HEAD -- Common/ThemeExpression.h Common/Common/ThemeExpression.cpp Common/ThemeDefinitionIo.h Common/Common/ThemeDefinitionIo.cpp Common/PlugInterfaces/Viewer.h Common/PlugInterfaces/Terminal.h Common/PlugInterfaces/Host.h Common/ViewerDxUiTheme.h Common/ViewerTitleBarTheme.h RedSalamander/AppTheme.h RedSalamander/AppTheme.cpp RedSalamander/DxUiThemePalette.h RedSalamander/HostServices.cpp RedSalamander/FolderWindow.Viewers.cpp Specs/Themes Specs/SettingsStore.schema.json Specs/Core/Core_SettingsStore.md
+git -C Z:\src\RedSalamander diff --stat 30c6cce0b..HEAD -- Common/ThemeExpression.h Common/Common/ThemeExpression.cpp Common/ThemeDefinitionIo.h Common/Common/ThemeDefinitionIo.cpp Common/PlugInterfaces/Viewer.h Common/PlugInterfaces/Terminal.h Common/PlugInterfaces/Host.h Common/ViewerDxUiTheme.h Common/ViewerTitleBarTheme.h RedSalamander/AppTheme.h RedSalamander/AppTheme.cpp RedSalamander/DxUiThemePalette.h RedSalamander/HostServices.cpp RedSalamander/FolderWindow.Viewers.cpp Specs/Themes Specs/SettingsStore.schema.json Specs/Core/Core_Settings.md
 git -C Z:\src\DxUi diff --stat f65e4a4b..origin/main -- include/DxUi/DxUi.h include/DxUi/ThemeColors.h src/Controls/DxUi.Theme.cpp src/Controls/DxUi.WindowHost.cpp src/Controls/DxUi.Grid.cpp Specs/DesignSystem Specs/Plans/WIP/ConsumerUiImprovements_S3_S7_2026-10-11.md AGENTS.md
 git -C Z:\src\RedXe diff --stat f86fa016..origin/main -- Common/PlugInterfaces RedXe/Application.cpp RedXe/PluginHost.cpp RedXe/PluginManager.cpp RedXe/Renderer.cpp RedXe/HostChrome.cpp Specs/Plugins/Plugins_API.md Specs/Core Build build.ps1
 git -C Z:\src\RedPrism diff --stat 0ce2070..origin/main -- RedPrism/ThemePalette.h RedPrism/ApplicationSettings.cpp RedPrism/Application.cpp RedPrism/ChromeHost.cpp RedPrism/CanvasCompositor.h RedPrism/CanvasCompositor.cpp RedPrism/CompositorBlit.hlsl RedPrism/LucideToolButton.cpp Common/SettingsStore.h Build build.ps1
@@ -99,7 +99,7 @@ needs a new owner decision, recorded here with its date.
 | D-2 | Code home | **The DxTheme repository** holds the stateless engine, the snapshot builder and table compiler, and the dependency-free snapshot ABI headers. **DxUi** gains only: control-role ids and metadata (the S7 list), an equality key for `SetTheme`, a scratch-brush API, and seeded tint tables for its controls. DxUi never sees the snapshot format. | Engine-in-DxUi was rejected for three reasons. First, RedXe forbids DxUi headers in the 12 of 13 bundled plugins that do not link DxUi (`Core_DxUiIntegration.md:223-226`), and DxUi has no header-only mode (RTA-4, RTB-11). Second, each product pins a different DxUi revision (RTA-2). Third, DxUi's validators would block a verbatim import (RTA-8). |
 | D-3 | Binary homes, and the DLL question | **No new DLL.**<br>• **RedSalamander:** `Common.dll`, already a DLL beside the exe that all 8 UI plugins link (zero loader or packaging work), hosts the engine and publisher (RTA-3).<br>• **RedXe and RedPrism:** the exe hosts them. | A theme DLL shares code, not data. RedSalamander already ships the engine in `Common.dll`, yet plugins still get copies and derive different colors (§2.2). In RedXe, plugins import only from `Plugins\` and System32 (`PluginHost.cpp:1226-1227`), so a DLL would need two copies and two packaging entries for no gain. RedPrism has no plugins. |
 | D-4 | Dynamic model | **The host compiles theme programs into tables inside the snapshot**: seeded hues, choices, state variants and on-colors. Every consumer only indexes them (C++, HLSL, ViewerWeb JavaScript). The host implements `IThemeSnapshot::Evaluate`, reserved for continuous programs. Time-based programs stay behind the §3.7 gate. | "One evaluator" then means one binary in the host (RTA-5, RTB-19). Today there are 19 recipes, two hash families and seven HSV converters (§2.3). |
-| D-5 | Rainbow semantics | **Per-token Rainbow suppression, which the current spec already requires** (`Core_SettingsStore.md:760`: "Static overrides suppress Rainbow only for those tokens"), plus one on-color rule (D-10). The visible change is approved at T5 with numeric before/after. Flag-driven Rainbow that ignores overrides is not an option, because it would delete that normative rule. | The code honors suppression only for `folderView.itemBackgroundSelected` (`AppTheme.cpp:1115-1129`). Shipped SolarFlare sets three keys statically yet still shows Rainbow there (RTC-4). T5 therefore fixes a bug against the existing spec. There are three on-color rules today (RTC-3). |
+| D-5 | Rainbow semantics | **Per-token Rainbow suppression, which the current spec already requires** (`Core_Settings.md:760`: "Static overrides suppress Rainbow only for those tokens"), plus one on-color rule (D-10). The visible change is approved at T5 with numeric before/after. Flag-driven Rainbow that ignores overrides is not an option, because it would delete that normative rule. | The code honors suppression only for `folderView.itemBackgroundSelected` (`AppTheme.cpp:1115-1129`). Shipped SolarFlare sets three keys statically yet still shows Rainbow there (RTC-4). T5 therefore fixes a bug against the existing spec. There are three on-color rules today (RTC-3). |
 | D-6 | Vocabulary and robustness | **Layering and references.** Layers are DxUi roles ← suite keys ← product keys ← plugin keys, and references only point down that list. Plugin token specs come from static metadata and merge before the document resolves.<br>**Failure isolation.** Suite, plugin and foreign tokens fail one at a time, falling back to their declared value. RedSalamander's own keys keep whole-theme failure until the owner changes it.<br>**High Contrast and semantic colors.** Every token declares a High Contrast mapping. Semantic tokens never inherit Rainbow or accent programs.<br>**Per-plugin control.** Plugins can opt out.<br>**User colors.** A user color that is absent and one set explicitly are distinguished. | RTC-1, RTC-7, RTC-8, RTC-9, RTC-17, RTB-15. |
 | D-7 | What users see | **RedSalamander:** T4 is parity; T5 changes are visible (identical host/viewer roles, one Rainbow per seed, filtered refresh) and each is owner-approved with numeric evidence.<br>**RedPrism:** the default look is unchanged at an injected appearance; adds theme files, Rainbow and a dark caption; accent following is opt-in.<br>**RedXe:** the default look is unchanged; all 13 bundled plugins become themeable (5H4D3R5's third-party art and the camera opt out); adds theme files; background becomes a per-instance override. | RTB-18, RTC-9, RTC-17. |
 | D-8 | Qualification bar | Debug, Release and ASan Debug on x64 and ARM64 for DxTheme and every consuming project. Native ARM64 and ASan runs for the library tests. Parity is compared per architecture on the same machine. RedSalamander's H4 deferral stays unless lifted. | The r2 bar (D-5), plus RTC/RTB findings on per-architecture parity. |
@@ -144,7 +144,7 @@ the plan. These decisions are accepted on that basis. Each slice re-checks the o
 | U1b | **Governance and tests:** measured, not capped. Estimates: RedSalamander 300–450 lines, RedXe 170–300, RedPrism 160–250. Generalizing each product's existing DxUi restore and provenance code by library name cuts this to 40–80 lines each. | Reported. |
 | U2 | **Sample size:** `Samples/HelloTheme` is 40 lines or fewer: publish, share with a DLL, read tokens, apply the caption, handle a change. | Consumer fixture. |
 | U3 | **No imposed facility:** no logger, settings store, string table, new DLL, COM/WinRT runtime or compiled third-party dependency. ABI headers are dependency-free. | Validator. |
-| U4 | **Hot-path cost:** a paint-time read is an array index. Resolution stays within RedSalamander's guards (`Core_SettingsStore.md:762-766`). | A/B/A measurements. |
+| U4 | **Hot-path cost:** a paint-time read is an array index. Resolution stays within RedSalamander's guards (`Core_Settings.md:762-766`). | A/B/A measurements. |
 | U5 | **Updates:** one reviewed lock change per product; rollback by reverting it together with its adapters. | Rehearsed in T6 or T7. |
 
 ## 2. Verified current state
@@ -491,7 +491,7 @@ High Contrast outranks per-widget user settings (RTC-7). F-25 is fixed when the 
 ### 3.7 Rainbow and dynamic themes
 
 **Rainbow**
-- Rainbow becomes a theme whose seeded-tint tokens are compiled tables. Static overrides suppress it per token, as `Core_SettingsStore.md:760` already requires (D-5).
+- Rainbow becomes a theme whose seeded-tint tokens are compiled tables. Static overrides suppress it per token, as `Core_Settings.md:760` already requires (D-5).
 - Per-base program parameters let S/V differ between dark and light.
 - The kinds (b)–(e) in §2.3 stay product logic that reads theme parameters and categorical tokens.
 
@@ -504,7 +504,7 @@ Depth is limited.
 
 **Composition is internal to the host compiler**, for built-in recipes only. Theme authors keep the v2 grammar:
 - expressions stay non-nested;
-- references to paint-time sources stay validation errors (`Core_SettingsStore.md:752`; the Done plan's "terminal" rule at `Theme_ExpressivePaletteAndReferencesPlan_2026-07-13.md:234` stands).
+- references to paint-time sources stay validation errors (`Core_Settings.md:752`; the Done plan's "terminal" rule at `Theme_ExpressivePaletteAndReferencesPlan_2026-07-13.md:234` stands).
 
 Exposing composition to authors would need `formatVersion` 3 and a spec change.
 
@@ -851,7 +851,7 @@ T5 must show zero per-paint palette builds and zero clean-frame allocations, inc
   - "Hash only the resolved sections." Replaced by a hash over every consumer-visible byte.
   - "An 8-name probe list." Replaced by the exact union of today's reads, with the engine mapping kept verbatim.
   - "The Prepare record becomes 32 bytes plus a pointer." Corrected to a 24-byte prefix plus an 8-byte pointer, 32 bytes in total.
-  - "Flag-driven Rainbow is an option." It would delete `Core_SettingsStore.md:760`.
+  - "Flag-driven Rainbow is an option." It would delete `Core_Settings.md:760`.
   - "Composition supersedes the paint-source rule." It is compiler-internal only.
   - "A settings migration rewrites explicit defaults." Replaced by D-19.
   - "Path A as the shared role target." It drops authored `menu.*`/`folderView.*`/`fileOps.*` values; D-9 picks the host mapping instead.
@@ -885,7 +885,7 @@ Never rebaseline silently. Never reclassify a failing required test as optional.
   - `Core_Architecture.md:40-42, :80-83, :87`;
   - the S7 plan's forbid list is rescoped.
 - **RedSalamander:**
-  - `Specs/Core/Core_SettingsStore.md` keeps the acceptance requirements: grammar, limits, High Contrast precedence, performance contract, keys.
+  - `Specs/Core/Core_Settings.md` keeps the acceptance requirements: grammar, limits, High Contrast precedence, performance contract, keys.
   - Also updated: `Specs/Plugins/Plugins_ViewerPlugins.md`, `Specs/Plugins/Plugins_PluginAPI.md`, `Specs/UI/UI_VisualStyle.md`, `Specs/Build/Build_Toolchain.md` (pinned DxTheme), `Specs/Core/Core_SharedHelpers.md`, `Specs/NormativeConsistency.json`, the theming skill, `docs/Themes.md`, `docs/DeveloperGuide.md`, a new `docs/DxTheme.md`, `AGENTS.md:217`, the tool inventory and the tooling-governance spec.
 - **RedXe and RedPrism:** the specs listed in §7.2 and §7.3; new `Core_DxThemeIntegration.md` files; AGENTS consumption rules.
 

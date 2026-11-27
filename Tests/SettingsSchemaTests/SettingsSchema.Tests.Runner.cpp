@@ -38,6 +38,7 @@
 #include "StringConversion.h"
 #include "TestSupport/TestSupport.Tests.ChildProcess.h"
 #include "TestSupport/TestSupport.Tests.FailureReports.h"
+#include "Version.h"
 
 namespace
 {
@@ -729,6 +730,82 @@ void CleanupSettingsTestArtifacts(std::wstring_view appId) noexcept
     const HRESULT backupHr = Common::Settings::BackupSettingsForExplicitReplacement(argv[2], diagnosedStamp, backupPath);
     return backupHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && backupPath.empty() ? 0 : 6;
 }
+
+#ifdef ENABLE_TESTS
+void TestSettingsProfileMigration(bool& success)
+{
+    using namespace Common::Settings;
+
+    if (GetEnvironmentVariableW(L"REDSALAMANDER_TEST_ROOT", nullptr, 0) == 0)
+    {
+        Check(false, L"settings profile migration: a governed test root is required", success);
+        return;
+    }
+
+    const std::wstring appId           = std::format(L"RedSalamanderSettingsProfile-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    const std::filesystem::path target = GetSettingsPath(appId);
+    if (target.empty())
+    {
+        Check(false, L"settings profile migration: the test root authorized the profile", success);
+        return;
+    }
+
+#ifdef _DEBUG
+    Check(target.filename() == appId + L"-debug.settings.json", L"settings profile migration: Debug keeps its own file", success);
+#else
+    Check(target.filename() == appId + L".settings.json", L"settings profile migration: Release uses an unversioned file", success);
+#endif
+    const auto versioned = target.parent_path() / std::format(L"{}-{}.{}.settings.json", appId, VERSINFO_MAJOR, VERSINFO_MINOR);
+    const auto cleanup   = wil::scope_exit([&]() noexcept
+    {
+        CleanupSettingsTestArtifacts(appId);
+        std::error_code ec;
+        static_cast<void>(std::filesystem::remove(std::filesystem::path(Common::Paths::ToExtendedWin32Path(versioned.native())), ec));
+    });
+
+    constexpr std::string_view oldBytes    = R"json({"schemaVersion":16,"fileOperations":{"verifyAfterCopy":true}})json";
+    constexpr std::string_view winnerBytes = R"json({"schemaVersion":16,"fileOperations":{"verifyAfterCopy":false}})json";
+    Check(WriteTestBytes(versioned, oldBytes), L"settings profile migration: the versioned source is present", success);
+
+    Settings imported{};
+    SettingsLoadRecoveryInfo recovery{};
+    const HRESULT importHr = LoadSettingsWithRecoveryInfo(appId, imported, &recovery);
+    Check(importHr == S_OK && recovery.settingsPath == versioned && ! imported.persistence.expectedFileStamp.has_value() && imported.fileOperations &&
+              imported.fileOperations->verifyAfterCopy,
+          L"settings profile migration: a missing canonical file reads the prior profile with create-only save authority",
+          success);
+    const std::filesystem::path extendedTarget(Common::Paths::ToExtendedWin32Path(target.native()));
+    Check(ReadTestBytes(versioned) == oldBytes && ! std::filesystem::exists(extendedTarget),
+          L"settings profile migration: loading preserves the prior bytes and leaves the new path vacant",
+          success);
+
+    Check(WriteTestBytes(target, winnerBytes), L"settings profile migration: a competing first creator published the canonical file", success);
+    Check(SaveSettingsValuesOnly(appId, imported) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && ReadTestBytes(target) == winnerBytes &&
+              ReadTestBytes(versioned) == oldBytes,
+          L"settings profile migration: saving a migrated snapshot preserves the competing file and prior source",
+          success);
+
+    Settings current{};
+    Check(LoadSettingsWithRecoveryInfo(appId, current, &recovery) == S_OK && recovery.settingsPath == target &&
+              current.persistence.expectedFileStamp.has_value() && current.fileOperations && ! current.fileOperations->verifyAfterCopy,
+          L"settings profile migration: an existing canonical file takes precedence",
+          success);
+
+    CleanupSettingsTestArtifacts(appId);
+    Check(LoadSettingsWithRecoveryInfo(appId, imported, &recovery) == S_OK && SaveSettingsValuesOnly(appId, imported) == S_OK &&
+              imported.persistence.expectedFileStamp.has_value() && std::filesystem::exists(extendedTarget) && ReadTestBytes(versioned) == oldBytes,
+          L"settings profile migration: a first save creates the canonical profile and leaves the versioned source intact",
+          success);
+
+    CleanupSettingsTestArtifacts(appId);
+    constexpr std::string_view malformed = "invalid prior profile";
+    Check(WriteTestBytes(versioned, malformed), L"settings profile migration: the malformed prior profile is present", success);
+    Check(LoadSettingsWithRecoveryInfo(appId, current, &recovery) == S_FALSE && recovery.settingsPath == versioned && ! recovery.backedUp &&
+              ! current.persistence.expectedFileStamp.has_value() && ReadTestBytes(versioned) == malformed,
+          L"settings profile migration: recovery preserves the malformed prior source in place",
+          success);
+}
+#endif
 
 void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
 {
@@ -1609,7 +1686,7 @@ int wmain(int argc, wchar_t** argv)
 
     // Step 3: synthetic-input tests (no external file needed).
     Check(Common::Settings::GetSettingsPath(L"RedSalamanderMonitor").filename() == L"RedSalamanderMonitor-7.0.settings.json",
-          L"Monitor Preferences address the installed Release helper in every app configuration",
+          L"the legacy monitor profile has the same path in every app configuration",
           success);
     TestSyntheticDefaults(success);
     TestSyntheticMinMax(success);
@@ -1622,6 +1699,7 @@ int wmain(int argc, wchar_t** argv)
     TestSettingsStoreConflictAndPrimitiveGuards(success);
     TestFloatingTerminalSettingsPersistence(success);
 #ifdef ENABLE_TESTS
+    TestSettingsProfileMigration(success);
     TestSettingsStoreRecoveryBackupCas(success);
 #endif
     TestConnectionProfileIdentityGuards(success);

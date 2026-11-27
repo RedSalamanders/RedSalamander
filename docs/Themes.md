@@ -135,7 +135,7 @@ see.
 - A failed settings hot reload keeps the last valid live theme rather than partially applying a broken graph.
 - `builtin/rainbow` can be used as a base. A static override replaces Rainbow only for that semantic token; the rest of the inherited Rainbow behavior remains active.
 
-The complete format, limits, semantic-key catalog, and evaluation rules are defined in `Specs/Core/Core_SettingsStore.md`.
+The complete format, limits, semantic-key catalog, and evaluation rules are defined in `Specs/Core/Core_Settings.md`.
 
 ## Running-application examples
 

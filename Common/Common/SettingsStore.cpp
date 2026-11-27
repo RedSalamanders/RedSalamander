@@ -57,8 +57,9 @@
 
 namespace
 {
-constexpr wchar_t kCompanyDirectoryName[]  = L"RedSalamander";
-constexpr wchar_t kSettingsDirectoryName[] = L"Settings";
+constexpr wchar_t kCompanyDirectoryName[]               = L"RedSalamander";
+constexpr wchar_t kSettingsDirectoryName[]              = L"Settings";
+constexpr std::wstring_view kLegacyMonitorSettingsAppId = L"RedSalamanderMonitor";
 
 constexpr size_t kMaxSettingsFileBytes = 16u * 1024u * 1024u; // 16 MiB safety limit
 
@@ -5662,67 +5663,33 @@ void MaybeStallSettingsRecoveryBeforeBackupForTest() noexcept
     return base;
 }
 
-[[nodiscard]] std::wstring GetLegacySettingsFileName(std::wstring_view appId)
+[[nodiscard]] std::wstring GetReleaseSettingsFileName(std::wstring_view appId)
 {
-    std::wstring fileName(appId);
-    fileName += L".settings.json";
-    return fileName;
+    return std::format(L"{}.settings.json", appId);
 }
 
 [[nodiscard]] std::wstring GetVersionedSettingsFileName(std::wstring_view appId)
 {
-    std::wstring fileName(appId);
-    fileName += std::format(L"-{}.{}", VERSINFO_MAJOR, VERSINFO_MINOR);
-    fileName += L".settings.json";
-    return fileName;
+    return std::format(L"{}-{}.{}.settings.json", appId, VERSINFO_MAJOR, VERSINFO_MINOR);
 }
 
 #ifdef _DEBUG
 [[nodiscard]] std::wstring GetDebugSettingsFileName(std::wstring_view appId)
 {
-    std::wstring fileName(appId);
-    fileName += L"-debug.settings.json";
-    return fileName;
+    return std::format(L"{}-debug.settings.json", appId);
 }
 #endif
 
-[[nodiscard]] std::filesystem::path GetLegacySettingsPath(std::wstring_view appId) noexcept
+[[nodiscard]] bool IsSettingsFileMissing(const std::filesystem::path& path) noexcept
 {
-    const std::filesystem::path base = GetSettingsDirectoryPath();
-    if (base.empty())
-    {
-        return {};
-    }
-    return base / GetLegacySettingsFileName(appId);
-}
-
-#ifdef _DEBUG
-[[nodiscard]] std::filesystem::path GetVersionedSettingsPath(std::wstring_view appId) noexcept
-{
-    const std::filesystem::path base = GetSettingsDirectoryPath();
-    if (base.empty())
-    {
-        return {};
-    }
-    return base / GetVersionedSettingsFileName(appId);
-}
-#endif
-
-[[nodiscard]] bool IsSettingsFilePresent(const std::filesystem::path& path) noexcept
-{
-    if (path.empty())
-    {
-        return false;
-    }
-
     const std::wstring extendedPath = Common::Paths::ToExtendedWin32Path(path.native());
-    const DWORD attrs               = GetFileAttributesW(extendedPath.c_str());
-    if (attrs == INVALID_FILE_ATTRIBUTES)
+    if (GetFileAttributesW(extendedPath.c_str()) != INVALID_FILE_ATTRIBUTES)
     {
         return false;
     }
 
-    return (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0;
+    const DWORD error = GetLastError();
+    return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
 }
 } // namespace
 
@@ -5739,14 +5706,16 @@ std::filesystem::path GetSettingsPath(std::wstring_view appId) noexcept
         return {};
     }
 
-    // RedMonitor is a separately installed Release helper in every consumer configuration.
-    if (appId == L"RedSalamanderMonitor")
+    // Preserve the legacy monitor profile for compatibility with older installations.
+    if (appId == kLegacyMonitorSettingsAppId)
+    {
         return base / L"RedSalamanderMonitor-7.0.settings.json";
+    }
 
 #ifdef _DEBUG
     return base / GetDebugSettingsFileName(appId);
 #else
-    return base / GetVersionedSettingsFileName(appId);
+    return base / GetReleaseSettingsFileName(appId);
 #endif
 }
 
@@ -5806,51 +5775,54 @@ std::string_view GetSettingsStoreSchemaJsonUtf8() noexcept
 
 namespace
 {
-[[nodiscard]] HRESULT ResolveSettingsLoadPath(std::wstring_view appId, std::filesystem::path& outPath) noexcept
+[[nodiscard]] HRESULT ResolveSettingsLoadPath(std::wstring_view appId, std::filesystem::path& outPath, bool* canonicalTarget = nullptr) noexcept
 {
+    if (canonicalTarget)
+    {
+        *canonicalTarget = true;
+    }
     outPath = GetSettingsPath(appId);
     if (outPath.empty())
     {
         return E_FAIL;
     }
+    if (! IsSettingsFileMissing(outPath))
+    {
+        return S_OK;
+    }
 
+    const std::filesystem::path directory   = outPath.parent_path();
+    const bool legacyMonitor                = appId == kLegacyMonitorSettingsAppId;
+    const std::filesystem::path releasePath = directory / GetReleaseSettingsFileName(appId);
+    std::filesystem::path fallback;
+    if (legacyMonitor)
+    {
+        fallback = releasePath;
+    }
+    else
+    {
 #ifdef _DEBUG
-    if (! IsSettingsFilePresent(outPath))
-    {
-        const std::filesystem::path versionedPath = GetVersionedSettingsPath(appId);
-        if (IsSettingsFilePresent(versionedPath))
+        if (! IsSettingsFileMissing(releasePath))
         {
-            outPath = versionedPath;
+            fallback = releasePath;
         }
         else
-        {
-            const std::filesystem::path legacyPath = GetLegacySettingsPath(appId);
-            if (IsSettingsFilePresent(legacyPath))
-            {
-                outPath = legacyPath;
-            }
-            else
-            {
-                return S_FALSE;
-            }
-        }
-    }
-#else
-    if (! IsSettingsFilePresent(outPath))
-    {
-        const std::filesystem::path legacyPath = GetLegacySettingsPath(appId);
-        if (IsSettingsFilePresent(legacyPath))
-        {
-            outPath = legacyPath;
-        }
-        else
-        {
-            return S_FALSE;
-        }
-    }
 #endif
+        {
+            fallback = directory / GetVersionedSettingsFileName(appId);
+        }
+    }
 
-    return outPath.empty() ? S_FALSE : S_OK;
+    if (IsSettingsFileMissing(fallback))
+    {
+        return S_FALSE;
+    }
+    outPath = std::move(fallback);
+    if (canonicalTarget)
+    {
+        *canonicalTarget = false;
+    }
+    return S_OK;
 }
 
 void ResetSettingsLoadRecoveryInfo(SettingsLoadRecoveryInfo* recovery) noexcept
@@ -6279,10 +6251,7 @@ void PrepareLoadedSettingsForSaveTarget(std::wstring_view appId, const std::file
         return;
     }
 
-    // Debug/version and legacy migration fallbacks are source imports, not the file this
-    // process will publish. The canonical target was absent when resolution selected the
-    // fallback, so CAS must expect a missing target and must not block to protect the
-    // separate source file.
+    // Fallback profiles are import sources. Save against the observed absence of the canonical name.
     settings.persistence.expectedFileStamp.reset();
     settings.persistence.savePermission = SettingsSavePermission::Automatic;
 }
@@ -6312,7 +6281,8 @@ HRESULT LoadSettingsWithRecoveryInfo(std::wstring_view appId, Settings& out, Set
     out = Settings{};
 
     std::filesystem::path path;
-    const HRESULT resolveHr = ResolveSettingsLoadPath(appId, path);
+    bool canonicalTarget    = false;
+    const HRESULT resolveHr = ResolveSettingsLoadPath(appId, path, &canonicalTarget);
     if (resolveHr != S_OK)
     {
         if (recovery)
@@ -6328,7 +6298,7 @@ HRESULT LoadSettingsWithRecoveryInfo(std::wstring_view appId, Settings& out, Set
         return resolveHr;
     }
 
-    HRESULT loadHr = LoadSettingsFromResolvedPath(path, out, true, true, recovery);
+    HRESULT loadHr = LoadSettingsFromResolvedPath(path, out, canonicalTarget, true, recovery);
     if (loadHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH))
     {
         // The source changed after it was read but before recovery could back it up. Reload the
@@ -6337,7 +6307,7 @@ HRESULT LoadSettingsWithRecoveryInfo(std::wstring_view appId, Settings& out, Set
         out = Settings{};
 
         path.clear();
-        const HRESULT retryResolveHr = ResolveSettingsLoadPath(appId, path);
+        const HRESULT retryResolveHr = ResolveSettingsLoadPath(appId, path, &canonicalTarget);
         if (retryResolveHr != S_OK)
         {
             if (recovery)
@@ -6352,7 +6322,7 @@ HRESULT LoadSettingsWithRecoveryInfo(std::wstring_view appId, Settings& out, Set
             }
             return retryResolveHr;
         }
-        loadHr = LoadSettingsFromResolvedPath(path, out, true, true, recovery);
+        loadHr = LoadSettingsFromResolvedPath(path, out, canonicalTarget, true, recovery);
     }
     if (SUCCEEDED(loadHr))
     {
@@ -6405,7 +6375,8 @@ HRESULT BackupSettingsForExplicitReplacement(std::wstring_view appId,
 {
     backupPath.clear();
     std::filesystem::path path;
-    const HRESULT resolveHr = ResolveSettingsLoadPath(appId, path);
+    bool canonicalTarget    = false;
+    const HRESULT resolveHr = ResolveSettingsLoadPath(appId, path, &canonicalTarget);
     if (resolveHr != S_OK)
     {
         if (resolveHr == S_FALSE && expectedStamp.has_value())
@@ -6413,6 +6384,11 @@ HRESULT BackupSettingsForExplicitReplacement(std::wstring_view appId,
             return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
         }
         return resolveHr;
+    }
+
+    if (! canonicalTarget)
+    {
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
     }
 
     const std::wstring extendedPath = Common::Paths::ToExtendedWin32Path(path.native());

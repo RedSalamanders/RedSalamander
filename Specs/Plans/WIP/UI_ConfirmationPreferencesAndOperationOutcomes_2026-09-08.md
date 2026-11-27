@@ -51,7 +51,7 @@ Line numbers below are anchors at the planned commit; verify symbols after drift
 | `Specs/FileSystem/FileSystem_FileOperations.md:1095` | Ordinary attributes/timestamps are best effort; compression/ACL inheritance is intentional; security-significant Move loss has a separate consent gate. | Do not treat all attributes as equivalent or all inheritance as loss. |
 | `RedSalamander/FolderWindow.FileSystem.Commands.cpp:1369,1374` | Compressed and Encrypted checkboxes are explicitly disabled in Change Attributes. | NTFS compression/encryption command confirmation is deferred until actual mutation support exists. |
 | `RedSalamander/FindFilesWindow.cpp:4477` | `OnClose()` marks close requested and cancels the session before deferred teardown. | Evaluate user-close policy before changing that state; cancellation/teardown remains asynchronous. |
-| `Specs/Core/Core_SettingsStore.md:502`, `RedSalamander/FileActionLauncher.cpp` | User Menu launches configured external commands through shared macro/selection handling. | A generic command review is meaningful; there is no dedicated “names to compare” contract to reuse. |
+| `Specs/Core/Core_Settings.md:502`, `RedSalamander/FileActionLauncher.cpp` | User Menu launches configured external commands through shared macro/selection handling. | A generic command review is meaningful; there is no dedicated “names to compare” contract to reuse. |
 | `Specs/Plugins/Plugins_VirtualFileSystem.md:2717`, `RedSalamander/FolderWindow.FileSystem.Commands.cpp:12403,12608` | Mounted 7z is read-only; separate Pack/Unpack commands exist, with options and extraction conflict policy. | Distinguish browsing, extraction, archive-file replacement, and future archive editing/update. |
 
 Read-only searches of current command/settings surfaces did not establish a general Always on Top command, archive edit/write-back lease workflow, User Menu two-file comparison dialog, or Compare one/two-hour exception-notification contract. Those rows are **deferred/not applicable**, not claims that the underlying capabilities have been implemented.
@@ -370,7 +370,7 @@ The executor may create `RedSalamander/Preferences.Confirmation.h/.cpp` and focu
 Authoritative files to update as each behavior lands:
 
 1. `Specs/UI/UI_PreferencesDialog.md` — page, defaults, search/accessibility, draft/Apply semantics.
-2. `Specs/Core/Core_SettingsStore.md` and settings schema — new section, metadata policy, parse/prune/reload migration.
+2. `Specs/Core/Core_Settings.md` and settings schema — new section, metadata policy, parse/prune/reload migration.
 3. `Specs/FileSystem/FileSystem_FileOperations.md` — admission/origin policy, policy-origin exact replacement decisions, delete invariants, metadata requirements and aggregate truth. Explicitly reconcile the current “only typed user decision” receipt wording with qualified policy-origin ordinary overwrites.
 4. `Specs/UI/UI_FileOperationsPopup.md` — options, combined reason prompts, warning/result states, hide-vs-Cancel behavior.
 5. `Specs/UI/UI_CommandMenuKeyboard.md` and `Specs/UI/UI_FolderView.md` — F5/F6 defaults, explicit options stability, clipboard/drop and Change Attributes/Pack/Unpack behavior. Routine labels must follow the menu's existing ellipsis convention when they now open a dialog.

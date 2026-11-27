@@ -5,7 +5,7 @@ description: Create or update RedSalamander settings-backed Preferences pages wi
 
 # Build Preferences Pages
 
-Read `Specs/UI/UI_PreferencesDialog.md`, `Specs/Core/Core_SettingsStore.md`, and the affected page implementation before editing.
+Read `Specs/UI/UI_PreferencesDialog.md`, `Specs/Core/Core_Settings.md`, and the affected page implementation before editing.
 
 ## Follow the complete settings path
 

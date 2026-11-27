@@ -6,11 +6,10 @@ RedSalamander stores per-user settings as JSON5 under:
 
 Typical filenames:
 
-- Release: `RedSalamander-<Major>.<Minor>.settings.json`
-- Debug: `RedSalamander-debug.settings.json`
-- Legacy (older builds): `RedSalamander.settings.json`
+- Release uses `RedSalamander.settings.json`.
+- Debug uses `RedSalamander-debug.settings.json`.
 
-In Debug builds, RedSalamander first looks for `RedSalamander-debug.settings.json`. If it does not exist, it falls back to the versioned or legacy settings file.
+If the Release file is missing, RedSalamander reads the previous `RedSalamander-<Major>.<Minor>.settings.json` for the current major and minor version. Debug can read the Release file when its own file is missing. The first save creates the selected profile and preserves the source file.
 
 You can open the main settings file from **Preferences -> Advanced -> Open settings file**.
 For viewer settings, open **File > Open Settings File** in [RedMonitor](Monitor.md).
@@ -72,7 +71,7 @@ Every settings file carries a `schemaVersion` field at its root, and RedSalamand
 }
 ```
 
-If a file's `schemaVersion` is missing, not an integer, or outside the supported range on a cold startup, RedSalamander backs up the existing file by renaming it to `*.bad.<UTC timestamp>`, restores the built-in defaults, and continues. Your previous values are preserved on disk in the `.bad.*` backup, but they are not carried forward into the new defaults file. When upgrading across a version bump, treat it as a reset of persisted settings rather than a migration.
+If the active profile has a missing, malformed or unsupported older `schemaVersion` at cold startup, RedSalamander backs it up to `*.bad.<UTC timestamp>` and uses built-in defaults. A profile from a newer schema stays in place and requires confirmation for replacement. A previous filename used as a migration source also stays in place.
 
 For the maintainer-facing rules around bumping the version, see [Settings Store Internals](dev/SettingsStore-Internals.md).
 

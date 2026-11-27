@@ -153,7 +153,27 @@
       "discrepancyIds": []
     },
     {
+      "path": "Specs/Core/Core_CrashHandling.md",
+      "status": "VERIFIED_MATCH",
+      "contractOwner": "Fatal dump writer and restart recovery",
+      "implementationAnchors": ["RedSalamander/CrashHandler.cpp", "RedSalamander/CrashQuarantine.cpp", "RedSalamander/RedSalamander.cpp"],
+      "testAnchors": ["Tests/CrashHandlingTests/CrashHandling.Tests.Runner.cpp", "RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.Tests.Cases.CoreDiffs.cpp"],
+      "siblingSpecs": ["Specs/Core/Core_StartupBootstrap.md"],
+      "reviewedSections": ["installation and fatal paths", "local artifacts and restart", "qualification"],
+      "reviewerNote": "The source and governed fixtures cover dump publication, marker claims, retention and local restart actions. Source-bound native and interactive execution remain pending."
+    },
+    {
       "path": "Specs/Core/Core_SettingsStore.md",
+      "status": "VERIFIED_MATCH",
+      "contractOwner": "Common SettingsStore and schema",
+      "implementationAnchors": ["Common/Common/SettingsStore.cpp"],
+      "testAnchors": ["Tests/SettingsSchemaTests/SettingsSchema.Tests.Runner.cpp"],
+      "siblingSpecs": ["Specs/Core/Core_Settings.md"],
+      "reviewedSections": ["settings contract link"],
+      "reviewerNote": "The historical path links to the active settings contract."
+    },
+    {
+      "path": "Specs/Core/Core_Settings.md",
       "status": "VERIFIED_MATCH",
       "contractOwner": "Common SettingsStore and schema",
       "implementationAnchors": ["Common/Common/SettingsStore.cpp", "Specs/SettingsStore.schema.json", "RedSalamander/FolderWindow.FileOperationsInternal.h", "RedSalamander/FolderWindow.FileOperations.State.Runtime.cpp", "RedSalamander/SettingsHotReload.cpp"],
@@ -651,7 +671,7 @@
       "contractOwner": "Preferences dialog and settings pages",
       "implementationAnchors": ["RedSalamander/Preferences.cpp", "RedSalamander/Preferences.Dialog.cpp", "RedSalamander/Preferences.Internal.cpp", "Common/Common/SettingsStore.cpp"],
       "testAnchors": ["RedSalamander/SelfTest/Commands/Commands.Tests.Preferences.cpp", "RedSalamander/SelfTest/Commands/Commands.Tests.Preferences.Dispatch.cpp", "RedSalamander/SelfTest/Commands/Commands.Tests.Preferences.ChromeAndPlugins.cpp", "RedSalamander/SelfTest/Commands/Commands.Tests.Preferences.ViewersAndKeyboardLists.cpp"],
-      "siblingSpecs": ["Specs/Core/Core_SettingsStore.md", "Specs/UI/UI_CommandMenuKeyboard.md", "Specs/UI/UI_DxUiSharedGrid.md"],
+      "siblingSpecs": ["Specs/Core/Core_Settings.md", "Specs/UI/UI_CommandMenuKeyboard.md", "Specs/UI/UI_DxUiSharedGrid.md"],
       "reviewedSections": ["all normative sections"],
       "reviewerNote": "Compared category/page inventory, draft/apply/cancel and partial-failure semantics, schema/default binding, plugin configuration, keyboard/file-action/theme pages, the two-toggle Mouse pane-focus settings page, native-edit boundary, validation, DPI/theme/UIA, and teardown with implementation/schema/tests. Migration diary and feature proposals were removed or routed to decisions. Focused I27 harness source review, 2026-10-05: the reordered Viewers clipboard fixture clears retained text before the quiet point, settles selection and focus, then makes one copy and requires exact actual system read without debug fallback. This anchors the fixture and its observed policy only; no Preferences product behavior changed, and final Full qualification remains separately receipt-dependent.",
       "resolution": "SPEC_STALE_AND_PROPOSAL_LEAK_RESOLVED",
@@ -686,7 +706,7 @@
       "contractOwner": "shared top-level tool-window placement and shell behavior",
       "implementationAnchors": ["Common/WindowSizing.h","Common/ModalWindowShell.h","RedSalamander/FindFilesWindow.cpp"],
       "testAnchors": ["Tools/Tests/ModalWindowShellSourceContracts.Tests.ps1","Tests/ProductUiTests/ProductUi.Tests.Runner.cpp"],
-      "siblingSpecs": ["Specs/Core/Core_SettingsStore.md", "Specs/UI/UI_DxUiWinUIDesign.md"],
+      "siblingSpecs": ["Specs/Core/Core_Settings.md", "Specs/UI/UI_DxUiWinUIDesign.md"],
       "reviewedSections": ["all normative sections"],
       "reviewerNote": "Compared owner/activation, restore/clamp and minimum size, DPI/monitor changes, modal shell behavior, accepted placement persistence, taskbar/topmost rules, teardown, and per-window override boundary with shared helpers and representative windows/tests. Blanket resizability remains a decision, not a current rule. Targeted I19 ownership update, 2026-09-12: deleted legacy source anchors now resolve to the exact dependency lock/imports and actual product adapters/tests. Shared implementation and control suites live in DxUi. This does not restamp the historical whole-document review or claim current Full, native ARM64, package or paired resource acceptance; those remain tracked in I19. Targeted I19 local closeout, 2026-09-13: native 1232d181 passes x64 Debug Fresh Full (2,122 passed, 0 failed, 52 skipped) and Release Fresh Full (2,118 passed, 0 failed, 56 skipped), each 20/20 entries with 14 actual module identities verified. Portable A/B/A passes with 11 packaged identities and identical baseline payloads. The user's accepted resource trade-off is retained; ARM64/ASan are deferred to H4. Original failures and skips remain evidence. This updates only the I19 qualification status; it does not restamp the whole-document review or claim publication, consumer master merges, hardware coverage or deferred native-platform passes.",
       "discrepancyIds": []
