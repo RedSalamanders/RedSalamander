@@ -468,7 +468,7 @@ evidence, not a permanent exemption.
 | External OLE / `CF_HDROP` drop | Qualify the local source, then `TransferPlan`; report Copy to OLE until asynchronous Move is proven |
 | Find Files Copy/Move/Delete | `TransferPlan` or `DeletePlan`; retain resolved provider/item correlation |
 | Compare Directories synchronization | `TransferPlan` with complete `explicitMappings`; Compare summary is the ingress confirmation |
-| Pack cleanup | `DeletePlan(Permanent, PackCleanup)` after successful/verified pack; the archive prompt supplies the one captured `ArchiveDeleteAfter` consent |
+| Pack cleanup | A regular-file selection uses `DeletePlan(Permanent, PackCleanup)` after publication. A directory selection uses the scheduled Pack task's exact tree cleanup phase after one deferred confirmation. |
 | Unpack cleanup | `DeletePlan(Permanent, UnpackCleanup)` after successful extraction; the archive prompt supplies the one captured `ArchiveDeleteAfter` consent and no private `std::filesystem::remove` is permitted |
 | F7 Create Folder | `CreateDirectoryAdmission`; one name prompt captures the provider and parent, then the worker validates and creates |
 | Inline F2 | One-step `RenamePlan(InlineRename)`; the inline editor supplies the name, and qualified same-parent routes can capture a provider source token |
@@ -2165,13 +2165,34 @@ records inventory preparation, archive format, entry count, selected root count 
 measures worker execution. `archive.pack.admission.ui_thread_us` measures pane capture, options, consent and task admission.
 Pack requires an error-free source listing and keeps the selected originals if any entry is omitted from the archive.
 For a regular-file selection, both Pack writers read from each approved source identity and revision.
+Each such read holds a Local handle that excludes data writers for the read lifetime and checks the
+approved revision on that handle. A writer already holding the source or a revision mismatch fails
+the operation before publication and leaves the prior output and sources intact.
 The cleanup task retains the published archive's exact file handle with write and delete sharing denied while it
 rebinds those versions for nonrecursive Delete before removing any selected file.
-If Pack cannot prove the exact cleanup set, including the descendants of selected directories, it
-writes the archive and keeps the originals without asking to delete them. After complete publication,
-the pane alert reports that Pack created the archive and kept the originals. When a source entry was
-omitted, the alert reports incomplete packing and retained originals. Archive admission requires the
-version receipt and rejects recursive Delete.
+A selection containing a directory uses the same Pack scheduler task for archive creation and cleanup.
+The task reserves write scopes for the selected roots. On the worker it binds the selected identities
+and every included directory and file, verifies their parent lineage and complete immediate
+membership, and captures each regular file's version. The bound tree includes empty directories.
+The task asks once on its card before encoding, displays the full member count, and defaults to
+Cancel. The question also discloses any recognized leftover in the tree. Both writers read the
+approved file versions through their retained exact bindings.
+
+After successful publication, Pack holds the exact archive with write and delete sharing denied.
+It pins the source ancestors and rebinds the entire approved tree with strict Delete authority before
+it removes any source. An altered ancestor, membership, file version or leftover receipt stops
+preflight. A read-only item also stops preflight without a separate override grant.
+The task closes its read witnesses and deletes the approved objects by handle, with children before
+their parents and no recursive or pathname fallback. An unapproved child arriving after preflight
+survives and prevents the nonempty directory from being removed. The task stops on the first
+unconfirmed or failed deletion and retains the published archive.
+
+The tree proof admits at most 4,096 entries and ancestor bindings per pass. If the worker cannot
+prove the initial set, it can publish the archive and keep the originals without asking to delete
+them. The pane reports complete publication with retained originals or incomplete packing when an
+entry was omitted. Tree timing is reported with `archive.pack.cleanup_tree_capture_us`,
+`archive.pack.cleanup_tree_preflight_us` and `archive.pack.cleanup_tree_delete_us`. The metrics
+report the archive format, bound or removed counts, and result.
 When an exact regular-file Pack or Unpack selection contains a possible leftover, the permanent-delete
 confirmation includes the leftover disclosure. Confirming accepts the exact artifact touch receipt.
 Admission compares the receipt before publishing the cleanup task and the worker checks it again after waiting.
@@ -2188,8 +2209,8 @@ If Unpack skips a requested entry because of a destination conflict or reports
 incomplete extraction, it keeps the selected archive set and reports that in
 the pane. Before asking to delete the selected archives, Unpack captures each
 regular archive's provider identity and revision. It rebinds each file against
-that snapshot before reading from the binding, including ZIP fallback
-extraction. The cleanup plan carries those snapshots and requires a matching
+that snapshot before opening a revision-checked read handle that excludes writers.
+Both ZIP extraction paths use that handle. The cleanup plan carries those snapshots and requires a matching
 nonrecursive Delete binding for every approved archive before any removal.
 A changed source stops cleanup and is reported on the task. If the original
 selection cannot supply an exact snapshot, Unpack can extract and keeps all

@@ -1516,10 +1516,25 @@ With `FILESYSTEM_BIND_READ_REVISION`, the host requires an immutable, nonempty
 revision token for a regular file. The Local provider captures creation time,
 last-write time, change time and size from the bound file. It uses a
 data-readable handle for these facts and refuses the flag if the location
-cannot supply a usable change time. A revision-qualified Delete uses its
-ordinary strict sharing mode, which protects the compared file against data
-writes or replacement until mutation. The host opts into revision capture
+cannot supply a usable change time. A Local reader opened on a revision-qualified
+binding excludes data writers before comparing the captured revision on the actual
+read handle. A conflicting writer or a changed revision fails the open. The read
+handle keeps its sharing restriction until closed. A revision-qualified Delete
+uses its ordinary strict sharing mode, which protects the compared file against
+data writes or replacement until mutation. The host opts into revision capture
 for an individual binding.
+
+Local bound directories expose the optional `IFileSystemBoundDirectory` interface. It visits
+exact immediate names with their attribute flags, including hidden names, on the retained directory
+object. The directory needs a `FILESYSTEM_BIND_READ_CONTENT` or `FILESYSTEM_BIND_PIN_DIRECTORY` grant.
+The Local provider serializes the cursor on each bound object and refuses a second simultaneous
+listing with `ERROR_BUSY`. Each borrowed name is valid only for the callback. A visitor result other than `S_OK`
+ends enumeration and is returned unchanged. Child binding accepts one leaf and opens it relative
+to that same directory without following a reparse point. Local traversal refuses reparse entries.
+A successful child binding returns one owned object whose identity and optional revision follow the
+same contract as a top-level binding. `FILESYSTEM_BIND_PIN_DIRECTORY` is valid only for a plain
+directory. It requests listing access and withholds write and delete sharing. It confers no Delete
+authority by itself. A consumer must explicitly request `FILESYSTEM_BIND_DELETE` for each mutation.
 
 The local provider binding supports no-follow nonzero `FILE_ID_INFO` identity, regular-file reads
 through a duplicate of the retained content-capable handle, handle-bound metadata writes, exact

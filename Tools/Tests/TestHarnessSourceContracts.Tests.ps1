@@ -5742,7 +5742,11 @@ Specs\TestRuns\local_scratch
         $commands | Should Match 'IDS_MSG_ARCHIVE_OUTPUT_INSIDE_SOURCE'
         $compactCommands = $commands -replace '\s+', ' '
         $compactCommands | Should Match 'if \(! completed\.published\) \{.{0,700}return; \} .{0,460}if \(request\.deleteAfter\)'
-        $compactCommands | Should Match 'if \(event\.hr != S_OK \|\| completed\.hr != S_OK \|\| ! exactCleanup \|\| ! publishedArchive \|\|.{0,1040}return; \} FolderView::FileOperationRequest deleteRequest'
+        ($compactCommands -match 'const bool fileCleanupAvailable = exactCleanup && publishedArchive && cleanupState\.fileSystem\.get\(\) == exactCleanup->fileSystem\.get\(\) && cleanupState\.pluginId == exactCleanup->pluginId && cleanupState\.instanceContext == exactCleanup->instanceContext;') | Should Be $true
+        ($compactCommands -match 'if \(event\.hr != S_OK \|\| completed\.hr != S_OK \|\| \(! treeCleanup && ! fileCleanupAvailable\)\) \{.{0,1040}return; \} if \(! treeCleanup\) \{ FolderView::FileOperationRequest deleteRequest') | Should Be $true
+        ($compactCommands -match 'if \(result\.published && treeApproved\) \{.{0,360}_archiveTask->publishedArchive \? BindPackTree') | Should Be $true
+        ($compactCommands -match 'CreateStoredZipArchive\(inventory\.entries, plan\.targetPath, request\.acceptedVersion, fileCleanup, checkpoint, retainedPublication\)') | Should Be $true
+        ($compactCommands -match 'CreateSevenZipArchive\(inventory\.entries, plan\.targetPath, request\.acceptedVersion, packer, fileCleanup, checkpoint, retainedPublication\)') | Should Be $true
         $compactCommands | Should Match 'deleteRequest\.operation = FILESYSTEM_DELETE; deleteRequest\.origin = FolderView::FileOperationRequest::Origin::PackCleanup.{0,670}cleanup\.publishedArchive = std::make_shared<const wil::unique_hfile>\(std::move\(publishedArchive\)\);.{0,120}StartFileOperationFromFolderView\(pane, std::move\(deleteRequest\), &cleanup\)'
         $commands | Should Not Match 'DeletePackedSources\('
     }
