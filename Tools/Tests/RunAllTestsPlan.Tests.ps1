@@ -859,7 +859,11 @@ Describe 'Run-AllTests inventory desktop admission' {
                 . ([scriptblock]::Create($function.Extent.Text))
             }
             $fixtureRoot = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('native-inventory-' + [guid]::NewGuid().ToString('N'))
-            $testRunContext = @{ TestRoot = (Get-RSTestSandboxRoot -RepoRoot $repoRoot); RunRoot = $fixtureRoot }
+            $testRunContext = @{
+                TestRoot = (Get-RSTestSandboxRoot -RepoRoot $repoRoot)
+                RunRoot = $fixtureRoot
+                ArtifactRoot = Join-Path $fixtureRoot 'artifacts/selftest/last_run'
+            }
             $admissions = [Collections.Generic.List[bool]]::new()
             $children = [Collections.Generic.List[object]]::new()
             $closed = [Collections.Generic.List[object]]::new()
