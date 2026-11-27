@@ -272,6 +272,24 @@ PluginContract's owned-output fixture covers both policies and both handle-renam
 installed after admission, failed publication retaining the namespace pin, exact rollback and a later
 writer reusing the temporary spelling. Candidate publish timings are observational, not a speedup claim.
 
+**Guarded user output.** The caller captures a destination revision before approving an overwrite
+and keeps that value through staging. A missing destination grants create-only publication.
+`GuardedSaveDialog.h` captures the existing target from the shell overwrite callback before the
+default prompt and returns authority for the selected path. The direct test entry points capture
+the version at submission.
+
+`LocalFileTransaction::CommitGuarded` flushes and verifies the private stage before any change to
+the destination name. It opens the accepted regular file without write or delete sharing and
+verifies the volume, file identity, timestamps and size. It moves only that held file to a unique
+recovery sibling and publishes the held stage with a non-replacing rename. Readers can briefly
+observe a vacant destination between the two renames. The older file returns to the destination
+only when the name is still vacant after a failure. A competing creation survives, and the caller
+reports the exact retained backup path. A filesystem that cannot identify or rename the
+held file refuses before losing the prior data. Existing-file recovery uses an exact held handle
+on both the Ex and classic paths. The focused `PluginContractTests --temporary-file-contract`
+covers a pre-publication replacement, classic rename, rollback and a creation between the
+two renames.
+
 ## Warned foreground hotkey dispatch
 
 The registered Alt+F24 fallback dispatches `WM_HOTKEY` to a temporary subclass on the

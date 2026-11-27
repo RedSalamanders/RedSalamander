@@ -1,10 +1,12 @@
 #include "ViewerImgRaw.h"
 
+#include "GuardedSaveDialog.h"
 #include "ViewerImgRaw.Internal.h"
 #include "ViewerImgRaw.ResourcePolicy.h"
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <format>
 #include <functional>
 #include <limits>
@@ -88,6 +90,7 @@ enum class ExportFormat : uint8_t
 struct ExportSaveDialogResult final
 {
     std::wstring path;
+    std::optional<Common::Files::LocalFileVersion> acceptedVersion;
     ExportFormat formatFromFilter = ExportFormat::Png;
 };
 
@@ -226,31 +229,17 @@ std::optional<ExportSaveDialogResult> ShowExportSaveDialog(HWND hwnd, ExportForm
     static_cast<void>(dialog->SetFileTypeIndex(FilterIndexForExportFormat(defaultFormat)));
     static_cast<void>(dialog->SetDefaultExtension(DefaultExtensionForExportFormat(defaultFormat).data()));
 
-    const HRESULT showHr = dialog->Show(hwnd);
-    if (FAILED(showHr))
+    Common::Files::GuardedSaveSelection selection;
+    if (FAILED(Common::Files::ShowGuardedSaveDialog(*dialog.get(), hwnd, selection)))
     {
         return std::nullopt;
     }
 
     UINT typeIndex = 1;
     static_cast<void>(dialog->GetFileTypeIndex(&typeIndex));
-
-    wil::com_ptr<IShellItem> item;
-    const HRESULT itemHr = dialog->GetResult(item.put());
-    if (FAILED(itemHr) || ! item)
-    {
-        return std::nullopt;
-    }
-
-    wil::unique_cotaskmem_string path;
-    const HRESULT nameHr = item->GetDisplayName(SIGDN_FILESYSPATH, path.put());
-    if (FAILED(nameHr) || ! path)
-    {
-        return std::nullopt;
-    }
-
     ExportSaveDialogResult result{};
-    result.path             = path.get();
+    result.path             = selection.path.native();
+    result.acceptedVersion  = selection.acceptedVersion;
     result.formatFromFilter = ExportFormatFromFilterIndex(typeIndex);
     return result;
 }
@@ -356,7 +345,222 @@ void ApplyExportEncoderOptions(IPropertyBag2* options, ExportFormat exportFormat
     }
 }
 
+class ExportFileStream final : public IStream
+{
+public:
+    explicit ExportFileStream(wil::unique_hfile file) noexcept : _file(std::move(file))
+    {
+    }
+
+    ExportFileStream(const ExportFileStream&)            = delete;
+    ExportFileStream& operator=(const ExportFileStream&) = delete;
+
+    [[nodiscard]] static HRESULT Create(HANDLE stage, IStream** output) noexcept
+    {
+        if (! output)
+        {
+            return E_POINTER;
+        }
+        *output = nullptr;
+        wil::unique_hfile file;
+        if (! DuplicateHandle(GetCurrentProcess(), stage, GetCurrentProcess(), file.put(), 0u, FALSE, DUPLICATE_SAME_ACCESS))
+        {
+            return StreamError(ERROR_OPEN_FAILED);
+        }
+        *output = std::make_unique<ExportFileStream>(std::move(file)).release();
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** output) noexcept override
+    {
+        if (! output)
+        {
+            return E_POINTER;
+        }
+        *output = nullptr;
+        if (iid != __uuidof(IUnknown) && iid != __uuidof(ISequentialStream) && iid != __uuidof(IStream))
+        {
+            return E_NOINTERFACE;
+        }
+        *output = static_cast<IStream*>(this);
+        AddRef();
+        return S_OK;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() noexcept override
+    {
+        return _references.fetch_add(1u, std::memory_order_relaxed) + 1u;
+    }
+
+    ULONG STDMETHODCALLTYPE Release() noexcept override
+    {
+        const ULONG remaining = _references.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+        if (remaining == 0u)
+        {
+            const std::unique_ptr<ExportFileStream> finalOwner(this);
+        }
+        return remaining;
+    }
+
+    HRESULT STDMETHODCALLTYPE Read(void* output, ULONG count, ULONG* actual) noexcept override
+    {
+        DWORD read = 0u;
+        if (! ReadFile(_file.get(), output, count, &read, nullptr))
+        {
+            if (actual)
+                *actual = 0u;
+            return StreamError(ERROR_READ_FAULT);
+        }
+        if (actual)
+            *actual = read;
+        return read == count ? S_OK : S_FALSE;
+    }
+
+    HRESULT STDMETHODCALLTYPE Write(const void* input, ULONG count, ULONG* actual) noexcept override
+    {
+        if (actual)
+            *actual = 0u;
+        if (! input && count != 0u)
+            return STG_E_INVALIDPOINTER;
+
+        const auto* bytes = static_cast<const std::byte*>(input);
+        ULONG total       = 0u;
+        while (total < count)
+        {
+            DWORD written = 0u;
+            if (! WriteFile(_file.get(), bytes + total, count - total, &written, nullptr))
+            {
+                return StreamError(ERROR_WRITE_FAULT);
+            }
+            if (written == 0u || written > count - total)
+            {
+                return STG_E_WRITEFAULT;
+            }
+            total += written;
+            if (actual)
+                *actual = total;
+        }
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE Seek(LARGE_INTEGER offset, DWORD origin, ULARGE_INTEGER* position) noexcept override
+    {
+        if (origin > STREAM_SEEK_END)
+        {
+            return STG_E_INVALIDFUNCTION;
+        }
+        LARGE_INTEGER updated{};
+        if (! SetFilePointerEx(_file.get(), offset, &updated, origin))
+        {
+            return StreamError(ERROR_SEEK);
+        }
+        if (position)
+            position->QuadPart = static_cast<ULONGLONG>(updated.QuadPart);
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE SetSize(ULARGE_INTEGER size) noexcept override
+    {
+        if (size.QuadPart > static_cast<ULONGLONG>((std::numeric_limits<int64_t>::max)()))
+        {
+            return STG_E_INVALIDFUNCTION;
+        }
+        FILE_END_OF_FILE_INFO end{};
+        end.EndOfFile.QuadPart = static_cast<LONGLONG>(size.QuadPart);
+        return SetFileInformationByHandle(_file.get(), FileEndOfFileInfo, &end, sizeof(end)) != FALSE ? S_OK : StreamError(ERROR_WRITE_FAULT);
+    }
+
+    HRESULT STDMETHODCALLTYPE Stat(STATSTG* status, DWORD) noexcept override
+    {
+        if (! status)
+        {
+            return STG_E_INVALIDPOINTER;
+        }
+        LARGE_INTEGER size{};
+        if (! GetFileSizeEx(_file.get(), &size))
+        {
+            return StreamError(ERROR_READ_FAULT);
+        }
+        *status                 = {};
+        status->type            = STGTY_STREAM;
+        status->cbSize.QuadPart = static_cast<ULONGLONG>(size.QuadPart);
+        status->grfMode         = STGM_READWRITE;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE Commit(DWORD) noexcept override
+    {
+        return FlushFileBuffers(_file.get()) != FALSE ? S_OK : StreamError(ERROR_WRITE_FAULT);
+    }
+
+    // The encoder uses a single cursor and releases it before publication.
+    HRESULT STDMETHODCALLTYPE CopyTo(IStream* destination, ULARGE_INTEGER size, ULARGE_INTEGER* read, ULARGE_INTEGER* written) noexcept override
+    {
+        if (read)
+            read->QuadPart = 0u;
+        if (written)
+            written->QuadPart = 0u;
+        if (! destination || destination == this)
+            return STG_E_INVALIDPOINTER;
+
+        std::array<std::byte, 16384u> buffer{};
+        while (size.QuadPart != 0u)
+        {
+            const ULONG request  = static_cast<ULONG>((std::min)(size.QuadPart, static_cast<ULONGLONG>(buffer.size())));
+            ULONG received       = 0u;
+            const HRESULT readHr = Read(buffer.data(), request, &received);
+            if (FAILED(readHr))
+                return readHr;
+            if (read)
+                read->QuadPart += received;
+            if (received == 0u)
+                return S_FALSE;
+
+            ULONG sent            = 0u;
+            const HRESULT writeHr = destination->Write(buffer.data(), received, &sent);
+            if (written)
+                written->QuadPart += sent;
+            if (FAILED(writeHr))
+                return writeHr;
+            if (sent != received)
+                return STG_E_MEDIUMFULL;
+            size.QuadPart -= received;
+        }
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE Revert() noexcept override
+    {
+        return STG_E_INVALIDFUNCTION;
+    }
+    HRESULT STDMETHODCALLTYPE LockRegion(ULARGE_INTEGER, ULARGE_INTEGER, DWORD) noexcept override
+    {
+        return STG_E_INVALIDFUNCTION;
+    }
+    HRESULT STDMETHODCALLTYPE UnlockRegion(ULARGE_INTEGER, ULARGE_INTEGER, DWORD) noexcept override
+    {
+        return STG_E_INVALIDFUNCTION;
+    }
+    HRESULT STDMETHODCALLTYPE Clone(IStream**) noexcept override
+    {
+        return E_NOTIMPL;
+    }
+
+private:
+    friend struct std::default_delete<ExportFileStream>;
+    ~ExportFileStream() = default;
+
+    [[nodiscard]] static HRESULT StreamError(DWORD fallback) noexcept
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? fallback : error);
+    }
+
+    std::atomic<ULONG> _references{1u};
+    wil::unique_hfile _file;
+};
+
 HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
+                                 const std::optional<Common::Files::LocalFileVersion>& acceptedVersion,
                                  ExportFormat exportFormat,
                                  uint32_t width,
                                  uint32_t height,
@@ -386,39 +590,14 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    // Atomic export: encode into a sibling temp file in the destination's own directory, then
-    // rename over the destination only after a fully successful encode. Any failure (disk full,
-    // device removed, encoder error, GIF palette quantization failure, oversized dimensions, ...)
-    // must never destroy the original the user confirmed overwriting. Mirrors ViewerWeb's
-    // temp-file + MoveFileExW export pattern. The directory is derived with std::wstring (not
-    // std::filesystem) to keep this noexcept function's existing exception profile — only
-    // std::bad_alloc, as with the std::format calls below. Extended Win32 paths preserve the
-    // sibling-temp guarantee for destinations beyond MAX_PATH.
-    const std::wstring outputWin32Path = Common::Paths::ToExtendedWin32Path(outputPath);
-    std::wstring tempPath;
-    wil::unique_hfile reservation;
-    const Common::Paths::UniqueSiblingFileOptions options{.prefix = L".rsi-", .suffix = L".tmp", .maximumAttempts = 16u};
-    const HRESULT tempHr = Common::Paths::CreateUniqueSiblingFile(outputWin32Path, options, tempPath, reservation);
+    Common::Files::LocalFileTransaction transaction;
+    const auto policy    = acceptedVersion.has_value() ? Common::Files::ExistingTargetPolicy::Replace : Common::Files::ExistingTargetPolicy::FailIfExists;
+    const HRESULT tempHr = Common::Files::LocalFileTransaction::Create(std::filesystem::path(outputPath), policy, false, transaction, L".rsi-", true);
     if (FAILED(tempHr))
     {
         outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_TEMP_CREATE_FAILED_FMT, tempHr);
         return tempHr;
     }
-    reservation.reset();
-
-    // The CREATE_NEW reservation already created a zero-byte temp file. Arm cleanup BEFORE the
-    // WIC objects are created so that on every early-return failure path the WIC stream (declared
-    // below) is destroyed first — closing its file handle — and this scope_exit fires last,
-    // deleting the temp after the handle is gone. On success, `committed` is set only after the
-    // rename, so the (already renamed-away) temp is never deleted.
-    bool committed   = false;
-    auto cleanupTemp = wil::scope_exit([&tempPath, &committed]() noexcept
-    {
-        if (! committed)
-        {
-            static_cast<void>(DeleteFileW(tempPath.c_str())); // best-effort; the original destination is untouched
-        }
-    });
 
     wil::com_ptr<IWICImagingFactory> factory;
     HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.put()));
@@ -428,18 +607,11 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
         return FAILED(hr) ? hr : E_FAIL;
     }
 
-    wil::com_ptr<IWICStream> stream;
-    hr = factory->CreateStream(stream.put());
-    if (FAILED(hr) || ! stream)
-    {
-        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_WIC_STREAM_FAILED_FMT, hr);
-        return FAILED(hr) ? hr : E_FAIL;
-    }
-
-    hr = stream->InitializeFromFilename(tempPath.c_str(), GENERIC_WRITE);
+    wil::com_ptr_nothrow<IStream> stream;
+    hr = ExportFileStream::Create(transaction.GetHandle(), stream.put());
     if (FAILED(hr))
     {
-        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_FILE_OPEN_FAILED_FMT, hr);
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_WIC_STREAM_FAILED_FMT, hr);
         return hr;
     }
 
@@ -606,10 +778,6 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
         return hr;
     }
 
-    // encoder->Commit() flushed all encoded bytes into the stream, but the WIC encoder still holds
-    // an AddRef on the IWICStream (taken in encoder->Initialize(stream.get(), ...)), and the frame
-    // holds the encoder, so the temp file's OS handle stays open. Release the entire WIC object
-    // graph that pins the stream BEFORE the rename, or MoveFileExW fails with a sharing violation.
     frame.reset();
     encoder.reset();
     source.reset();
@@ -617,15 +785,17 @@ HRESULT EncodeBgraToImageFileWic(const std::wstring& outputPath,
     paletteToSet.reset();
     stream.reset();
 
-    if (MoveFileExW(tempPath.c_str(), outputWin32Path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0)
+    std::filesystem::path retainedBackup;
+    hr = transaction.CommitGuarded(acceptedVersion, retainedBackup);
+    if (! retainedBackup.empty())
     {
-        const DWORD lastError = GetLastError();
-        outStatusMessage      = FormatExportError(IDS_VIEWERRAW_EXPORT_FINALIZE_FAILED_FMT, HRESULT_FROM_WIN32(lastError));
-        return HRESULT_FROM_WIN32(lastError); // cleanupTemp removes the temp; the original is untouched
+        Debug::Warning(L"ViewerImgRaw retained the previous version of '{}' at '{}'.", outputPath, retainedBackup.c_str());
     }
-
-    committed = true; // the temp has been renamed onto the destination — do not delete it
-    return S_OK;
+    if (FAILED(hr))
+    {
+        outStatusMessage = FormatExportError(IDS_VIEWERRAW_EXPORT_FINALIZE_FAILED_FMT, hr);
+    }
+    return hr;
 }
 } // namespace
 
@@ -768,6 +938,22 @@ void ViewerImgRaw::BeginExportImpl(HWND hwnd, const wchar_t* outputPathOverride)
         output.append(DefaultExtensionForExportFormat(exportFormat).data());
     }
 
+    const std::filesystem::path destination(output);
+    std::optional<Common::Files::LocalFileVersion> acceptedVersion;
+    if (outputPathOverride && outputPathOverride[0] != L'\0')
+    {
+        const HRESULT observation = Common::Files::ObserveLocalFileDestination(destination, acceptedVersion);
+        if (FAILED(observation))
+        {
+            Debug::Error(L"ViewerImgRaw could not bind the export destination (hr=0x{:08X}).", static_cast<unsigned long>(observation));
+            return;
+        }
+    }
+    else if (Common::Paths::NormalizedWindowsPathEqualsNoCase(output, save->path))
+    {
+        acceptedVersion = save->acceptedVersion;
+    }
+
     ExportEncoderOptions encoderOptions{};
     encoderOptions.jpegQualityPercent      = std::clamp(_config.exportJpegQualityPercent, 1u, 100u);
     encoderOptions.jpegSubsampling         = std::clamp(_config.exportJpegSubsampling, 0u, 4u);
@@ -804,7 +990,8 @@ void ViewerImgRaw::BeginExportImpl(HWND hwnd, const wchar_t* outputPathOverride)
         Release(); // balance the AddRef() above
         return;
     }
-    ctx->work = [this, hwnd, exportFormat, width = w, height = h, encoderOptions, output = std::move(output), pixels = std::move(pixels)]() mutable
+    ctx->work =
+        [this, hwnd, exportFormat, width = w, height = h, encoderOptions, acceptedVersion, output = std::move(output), pixels = std::move(pixels)]() mutable
     {
         auto releaseSelf = wil::scope_exit([&] { Release(); });
 
@@ -834,7 +1021,7 @@ void ViewerImgRaw::BeginExportImpl(HWND hwnd, const wchar_t* outputPathOverride)
         }
         else
         {
-            result->hr = EncodeBgraToImageFileWic(output, exportFormat, width, height, pixels, encoderOptions, result->statusMessage);
+            result->hr = EncodeBgraToImageFileWic(output, acceptedVersion, exportFormat, width, height, pixels, encoderOptions, result->statusMessage);
         }
 
         if (! hwnd || GetWindowLongPtrW(hwnd, GWLP_USERDATA) != reinterpret_cast<LONG_PTR>(this))
