@@ -283,3 +283,25 @@ The test-enabled x64 Release build was source `196c02d8dc53e8b1c30b1201e0cba8611
 The read-only collision offered Replace read-only and Keep both. Explicit replacement cleared the destination's read-only attribute. The Retry fixture verified one attempt per explicit choice after a proved sharing failure and eventual completion. The metadata fixture verified preservation of alternate streams, Mark of the Web and sparse allocation. It exercised separate hydration consent, the combined EFS and sparse allocation choice, publication with the source retained, and Cancel before publication. The `FileOps.SelfTest.MetadataMatrix` row recorded all four scenario groups. Performance log SHA-256 `a2b69a06e8a2f9384c46fcc5938b0c85537e646621992ece33be1d8c8f85bf93`.
 
 The selected pass covers these three cases. The wider workflow walkthrough and the integrated native gates stay open.
+
+### Local archive source revision protection
+
+Candidate `650c2ea733068bbec8c510a5cb74471b52f548f1` excludes overlapping content writes for an approved versioned Local reader. It compares the existing four-part revision on the same handle after obtaining its sharing restriction. Pack and Unpack use this reader after exact cleanup consent. Directory sources still require a separate exact cleanup receipt. [Archive reader PR #381](https://github.com/RedSalamanders/RedSalamander/pull/381)
+
+The frozen baseline `196c02d8dc53e8b1c30b1201e0cba8611fea5a2a` with receipt `35c4bdf6abb56bac20cce67fc5f0fd4a254303dadfb88674085a097e375ac65a` passed all three non-activating x64 Release archive case repetitions. The relevant Local provider, archive command and native fixture inputs match the pre-change candidate base. Baseline run `20261127T193408Z-23604-e42017460a3d4119908785a73d9eb1df` has native case times of 2,330, 1,932 and 2,020 ms. Result SHA-256 `81f11b4241db21e697940023699bd3b16c0ba6b027180bf766f2c0e204fe5480`. Raw metrics SHA-256 `972532cc7a9497ccee66e0a7b28f2fe02a77ef99c3d75cd7ca911ed2a5828dfd`.
+
+The first candidate build, a single-project invocation, passed with zero warnings and errors. Receipt `8957324f6e213acee1c3b9158da5b2109279ea49de39b1891c92c13a074b971a` carried the single-project target kind. The canonical replay `20261127T194656Z-4000-0b163d44b69c47ff970583fb4fbfab71` required the explicit project union and refused that receipt before launching tests. The retry delegates the build and receipt to the same canonical runner.
+
+The canonical x64 Release project-union build finished with zero warnings and errors. Receipt `afeb761141ca932aa7ce6ae1361f82298b9fe5ec320d732acb4826079935eade` attests 166 outputs. Run `20261127T194823Z-73460-19917ccd9d6a4cbbbbc7e4cd3726d030` passed all three non-activating archive repetitions with zero failures or skips. The native case times were 2,315, 1,888 and 2,003 ms. Native result SHA-256 `f32972c5e8a3ed65ec9386375f22debb14c3c8142a3bd64f09d0143bd3b9255e`. Raw metrics SHA-256 `67f2e44e3aa5f782af768dca09e9582038af18b01c04acb6050b6407e5f2f18b`. The filtered repository verdict was `NOT_EVALUATED`.
+
+All six busy-source Pack attempts, three ZIP and three 7z, reached the worker and reported `0x80070020`. The native assertions checked exact cleanup consent, preserved source and pre-existing output bytes, and no active cleanup. Each repetition also denied a new writer while its versioned reader was open and refused the old binding after a same-size rewrite.
+
+The existing successful 33-byte exact-source Pack controls give directly paired worker samples for both formats. Baseline medians were 3,216 µs for ZIP and 4,288 µs for 7z. Candidate medians were 2,872 µs for ZIP and 4,287 µs for 7z. Both runs reported the same 13 existing sandbox audit issues. The samples describe three repetitions of the local fixture.
+
+The same byte-verified receipt passed the non-activating `FileOps_ReviewRemediationContracts` selection and its setup and cleanup in `20261127T195517Z-75080-8bd77c30628d41fdad215dc0593c0720`. The case took 85,906 ms. The archived native result reported 3/0/0, SHA-256 `481dfc00a50781d0c8aebf0db4006ae06caeac508da64d1046b7e3082d1cafb5`. The filtered repository verdict was `NOT_EVALUATED`.
+
+PR #381 passed the required checks and merged at `e72f5f02ff619264b6c3b2db7297a4a9ce154b73`. The six changed product, test and contract files match the verified candidate. [Merged archive reader protection](https://github.com/RedSalamanders/RedSalamander/pull/381)
+
+### Hosted qualification during the archive reader merge
+
+At 20:58 CET, both native regression jobs on `bcc3f42e2` were still at the actual regression and Release assertion step. The Pack and combined metadata merge runs remained queued. [x64 job](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244/job/140671267975) [ARM64 job](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244/job/140671268108)
