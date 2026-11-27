@@ -4,6 +4,12 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Apply the shared WIL warning scope to the remaining active product and test includes, use nonthrowing COM ownership for file-system route queries, Change Case and bar rendering, and configure Clang-Tidy for private and protected member names.
+- Tell users when Pack created the full archive and kept their originals. Use the same worker-prepared
+  source inventory for stored ZIP and 7z.
+- Keep Commands crash case evidence when Windows gives a newly written trace a coarse timestamp.
+  The runner compares the same guarded trace path before launch and after containment closes.
+- Show one File Operations question when a transfer will lose both EFS encryption and sparse allocation.
 - Expose the pinned shared scope options through both root test commands, preserve the single-profile and interactive compatibility paths, and classify the plugin fixture README as CI prose.
 - Add root restore, Release packaging and WinGet generation for both architectures. Default dependency installation to x64, use the canonical package directory for root packaging and hosted production, and preserve legacy package and manifest entry points.
 - Add an SMB Rename self-test for a changed parent and same-name files in neighboring folders.
