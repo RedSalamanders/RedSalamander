@@ -18,6 +18,7 @@
     "CLAUDE.md",
     "CHANGELOG.md",
     "Specs/**/*.md",
+    "Plugins/**/README.md",
     "Tests/README.md",
     ".github/skills/**/*.md",
     "Specs/Plans/**",

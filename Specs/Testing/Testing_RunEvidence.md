@@ -561,6 +561,15 @@ The shared [scope manifest](../../Tests/test-scopes.json) maps changed paths to 
 Specific source rules retain their selections and ordered fallbacks cover unclassified inputs.
 Interactive entries remain separately declared and require the canonical desktop admission path.
 The human-managed planning note and archived test evidence do not participate in shared scope discovery.
+Plugin directory README guides are prose. Their runtime and fixture files retain their native scope classification.
+
+Both `test.ps1` and `Test-Changes.ps1` accept `-Scopes <names>` for explicit
+unattended Affected selection. They pass names and comma-separated values to the
+pinned shared planner. `-Force` bypasses its reuse and iteration baseline.
+Product-owned execution requires `-ParallelSuites 1`. These shared options
+cannot be combined with product-specific selection, Resume, sandbox or interactive
+execution. When an explicit `-Root` is supplied to `Test-Changes.ps1`, it must
+contain a RedSalamander checkout and its root test command.
 
 The shared runner calls `test.ps1 -Suites <entry IDs>` with exact noninteractive scopes. The adapter preserves the
 canonical Full order, including the toolchain artifact writer and re-attestation before any artifact readers.
@@ -575,7 +584,7 @@ build receipt for `-SkipBuild`. The shared runner verifies unchanged source, ind
 requires fresh named reports. The canonical runner owns native profile builds, byte verification, the
 artifact writer and re-attestation. `-Explain` plans without running builds or suites.
 
-`Test-Changes.ps1`, explicit PrePush profiles and runs with explicit sandbox, build-number, alternate-volume
+`Test-Changes.ps1` without shared options, explicit PrePush profiles and runs with explicit sandbox, build-number, alternate-volume
 or interactive controls keep the single-profile canonical path. Focused selection and exact Resume retain their canonical execution contracts. A completed unattended Full or PrePush reports exit 2 for
 `NOT_EVALUATED`. The handoff preserves the native runner failure code.
 

@@ -3,11 +3,20 @@
 Compatibility entry point for RedSalamander scoped tests.
 .DESCRIPTION
 Forwards the existing parameters to the root test.ps1, preserving single-profile
-execution and returning its exit code.
+execution and returning its exit code. Shared scope options select the pinned engine.
+.PARAMETER Root
+Checkout containing the RedSalamander root test command. Defaults to this checkout.
 .PARAMETER Mode
 Affected (default), Full, or PrePush.
 .PARAMETER BaseRef
-Local comparison revision; defaults to origin/HEAD, the remote's recorded default branch. No fetch is performed.
+Local comparison revision. The canonical runner defaults to origin/HEAD. The shared runner
+uses the default branch in the scope manifest. The comparison uses local refs.
+.PARAMETER Scopes
+Runs explicit shared scopes in Affected mode. Accepts names or comma-separated strings.
+.PARAMETER Force
+Uses the shared runner and bypasses successful scope reuse and its iteration baseline.
+.PARAMETER ParallelSuites
+Selects the shared runner. RedSalamander's product-owned native profiles require one lane.
 .PARAMETER Configuration
 Debug, Release or ASan Debug.
 .PARAMETER Platform
@@ -48,6 +57,8 @@ through the canonical runner; no second evidence cache or desktop lease is intro
 .EXAMPLE
 ./Test-Changes.ps1 -Mode PrePush -Configuration Debug
 .EXAMPLE
+./Test-Changes.ps1 -Scopes CompilerFreeValidation -Explain
+.EXAMPLE
 ./Test-Changes.ps1 -Mode Full -Interactive -AllowAlternateVolumeTestRoot -TestRoot E:\RedSalamander.Perf
 #>
 [CmdletBinding()]
@@ -64,9 +75,21 @@ param(
     [switch]$AllowAlternateVolumeTestRoot,
     [ValidateSet('','Commands','Compare','FileOps')][string]$Suite='',
     [string]$CaseFilter='',
-    [string]$CommandsFamily=''
+    [string]$CommandsFamily='',
+    [string]$Root=$PSScriptRoot,
+    [string[]]$Scopes=@(),
+    [switch]$Force,
+    [ValidateRange(1,8)][int]$ParallelSuites=1
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-& (Join-Path $PSScriptRoot 'test.ps1') -CanonicalProfile @PSBoundParameters
+$checkout = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Root)
+if ($PSBoundParameters.Remove('Root')) {
+    $project = Get-Content -Raw -LiteralPath (Join-Path $checkout '.ci/project.json') | ConvertFrom-Json
+    if ($project.repository -cne 'RedSalamanders/RedSalamander') { throw 'Root must be a RedSalamander checkout.' }
+}
+if (-not ($Scopes -or $Force -or $PSBoundParameters.ContainsKey('ParallelSuites'))) {
+    $PSBoundParameters['CanonicalProfile'] = $true
+}
+& (Join-Path $checkout 'test.ps1') @PSBoundParameters
 exit $LASTEXITCODE

@@ -17,6 +17,66 @@ $launchWriter = $launchAst.Find({ param($node)
 if (-not $launchWriter) { throw 'Missing actual private launch diagnostic writer.' }
 . ([scriptblock]::Create($launchWriter.Extent.Text))
 
+Describe 'Shared scoped test entry points' {
+    BeforeAll {
+        $testShell = Join-Path $PSHOME 'pwsh.exe'
+        $rootCommand = Join-Path $repoRoot 'test.ps1'
+        $compatCommand = Join-Path $repoRoot 'Test-Changes.ps1'
+    }
+
+    It 'explains the same exact affected scopes through both public entry points' {
+        $planArguments = @('-Scopes', 'CompilerFreeValidation,standalone.crash-handling', '-BaseRef', 'HEAD',
+            '-Configuration', 'Release', '-Platform', 'ARM64', '-Force', '-ParallelSuites', '1', '-Explain')
+        $direct = & $testShell -NoProfile -NonInteractive -File $rootCommand @planArguments
+        $LASTEXITCODE | Should Be 2
+        $legacy = & $testShell -NoProfile -NonInteractive -File $compatCommand -Root $repoRoot @planArguments
+        $LASTEXITCODE | Should Be 2
+        ($legacy -join "`n") | Should BeExactly ($direct -join "`n")
+        ($direct -join "`n") | Should Match 'Affected \(ARM64 Release\); baseline: explicit scopes'
+        ($direct -join "`n") | Should Match 'explicit scope => CompilerFreeValidation'
+        ($direct -join "`n") | Should Match 'explicit scope => standalone\.crash-handling'
+    }
+
+    It 'refuses to mix shared scope selection with interactive execution' {
+        $output = & $testShell -NoProfile -NonInteractive -File $compatCommand -Scopes CompilerFreeValidation -Interactive -Explain 2>&1
+        $LASTEXITCODE | Should Be 1
+        ($output -join "`n") | Should Match 'require the unattended shared runner'
+    }
+
+    It 'refuses multiple native suite lanes for the product-owned profile' {
+        $output = & $testShell -NoProfile -NonInteractive -File $rootCommand -ParallelSuites 2 -Explain 2>&1
+        $LASTEXITCODE | Should Be 1
+        ($output -join "`n") | Should Match 'selected suites in canonical order'
+    }
+
+    It 'keeps positional legacy invocation, desktop delegation and the child exit code' {
+        Copy-Item -LiteralPath $compatCommand -Destination (Join-Path $TestDrive 'Test-Changes.ps1')
+        @'
+param([string]$Mode, [string]$BaseRef, [string]$Configuration, [switch]$Interactive, [switch]$CanonicalProfile)
+Write-Output "$Mode|$BaseRef|$Configuration|$($Interactive.IsPresent)|$($CanonicalProfile.IsPresent)"
+exit 4
+'@ | Set-Content -LiteralPath (Join-Path $TestDrive 'test.ps1')
+        $output = & $testShell -NoProfile -NonInteractive -File (Join-Path $TestDrive 'Test-Changes.ps1') Full main Debug -Interactive
+        $LASTEXITCODE | Should Be 4
+        $output | Should BeExactly 'Full|main|Debug|True|True'
+    }
+
+    It 'classifies the plugin fixture guide as prose while retaining the archive input' {
+        Import-Module (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.EngineBinding.psm1') -Scope Local -ErrorAction Stop
+        Import-Module (Resolve-CiPinnedEngineModule -ProjectRoot $repoRoot -Name 'Policy.psm1') -Scope Local
+        Import-Module (Resolve-CiPinnedEngineModule -ProjectRoot $repoRoot -Name 'ScopedTesting.psm1') -Scope Local
+        $project = Read-CiProject $repoRoot
+        $fixture = 'Plugins/FileSystem7z/Tests/MultipartRar'
+        $guide = "$fixture/README.md"
+        $archive = "$fixture/test_read_format_rar_multivolume.part0001.rar"
+        (Get-CiPathDisposition -Project $project -Path $guide).native | Should Be $false
+        (Get-CiPathDisposition -Project $project -Path $archive).native | Should Be $true
+        $manifest = Read-ScopedTestManifest -Root $repoRoot
+        (Get-ScopedTestPlan -Manifest $manifest -ChangedPaths @($guide)).prose | Should Be $true
+        (Get-ScopedTestPlan -Manifest $manifest -ChangedPaths @($archive)).prose | Should Be $false
+    }
+}
+
 Describe 'Direct self-test launch facts' {
     It 'retains a real CLR fatal getter with ordinary inner context after native and listing cleanup' {
         if (-not ('RSLaunchFatalContextProbe' -as [type])) {
