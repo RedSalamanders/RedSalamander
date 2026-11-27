@@ -1524,6 +1524,16 @@ uses its ordinary strict sharing mode, which protects the compared file against
 data writes or replacement until mutation. The host opts into revision capture
 for an individual binding.
 
+Local bound directories expose the optional `IFileSystemBoundDirectory` interface. It visits
+exact immediate names with their attribute flags, including hidden names, on the retained directory
+object. Each borrowed name is valid only for the callback. A visitor result other than `S_OK`
+ends enumeration and is returned unchanged. Child binding accepts one leaf and opens it relative
+to that same directory without following a reparse point. Local traversal refuses reparse entries.
+A successful child binding returns one owned object whose identity and optional revision follow the
+same contract as a top-level binding. `FILESYSTEM_BIND_PIN_DIRECTORY` is valid only for a plain
+directory. It requests listing access and withholds write and delete sharing. It confers no Delete
+authority by itself. A consumer must explicitly request `FILESYSTEM_BIND_DELETE` for each mutation.
+
 The local provider binding supports no-follow nonzero `FILE_ID_INFO` identity, regular-file reads
 through a duplicate of the retained content-capable handle, handle-bound metadata writes, exact
 conditional rename/delete, bounded exact-handle link reads, and exclusive visible file/link stage

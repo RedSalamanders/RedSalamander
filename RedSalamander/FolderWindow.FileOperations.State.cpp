@@ -12048,12 +12048,14 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareMutationInterlockScopes()
             }
             else if constexpr (std::is_same_v<Plan, FileOperations::ArchiveTaskAdmission>)
             {
+                const auto* cleanup     = _archiveTask ? _archiveTask->request.cleanup.get() : nullptr;
+                const auto sourceAccess = cleanup && cleanup->containsDirectory ? FileOperations::MutationInterlockAccess::WriteSource
+                                                                                : FileOperations::MutationInterlockAccess::ReadSource;
                 for (const auto& source : typedPlan.selectedItems)
                 {
                     if (CancelRequestedDurable())
                         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
-                    RETURN_IF_FAILED(builder.Add(
-                        _fileSystem.get(), source.endpoint, source.providerPath, FileOperations::MutationInterlockAccess::ReadSource, false, false));
+                    RETURN_IF_FAILED(builder.Add(_fileSystem.get(), source.endpoint, source.providerPath, sourceAccess, false, false));
                 }
                 return builder.Add(_fileSystem.get(),
                                    typedPlan.endpoint,
@@ -12831,6 +12833,24 @@ std::wstring FolderWindow::FileOperationState::Task::BuildPermanentDeleteConsent
         note += FormatStringResource(nullptr, IDS_FILEOPS_CONSENT_ALSO_RECYCLE, FormatFileOperationCountNoun(FileOperationCountNoun::Item, recycleCount));
     }
     return note;
+}
+
+HRESULT FolderWindow::FileOperationState::Task::ConfirmPackTreeCleanup(size_t itemCount, std::wstring_view selection, size_t leftoverCount) noexcept
+{
+    const std::wstring detail = FormatFileOperationCountNoun(FileOperationCountNoun::Item, static_cast<unsigned long long>(itemCount));
+    const std::wstring note =
+        leftoverCount == 0u ? std::wstring{} : FormatStringResource(nullptr, IDS_FMT_FILEOPS_ARTIFACT_TOUCH_WARNING, static_cast<unsigned long>(leftoverCount));
+    DeferredConsentRequest request{};
+    request.risk           = FileOperations::DeferredConsentRisk::PermanentDelete;
+    request.sourcePath     = selection;
+    request.consentDetail  = detail;
+    request.consentNote    = note;
+    request.itemCountKnown = true;
+    request.itemCount      = itemCount;
+    const auto decision    = RequestDeferredConsent(*this, request);
+    if (FAILED(decision.status))
+        return decision.status;
+    return decision.action == ConflictAction::PermanentDelete ? S_OK : HRESULT_FROM_WIN32(ERROR_CANCELLED);
 }
 
 HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation() noexcept

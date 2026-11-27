@@ -14273,6 +14273,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     for (const std::wstring_view extension : {std::wstring_view(L"zip"), std::wstring_view(L"7z")})
     {
+        const RedSalamander::TestSupport::ScopedEnvironmentVariable identityUnavailable(L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_UNSUPPORTED_PATH",
+                                                                                        nestedRoot.native());
         const auto retainedArchive           = outputRoot / std::format(L"folders-retained.{}", extension);
         auto folderCleanupOptions            = packOptions;
         folderCleanupOptions.archivePath     = retainedArchive;
@@ -14871,6 +14873,202 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                             versionedSource.authority.boundObject->OpenReader(nullptr, versionedReader.put()) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) &&
                             ! versionedReader,
                         L"Opening the old version must refuse a same-size change made before this read."))
+        return false;
+
+    enum class TreeChange
+    {
+        None,
+        Cancel,
+        AddChild,
+        RewriteChild,
+        ReplaceAncestor,
+    };
+    struct TreeScenario
+    {
+        std::wstring_view name;
+        std::wstring_view extension;
+        TreeChange change;
+    };
+    constexpr std::array treeScenarios{
+        TreeScenario{L"zip-exact", L"zip", TreeChange::None},
+        TreeScenario{L"7z-exact", L"7z", TreeChange::None},
+        TreeScenario{L"cancel", L"zip", TreeChange::Cancel},
+        TreeScenario{L"added", L"7z", TreeChange::AddChild},
+        TreeScenario{L"rewritten", L"zip", TreeChange::RewriteChild},
+        TreeScenario{L"ancestor", L"zip", TreeChange::ReplaceAncestor},
+    };
+    for (const auto& scenario : treeScenarios)
+    {
+        using Task                              = FolderWindow::FileOperationState::Task;
+        const auto parent                       = root / scenario.name;
+        const auto tree                         = parent / L"tree";
+        const auto empty                        = tree / L"empty";
+        const auto child                        = tree / L"nested" / L"data.txt";
+        const auto peer                         = parent / L"peer.txt";
+        const auto target                       = outputRoot / std::format(L"tree-{}.{}", scenario.name, scenario.extension);
+        constexpr std::string_view archiveBytes = "original payload";
+        if (! state.Require(SelfTest::EnsureDirectory(empty) && SelfTest::EnsureDirectory(child.parent_path()) &&
+                                SelfTest::WriteTextFile(child, archiveBytes) && SelfTest::WriteTextFile(peer, "peer payload") &&
+                                SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                            L"Seed a selected Pack directory, a nested file, an empty directory, and a selected sibling file."))
+            return false;
+        g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, parent);
+        if (! state.Require(WaitForPanePath(FolderWindow::Pane::Left, parent, SelfTest::Scale(3000ms)) &&
+                                WaitForPaneItems(FolderWindow::Pane::Left, {L"tree", L"peer.txt"}, SelfTest::Scale(3000ms)),
+                            L"Open the owned Pack tree fixture in the source pane."))
+            return false;
+        g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
+                                                              [](std::wstring_view name) noexcept { return name == L"tree" || name == L"peer.txt"; });
+
+        const bool mutate = scenario.change != TreeChange::None && scenario.change != TreeChange::Cancel;
+        auto& gate        = FolderWindowFileOperationsStateInternal::g_fileOpsPackBeforePublishPausePoint;
+        if (mutate && ! state.Require(gate.ArmForSource(target.native()), L"Arm the Pack tree publication boundary."))
+            return false;
+        const auto release = wil::scope_exit([&]() noexcept
+        {
+            if (mutate)
+                gate.Release();
+        });
+        if (scenario.change == TreeChange::Cancel &&
+            ! state.Require(SelfTest::WriteTextFile(target, "previous archive"), L"Seed a previous archive for Cancel."))
+            return false;
+
+        FolderWindow::ArchiveCommandDebugOptions treeOptions{};
+        treeOptions.archivePath     = target;
+        treeOptions.packerExtension = scenario.extension;
+        treeOptions.deleteAfter     = true;
+        treeOptions.overwrite       = true;
+        g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(treeOptions);
+        if (! state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack"), L"Dispatch the selected Pack tree."))
+            return false;
+
+        Task* pendingTask       = nullptr;
+        uint64_t generation     = 0u;
+        bool exactPrompt        = false;
+        const auto consentReady = RedSalamander::TestSupport::PumpMessagesUntil(
+            [&]() noexcept
+        {
+            auto* const operations = g_folderWindow.DebugGetFileOperationState(false);
+            if (! operations)
+                return false;
+            std::vector<Task*> tasks;
+            operations->CollectTasks(tasks);
+            for (Task* task : tasks)
+            {
+                if (task->GetOperation() != FileOperations::kPackArchiveOperation)
+                    continue;
+                std::scoped_lock lock(task->_conflictArbiter.mutex);
+                const auto& prompt = task->_conflictArbiter.prompt;
+                if (! prompt.active || ! prompt.buttonsPublishable)
+                    continue;
+                pendingTask = task;
+                generation  = prompt.generation;
+                exactPrompt = prompt.bucket == Task::ConflictBucket::PermanentDeleteConfirmation && prompt.factItemCountKnown && prompt.factItemCount == 5u &&
+                              prompt.defaultAction == Task::ConflictAction::Cancel && ! prompt.applyToAllEligible;
+                return true;
+            }
+            return g_folderWindow.DebugGetLastArchiveCommandResultForTest().has_value();
+        },
+            {.timeout = SelfTest::Scale(4000ms), .operationName = L"Pack verified directory consent"});
+        if (! state.Require(consentReady.conditionMet && pendingTask && exactPrompt,
+                            std::format(L"{} Pack must ask once after proving the five exact entries.", scenario.name)))
+        {
+            if (pendingTask)
+                pendingTask->RequestCancel();
+            return false;
+        }
+        const auto decision = scenario.change == TreeChange::Cancel ? Task::ConflictAction::Cancel : Task::ConflictAction::PermanentDelete;
+        if (! state.Require(pendingTask->SubmitConflictDecision(generation, decision, false), L"Submit the current Pack directory consent."))
+        {
+            pendingTask->RequestCancel();
+            return false;
+        }
+
+        if (mutate)
+        {
+            const auto beforePublish = RedSalamander::TestSupport::PumpMessagesUntil(
+                [&]() noexcept { return gate.HasEntered(); }, {.timeout = SelfTest::Scale(4000ms), .operationName = L"Pack tree staged"});
+            if (! state.Require(beforePublish.conditionMet && ! SelfTest::PathExists(target), L"Hold the already read Pack tree before publication."))
+                return false;
+            if (scenario.change == TreeChange::AddChild)
+            {
+                if (! state.Require(SelfTest::WriteTextFile(tree / L"added.txt", "added after consent"), L"Add an unapproved child to the owned tree."))
+                    return false;
+            }
+            else if (scenario.change == TreeChange::RewriteChild)
+            {
+                constexpr std::string_view replacement = "replaced payload";
+                static_assert(replacement.size() == archiveBytes.size());
+                if (! state.Require(SelfTest::WriteTextFile(child, replacement), L"Rewrite the owned archived child without changing its size."))
+                    return false;
+                std::filesystem::last_write_time(child, std::filesystem::file_time_type::clock::now() - std::chrono::hours(24), ec);
+                if (! state.Require(! ec, L"Set a deterministically different write timestamp on the changed child."))
+                    return false;
+            }
+            else
+            {
+                const auto previousParent = root / L"previous-pack-parent";
+                std::filesystem::rename(parent, previousParent, ec);
+                if (! state.Require(! ec && SelfTest::EnsureDirectory(parent), L"Replace the owned ancestor directory while the archive is staged."))
+                    return false;
+                std::filesystem::rename(previousParent / L"tree", tree, ec);
+                if (! state.Require(! ec, L"Place the original selected tree in the replacement ancestor."))
+                    return false;
+                std::filesystem::rename(previousParent / L"peer.txt", peer, ec);
+                if (! state.Require(! ec, L"Place the original selected sibling in the replacement ancestor."))
+                    return false;
+            }
+            gate.Release();
+        }
+
+        const auto result      = waitForArchiveResult();
+        const HRESULT expected = scenario.change == TreeChange::Cancel ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
+                                 : mutate                              ? HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH)
+                                                                       : S_OK;
+        if (! state.Require(result.has_value() && result->hr == expected && cleanupIdle(),
+                            std::format(L"{} tree Pack must finish with the exact status. Expected 0x{:08X} and got 0x{:08X}.",
+                                        scenario.name,
+                                        static_cast<unsigned long>(expected),
+                                        static_cast<unsigned long>(result ? result->hr : E_PENDING))))
+            return false;
+
+        if (scenario.change == TreeChange::Cancel)
+        {
+            if (! state.Require(ReadUtf8TextFileForCommandSelfTest(target) == L"previous archive" && SelfTest::PathExists(empty) &&
+                                    ReadUtf8TextFileForCommandSelfTest(child) == L"original payload" && SelfTest::PathExists(peer),
+                                L"Cancel must preserve the previous archive and the entire owned tree."))
+                return false;
+            continue;
+        }
+
+        const bool kept    = mutate && SelfTest::PathExists(empty) && SelfTest::PathExists(child) && SelfTest::PathExists(peer);
+        const bool removed = ! mutate && ! SelfTest::PathExists(tree) && ! SelfTest::PathExists(peer);
+        if (! state.Require(
+                SelfTest::PathExists(target) && result->entryCount == 5u && (kept || removed) &&
+                    (scenario.change != TreeChange::AddChild || ReadUtf8TextFileForCommandSelfTest(tree / L"added.txt") == L"added after consent") &&
+                    (scenario.change != TreeChange::RewriteChild || ReadUtf8TextFileForCommandSelfTest(child) == L"replaced payload"),
+                std::format(L"{} tree Pack must publish and preserve or remove exactly the expected sources.", scenario.name)))
+            return false;
+
+        const auto archiveLocation = NavigationLocation::FormatHistoryPath(L"7z", target.wstring(), L"/");
+        g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, archiveLocation);
+        if (! state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"tree", L"peer.txt"}, SelfTest::Scale(4000ms)) &&
+                                OrdinalString::EqualsNoCase(g_folderWindow.GetFileSystemPluginShortId(FolderWindow::Pane::Left), L"7z"),
+                            L"Open the exact published archive through the archive provider."))
+            return false;
+        const auto archive = g_folderWindow.GetFileSystem(FolderWindow::Pane::Left);
+        wil::com_ptr<IFileSystemIO> io;
+        wil::com_ptr<IFileReader> reader;
+        std::array<char, archiveBytes.size()> bytes{};
+        unsigned long count = 0u;
+        if (! state.Require(archive && SUCCEEDED(archive.query_to(io.put())) && SUCCEEDED(io->CreateFileReader(L"/tree/nested/data.txt", reader.put())) &&
+                                reader && SUCCEEDED(reader->Read(bytes.data(), static_cast<unsigned long>(bytes.size()), &count)) &&
+                                std::string_view(bytes.data(), count) == archiveBytes,
+                            L"The published archive must contain the original approved nested payload."))
+            return false;
+    }
+    if (! state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                        L"Restore the Local provider after reading the archived tree fixtures."))
         return false;
 
     const std::filesystem::path cp437ArchivePath = outputRoot / L"cp437.zip";

@@ -3608,7 +3608,35 @@ using LocalFileRevision = std::array<int64_t, 4>;
     return S_OK;
 }
 
+[[nodiscard]] HRESULT OpenLocalChildNoFollow(
+    HANDLE parent, std::wstring_view child, ACCESS_MASK access, ULONG share, ULONG flags, wil::unique_handle& handle) noexcept;
+[[nodiscard]] HRESULT CreateLocalBoundObject(wil::unique_handle file, const wchar_t* path, FileSystemBindFlags flags, IFileSystemBoundObject** bound) noexcept;
+
+[[nodiscard]] DWORD LocalBindingShareMode(FileSystemBindFlags flags) noexcept
+{
+    return (flags & (FILESYSTEM_BIND_DELETE | FILESYSTEM_BIND_PIN_DIRECTORY)) != 0u ? FILE_SHARE_READ : FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+}
+
+[[nodiscard]] DWORD LocalBindingAccess(FileSystemBindFlags flags) noexcept
+{
+    DWORD access = FILE_READ_ATTRIBUTES;
+    if ((flags & FILESYSTEM_BIND_READ_CONTENT) != 0u)
+        access |= GENERIC_READ;
+    // Redirectors may report older timestamps to metadata-only handles.
+    if ((flags & FILESYSTEM_BIND_READ_REVISION) != 0u)
+        access |= FILE_READ_DATA;
+    if ((flags & FILESYSTEM_BIND_PIN_DIRECTORY) != 0u)
+        access |= FILE_LIST_DIRECTORY;
+    if ((flags & (FILESYSTEM_BIND_DELETE | FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION)) != 0u)
+        access |= DELETE;
+    // Exact replacement may need to clear the read-only attribute on the retained destination.
+    if ((flags & FILESYSTEM_BIND_PUBLICATION) != 0u)
+        access |= FILE_WRITE_ATTRIBUTES;
+    return access;
+}
+
 class LocalBoundObject final : public IFileSystemBoundObject,
+                               public IFileSystemBoundDirectory,
                                public IFileSystemBoundMetadata,
                                public IFileSystemBoundContentProof,
                                public IFileSystemBoundObjectPinHandoff,
@@ -3668,6 +3696,12 @@ public:
         if (riid == __uuidof(IUnknown) || riid == __uuidof(IFileSystemBoundObject))
         {
             *ppvObject = static_cast<IFileSystemBoundObject*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if (riid == __uuidof(IFileSystemBoundDirectory) && _kind == FILESYSTEM_BOUND_DIRECTORY)
+        {
+            *ppvObject = static_cast<IFileSystemBoundDirectory*>(this);
             AddRef();
             return S_OK;
         }
@@ -3780,6 +3814,79 @@ public:
         return S_OK;
     }
 
+    HRESULT STDMETHODCALLTYPE VisitChildren(FileSystemBoundChildVisitor visitor, void* context) noexcept override
+    {
+        if (! visitor)
+            return E_INVALIDARG;
+
+        wil::unique_handle listing;
+        RETURN_IF_FAILED(ReopenPlainDirectory(listing));
+        constexpr DWORD bufferBytes = 64u * 1024u;
+        std::unique_ptr<std::byte[]> storage(new (std::nothrow) std::byte[bufferBytes]);
+        if (! storage)
+            return E_OUTOFMEMORY;
+        const std::span<const std::byte> records(storage.get(), bufferBytes);
+        auto informationClass = FileFullDirectoryRestartInfo;
+        for (;;)
+        {
+            if (! GetFileInformationByHandleEx(listing.get(), informationClass, storage.get(), bufferBytes))
+            {
+                const DWORD error = GetLastError();
+                return error == ERROR_NO_MORE_FILES ? S_OK : HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+            }
+            informationClass = FileFullDirectoryInfo;
+            for (size_t offset = 0u;;)
+            {
+                Common::DirectoryRecords::RecordView<FILE_FULL_DIR_INFO> record{};
+                RETURN_IF_FAILED(Common::DirectoryRecords::Read(records, offset, record));
+                if (record.name != L"." && record.name != L"..")
+                {
+                    const HRESULT visit = visitor(record.name.data(), static_cast<uint32_t>(record.name.size()), record.information->FileAttributes, context);
+                    if (visit != S_OK)
+                        return visit;
+                }
+                if (record.nextOffset == 0u)
+                    break;
+                offset = record.nextOffset;
+            }
+        }
+    }
+
+    HRESULT STDMETHODCALLTYPE BindChild(const wchar_t* leaf, FileSystemBindFlags flags, IFileSystemBoundObject** bound) noexcept override
+    {
+        if (! bound)
+            return E_POINTER;
+        *bound                     = nullptr;
+        constexpr uint32_t allowed = FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_REVISION |
+                                     FILESYSTEM_BIND_DELETE | FILESYSTEM_BIND_PIN_DIRECTORY;
+        if (! leaf || (flags & ~allowed) != 0u || (flags & FILESYSTEM_BIND_NO_FOLLOW) == 0u)
+            return E_INVALIDARG;
+
+        const std::wstring_view name(leaf);
+        if (_kind != FILESYSTEM_BOUND_DIRECTORY || ! Common::Paths::IsSingleChildPathComponent(name) ||
+            name.find_first_of(L":*?\"<>|") != std::wstring_view::npos || name.size() > (std::numeric_limits<USHORT>::max)() / sizeof(wchar_t))
+            return E_INVALIDARG;
+
+        const std::wstring path = FileSystemInternal::AppendPath(_path, name);
+#if defined(ENABLE_TESTS)
+        if (IsBindOpenNotSupportedForSelfTest(path.c_str()))
+            return HRESULT_FROM_WIN32(ERROR_OPEN_FAILED);
+        if ((flags & FILESYSTEM_BIND_DELETE) != 0u && MatchesPersistentTestPath(path.c_str(), kBindDeleteAccessDeniedPathEnvVar))
+            return E_ACCESSDENIED;
+#endif
+        wil::unique_handle parent;
+        RETURN_IF_FAILED(ReopenPlainDirectory(parent));
+        wil::unique_handle child;
+        RETURN_IF_FAILED(OpenLocalChildNoFollow(parent.get(), name, LocalBindingAccess(flags), LocalBindingShareMode(flags), 0u, child));
+
+        FILE_ATTRIBUTE_TAG_INFO attributes{};
+        if (! GetFileInformationByHandleEx(child.get(), FileAttributeTagInfo, &attributes, sizeof(attributes)))
+            return HRESULT_FROM_WIN32(GetLastError());
+        if ((attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        return CreateLocalBoundObject(std::move(child), path.c_str(), flags, bound);
+    }
+
     HRESULT STDMETHODCALLTYPE OpenReader(const FileSystemOptions* options, IFileReader** reader) noexcept override
     {
         if (reader == nullptr)
@@ -3849,6 +3956,21 @@ public:
         return S_OK;
     }
 
+private:
+    [[nodiscard]] HRESULT ReopenPlainDirectory(wil::unique_handle& listing) noexcept
+    {
+        if (_kind != FILESYSTEM_BOUND_DIRECTORY)
+            return HRESULT_FROM_WIN32(ERROR_DIRECTORY);
+        RETURN_IF_FAILED(ReopenExactFile(_file.get(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES, listing));
+        FILE_ATTRIBUTE_TAG_INFO attributes{};
+        if (! GetFileInformationByHandleEx(listing.get(), FileAttributeTagInfo, &attributes, sizeof(attributes)))
+            return HRESULT_FROM_WIN32(GetLastError());
+        return (attributes.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == FILE_ATTRIBUTE_DIRECTORY
+                   ? S_OK
+                   : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+public:
     HRESULT STDMETHODCALLTYPE GetContentProof(const FileSystemOptions* options, FileSystemContentProof* proof) noexcept override
     {
         if (proof == nullptr)
@@ -6266,7 +6388,7 @@ struct LocalRenameSourceCapture final
     }
 }
 
-[[nodiscard]] HRESULT OpenLocalRenameChild(
+[[nodiscard]] HRESULT OpenLocalChildNoFollow(
     HANDLE parent, std::wstring_view child, ACCESS_MASK access, ULONG share, ULONG flags, wil::unique_handle& handle) noexcept
 {
     const auto createFile       = GetNtCreateFile();
@@ -6376,7 +6498,7 @@ struct LocalRenameSourceCapture final
         {
             const auto& component = capture.directories[index - 1u];
             const HANDLE parent   = pins.back().get();
-            const HRESULT open    = OpenLocalRenameChild(parent, component, access, share, FILE_DIRECTORY_FILE, pins.emplace_back());
+            const HRESULT open    = OpenLocalChildNoFollow(parent, component, access, share, FILE_DIRECTORY_FILE, pins.emplace_back());
             if (FAILED(open))
                 return open;
             currentPath = FileSystemInternal::AppendPath(currentPath, component);
@@ -6506,7 +6628,8 @@ private:
             return lineageHr;
 
         wil::unique_handle file;
-        const HRESULT open = OpenLocalRenameChild(pins.back().get(), _capture.leaf, FILE_READ_DATA | FILE_READ_ATTRIBUTES | DELETE, FILE_SHARE_READ, 0u, file);
+        const HRESULT open =
+            OpenLocalChildNoFollow(pins.back().get(), _capture.leaf, FILE_READ_DATA | FILE_READ_ATTRIBUTES | DELETE, FILE_SHARE_READ, 0u, file);
         if (FAILED(open))
             return open;
         LocalRenameSourceFacts facts{};
@@ -6611,7 +6734,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::CaptureCorroboratedRenameSource(const wcha
         // A metadata-only SMB open can return cached write times. Read-data access
         // observes the same timestamp as the eventual mutation handle.
         wil::unique_handle file;
-        const HRESULT open = OpenLocalRenameChild(
+        const HRESULT open = OpenLocalChildNoFollow(
             pins.back().get(), capture.leaf, FILE_READ_DATA | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, 0u, file);
         if (FAILED(open))
             return open;
@@ -7804,36 +7927,15 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path, FileSystem
     }
 
     constexpr uint32_t knownFlags = FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_DELETE |
-                                    FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION | FILESYSTEM_BIND_READ_REVISION;
+                                    FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION | FILESYSTEM_BIND_READ_REVISION | FILESYSTEM_BIND_PIN_DIRECTORY;
     const uint32_t requestedFlags = static_cast<uint32_t>(flags);
     if ((requestedFlags & ~knownFlags) != 0u || (requestedFlags & FILESYSTEM_BIND_NO_FOLLOW) == 0u)
     {
         return E_INVALIDARG;
     }
     const std::wstring extendedPath = FileSystemInternal::ToExtendedPath(path);
-    DWORD desiredAccess             = FILE_READ_ATTRIBUTES;
-    const bool readRevision         = (requestedFlags & FILESYSTEM_BIND_READ_REVISION) != 0u;
-    if ((requestedFlags & FILESYSTEM_BIND_READ_CONTENT) != 0u)
-    {
-        desiredAccess |= GENERIC_READ;
-    }
-    if (readRevision)
-    {
-        // Redirectors may return older timestamps to metadata-only handles.
-        desiredAccess |= FILE_READ_DATA;
-    }
-    if ((requestedFlags & (FILESYSTEM_BIND_DELETE | FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION)) != 0u)
-    {
-        desiredAccess |= DELETE;
-    }
-    if ((requestedFlags & FILESYSTEM_BIND_PUBLICATION) != 0u)
-    {
-        // Exact replacement may need to clear a retained destination's read-only attribute
-        // before moving it to the rollback sibling. The publication grant must therefore own
-        // that metadata write on the same no-follow handle.
-        desiredAccess |= FILE_WRITE_ATTRIBUTES;
-    }
-    const DWORD shareMode = (requestedFlags & FILESYSTEM_BIND_DELETE) != 0u ? FILE_SHARE_READ : FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    const DWORD desiredAccess       = LocalBindingAccess(flags);
+    const DWORD shareMode           = LocalBindingShareMode(flags);
     wil::unique_handle file;
 #if defined(ENABLE_TESTS)
     if ((requestedFlags & FILESYSTEM_BIND_DELETE) != 0u && MatchesPersistentTestPath(path, kBindDeleteAccessDeniedPathEnvVar))
@@ -7867,6 +7969,13 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path, FileSystem
         return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_FILE_NOT_FOUND);
     }
 
+    return CreateLocalBoundObject(std::move(file), path, flags, bound);
+}
+
+namespace
+{
+[[nodiscard]] HRESULT CreateLocalBoundObject(wil::unique_handle file, const wchar_t* path, FileSystemBindFlags flags, IFileSystemBoundObject** bound) noexcept
+{
     LocalObjectIdentityPayload identity{};
     HRESULT identityHr = S_OK;
 #if defined(ENABLE_TESTS)
@@ -7906,6 +8015,10 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path, FileSystem
         kind = FILESYSTEM_BOUND_REGULAR_FILE;
     }
 
+    if ((flags & FILESYSTEM_BIND_PIN_DIRECTORY) != 0u &&
+        (attributes.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != FILE_ATTRIBUTE_DIRECTORY)
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
     uint64_t committedSizeBytes = std::numeric_limits<uint64_t>::max();
     if (kind == FILESYSTEM_BOUND_REGULAR_FILE)
     {
@@ -7923,7 +8036,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path, FileSystem
     }
 
     std::unique_ptr<const LocalFileRevision> revision;
-    if (readRevision)
+    if ((flags & FILESYSTEM_BIND_READ_REVISION) != 0u)
     {
         if (kind != FILESYSTEM_BOUND_REGULAR_FILE)
             return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
@@ -7945,6 +8058,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path, FileSystem
     *bound = impl;
     return S_OK;
 }
+} // namespace
 
 namespace
 {
