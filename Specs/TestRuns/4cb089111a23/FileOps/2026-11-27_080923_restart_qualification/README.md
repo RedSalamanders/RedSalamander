@@ -98,3 +98,24 @@ Five independent native runs passed Setup, `Phase7_DeleteItemsNestedRootsWake` a
 The initial wrapper supplied an ID associated with the still-live wrapper process. Its native child passed three checks before the sandbox correctly refused archival. The five listed runs use their runner's own identities and completed archival.
 
 The fix merged at `3a82609a0f07313b7707d7fc7dbbfc9e889b082e` after all required checks passed. With fresh desktop agreement, the broader x64 Release File Operations replay began at 11:08 CET on the exact repair build. Run `20261127T100829Z-71032-3a35034d0a544ae7a4b3aa41840a24cf`, launcher capture `20261127T100828Z-63940-23509abeeab44bb69fc99dfb7893995f`. The approved end is 11:58 CET. [Merged PR #360](https://github.com/RedSalamanders/RedSalamander/pull/360)
+
+### Live SMB namespace witness
+
+The first x64 Release compile rejected the wrong completion member in the test recorder. Corrected `843f88712e819a8410b02691eb261d631e53b906` reads the captured source-row receipt. That test-enabled x64 Release solution built in 7 minutes 45 seconds with zero warnings and errors. Verified receipt `78dda21b7329c33122cc0e8b6d02f165d2f01d44a53e7635be938e4230720ca4`.
+
+| Live endpoint and identity mode | Governed run | Result | Same-name decoys (µs) | Replaced parent (µs) |
+| --- | --- | --- | ---: | ---: |
+| RubyGloom Samba, natural missing exact ID | `20261127T101512Z-12936-a57a7c13a8984420aa42842a33aa8be2` | 3 passed, 0 failed, 0 skipped | 271,281 | 146,032 |
+| Windows SMB, controlled missing-ID path | `20261127T101702Z-75836-df53b4ff675e49cd8f24cedccc0f31c9` | 3 passed, 0 failed, 0 skipped | 28,537 | 23,263 |
+
+Both focused witnesses kept ancestor decoys byte-for-byte and refused publication after moving the original file back through a replacement parent. The test also exercised 100 provider Renames on each endpoint. Both fixture cleanups passed. The Windows launcher restored the sandbox resource manifest to its original bytes.
+
+Raw result SHA-256 values are `e344c7c1e5a562858daab048a086ab606c7251b7c61ba236782708675c30569f` for Samba and `f3a2994071aa556c45e89d0b10294eeca67615169cae69e789c885abf105d702` for Windows SMB. Launcher archive `20261127T101454Z-22036-f4fc735368884ac684d575833878c2c5`. The protected merge reached `f43444dcbdd4d77c3edcd4fd8ed108f9fbfea41c`. [Merged PR #359](https://github.com/RedSalamanders/RedSalamander/pull/359)
+
+### Hosted x64 regression after the tooling repair
+
+The [hosted x64 Release job](https://github.com/RedSalamanders/RedSalamander/actions/runs/45960884674/job/140378451388) succeeded on `3f2b01251`. Its actual regression and Release assertion step passed. The combined test gate and both production Release branches did not run after ARM64 failed.
+
+### Dedicated viewer desktop selection
+
+The exact selection in PR #362 passed 68 planning checks in `20261127T101832Z-64300-051ffb0f71c0471bb77f612885fbfd13`. Read-only ExplainPlan `20261127T101832Z-76544-fb0f2647358041c49cf98040b042d5d8` listed Viewer PE Interactive, Viewer SQLite Interactive, Viewer Text Find and Viewer Text Go To in canonical CI order. The local native run awaits the exact build and a separate desktop window. [Draft PR #362](https://github.com/RedSalamanders/RedSalamander/pull/362)
