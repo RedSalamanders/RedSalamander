@@ -85,7 +85,7 @@ RedSalamander checks the exact spelling for case-only changes. A result it canno
 
 Background work such as **Compare Directories** can appear as a read-only **informational** card. Change Case can show an informational card while it scans the selection. Once the scan produces a rename plan, File Operations shows the scheduled task with its ordinary queue, progress, cancellation and results.
 
-The Files menu makes **Batch Rename** and **Change Case** available on providers that can identify each item for scheduled Rename. If your provider lacks this support, the corresponding shortcuts show a warning in the pane.
+The Files menu makes **Batch Rename** and **Change Case** available on providers that can identify each item for scheduled Rename. If your provider lacks this support, the corresponding shortcuts show a warning in the pane. On a configured SFTP connection, use **F2** to rename one item at a time.
 Informational cards appear for work that takes about 700 ms or longer. They show the current path and basic progress counters, and can be dismissed when complete.
 
 ### “Counting items…” and totals

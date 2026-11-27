@@ -1,0 +1,1 @@
+- Verify that Batch Rename and Change Case show an unsupported-operation warning on SFTP while F2 can still rename individual files and folders.
