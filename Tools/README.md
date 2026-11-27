@@ -548,8 +548,9 @@ Each contained native self-test also leaves a unique `artifacts/native-process-e
 with its original signed process exit, PID, executable and UTC observation before result
 normalization. After a negative exit from the original Commands child, the runner can print
 `[selftest-commands-crash]` after containment closes. The console row associates the launch ID and
-exit with a recent, complete case boundary from the guarded Commands trace before desktop retirement
-or archiving. Missing/stale results can fail coverage independently of that exit. Retry
+exit with a complete case boundary from the guarded Commands trace before desktop retirement or
+archiving. The trace must be new or have changed file metadata since the prelaunch observation.
+Missing/stale results can fail coverage independently of that exit. Retry
 records are separate, write failures stop execution, and archive refusal preserves the records.
 After children and owned-disk teardown finish, it verifies and renames the complete
 tree into `evidence/completed-runs/<runId>` on the same volume. Summary/dashboard

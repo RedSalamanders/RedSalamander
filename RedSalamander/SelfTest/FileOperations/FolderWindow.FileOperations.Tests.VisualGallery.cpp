@@ -353,7 +353,7 @@ template <typename VerifyProvider>
     canceled.taskId = 4u;
     result.push_back({L"31-completed-group-expanded", {done, partial, failed, canceled}, true});
     result.push_back({L"32-completed-group-collapsed", {done, partial, failed, canceled}, true, false, false});
-    constexpr std::array<std::wstring_view, 26> names{{L"file-exists",
+    constexpr std::array<std::wstring_view, 27> names{{L"file-exists",
                                                        L"read-only-file",
                                                        L"read-only-exists",
                                                        L"type-mismatch",
@@ -378,12 +378,14 @@ template <typename VerifyProvider>
                                                        L"permanent-delete",
                                                        L"unknown-error",
                                                        L"permanent-delete-by-name",
-                                                       L"recycle-failed-by-name"}};
+                                                       L"recycle-failed-by-name",
+                                                       L"efs-plaintext-and-sparse-inflation"}};
     static_assert(names.size() == static_cast<size_t>(FileOperations::ConflictClass::Count));
     // I35 S4: the by-name classes follow Unknown in the enumeration. Their scenarios are added after the
     // whole existing gallery (150, 151) so every earlier scenario keeps its index and name.
-    constexpr size_t kFirstByNameClass = static_cast<size_t>(FileOperations::ConflictClass::PermanentDeleteByNameConfirmation);
-    const auto makeDecision            = [&](size_t i)
+    constexpr size_t kFirstByNameClass  = static_cast<size_t>(FileOperations::ConflictClass::PermanentDeleteByNameConfirmation);
+    constexpr size_t kCombinedLossClass = static_cast<size_t>(FileOperations::ConflictClass::EfsPlaintextAndSparseInflation);
+    const auto makeDecision             = [&](size_t i)
     {
         Snapshot decision        = base;
         decision.conflict.active = true;
@@ -391,7 +393,7 @@ template <typename VerifyProvider>
         // control bindings and UIA; zero is the production stale/invalid sentinel.
         decision.conflict.generation = static_cast<uint64_t>(i) + 1u;
         decision.conflict.bucket     = static_cast<uint8_t>(i);
-        constexpr std::array<DWORD, 26> errors{{ERROR_FILE_EXISTS,
+        constexpr std::array<DWORD, 27> errors{{ERROR_FILE_EXISTS,
                                                 ERROR_ACCESS_DENIED,
                                                 ERROR_FILE_EXISTS,
                                                 ERROR_ALREADY_EXISTS,
@@ -416,6 +418,7 @@ template <typename VerifyProvider>
                                                 ERROR_SUCCESS,
                                                 ERROR_GEN_FAILURE,
                                                 ERROR_SUCCESS,
+                                                ERROR_NOT_SUPPORTED,
                                                 ERROR_NOT_SUPPORTED}};
         decision.conflict.status          = HRESULT_FROM_WIN32(errors[i]);
         decision.conflict.sourcePath      = base.currentSourcePath;
@@ -440,11 +443,12 @@ template <typename VerifyProvider>
         decision.conflict.factBytesKnown     = i >= 11u;
         decision.conflict.factBytes          = base.totalBytes;
         decision.conflict.deferredConsent    = i >= 11u && i != 18u && i != 19u && i != 23u;
-        if (i == 11u || i == 22u || i >= kFirstByNameClass)
+        const bool byName                    = i >= kFirstByNameClass && i < kCombinedLossClass;
+        if (i == 11u || i == 22u || byName)
             decision.operation = FILESYSTEM_DELETE;
-        if (i == 17u)
+        if (i == 17u || i == kCombinedLossClass)
             decision.operation = FILESYSTEM_MOVE;
-        if (i >= kFirstByNameClass)
+        if (byName)
         {
             // The by-name consents end with how the location deletes and the leftover warning.
             decision.conflict.consentNote =
@@ -903,7 +907,7 @@ template <typename VerifyProvider>
     task.resultSummary               = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_NOT_STARTED);
     add(L"149-delete-not-started", task);
     // I35 R7.3: the by-name consents of a location without file identities (Delete by name).
-    for (size_t i = kFirstByNameClass; i < names.size(); ++i)
+    for (size_t i = kFirstByNameClass; i < kCombinedLossClass; ++i)
     {
         add(std::format(L"{:03}-decision-{}", 150u + (i - kFirstByNameClass), names[i]), makeDecision(i));
     }
@@ -936,6 +940,7 @@ template <typename VerifyProvider>
     allVerified.verificationCompletedBytes           = allVerified.totalBytes;
     allVerified.verifiedItemCount                    = 128u;
     result.push_back({L"153-compact-verification-shares", {allVerified, quarterVerified, notVerified}, true});
+    add(std::format(L"154-decision-{}", names[kCombinedLossClass]), makeDecision(kCombinedLossClass));
     return result;
 }
 

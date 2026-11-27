@@ -1362,6 +1362,7 @@ BEGIN
     IDS_ARCHIVE_PACKER_LABEL                             "パッカー:"
     IDS_ARCHIVE_PACK_DELETE_AFTER                        "アーカイブにパッキングした後、ディスクからファイルを削除します"
     IDS_MSG_ARCHIVE_PACK_SOURCES_KEPT                    "圧縮が完了しなかったため、元の項目を保持しました。"
+    IDS_FMT_ARCHIVE_PACK_ORIGINALS_KEPT                "アーカイブ {0} を作成しました。元の項目は保持されました。"
     IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED                "アーカイブ {0} が作成されましたが、元のファイルの削除に失敗しました。\r\n\r\nエラー: 0x{1:08X}"
     IDS_ARCHIVE_UNPACK_ARCHIVE_FMT                       "アーカイブ「{0}」を解凍して、"
     IDS_ARCHIVE_UNPACKER_LABEL                           "アンパッカー:"

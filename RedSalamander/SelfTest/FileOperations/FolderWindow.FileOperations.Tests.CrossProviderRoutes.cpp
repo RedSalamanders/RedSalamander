@@ -1098,6 +1098,97 @@ private:
     return true;
 }
 
+[[nodiscard]] bool RunFileOpsCombinedPreContentConsentChecks(SelfTestState& state)
+{
+    const auto reject = [](std::wstring_view reason)
+    {
+        AppendLog(std::format(L"Combined pre-content consent: {}", reason));
+        return false;
+    };
+    auto* operations = state.fileOps;
+    if (! operations || ! state.fsLocal || ! CancelOutstandingSelfTestOperations(operations))
+        return reject(L"the owned Local provider or File Operations engine is unavailable");
+
+    const LoopbackShareStatus shareStatus = ProbeLoopbackShare(state.tempRoot);
+    if (shareStatus == LoopbackShareStatus::Refused)
+        return reject(L"the owned share alias was refused");
+    if (shareStatus == LoopbackShareStatus::Unreachable)
+    {
+        AppendLog(L"Combined pre-content consent skipped because the owned loopback share is unreachable.");
+        return true;
+    }
+
+    const auto root              = state.tempRoot / L"combined-pre-content-consent";
+    const auto sourceFolder      = root / L"source";
+    const auto destinationFolder = root / L"destination";
+    if (! RecreateEmptyDirectory(sourceFolder) || ! RecreateEmptyDirectory(destinationFolder))
+        return reject(L"the owned folders are unavailable");
+    const auto removeRoot              = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
+    const auto source                  = sourceFolder / L"selected.bin";
+    const auto destination             = destinationFolder / source.filename();
+    constexpr std::string_view payload = "Selected bytes for the metadata decision.";
+    const auto localIo                 = state.fsLocal.query<IFileSystemIO>();
+    if (! WriteFileTextFsIo(localIo, source, payload))
+        return reject(L"the source could not be written");
+
+    constexpr uint32_t loss = FILESYSTEM_METADATA_EFS | FILESYSTEM_METADATA_SPARSE;
+    const std::wstring mask = std::format(L"0x{:X}", loss);
+    const RedSalamander::TestSupport::ScopedEnvironmentVariable forceMetadata(L"REDSALAMANDER_FILEOPS_METADATA_FORCE_PRESENT_MASK", mask);
+    const RedSalamander::TestSupport::ScopedEnvironmentVariable failMetadata(L"REDSALAMANDER_FILEOPS_METADATA_FAIL_MASK", mask);
+    CrossProviderCaseScope scope(state, operations);
+    EnsureFileOperationsSettingsForSelfTest().verifyAfterCopy = false;
+    using Action                                              = FolderWindow::FileOperationState::Task::ConflictAction;
+    using Bucket                                              = FolderWindow::FileOperationState::Task::ConflictBucket;
+    FileOperations::ConflictPromptTextFacts facts{};
+    facts.bucket                    = static_cast<uint8_t>(Bucket::EfsPlaintextAndSparseInflation);
+    const std::wstring sparse       = LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_SPARSE_INFLATION);
+    facts.operation                 = FILESYSTEM_COPY;
+    const std::wstring copyQuestion = FileOperations::BuildConflictPromptQuestion(facts);
+    facts.operation                 = FILESYSTEM_MOVE;
+    const std::wstring moveQuestion = FileOperations::BuildConflictPromptQuestion(facts);
+    if (sparse.empty() || copyQuestion != LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_EFS_PLAINTEXT) + L" " + sparse ||
+        moveQuestion != LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_EFS_MOVE_PLAINTEXT) + L" " + sparse ||
+        FileOperations::FormatConflictActionLabel(Action::RetainSource, Bucket::EfsPlaintextAndSparseInflation, FILESYSTEM_MOVE) !=
+            LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_BTN_COPY_KEEP_SOURCE))
+        return reject(L"the question and Move actions must disclose both losses and source retention");
+
+    const auto beforeDecision = [&]()
+    {
+        const auto prompt = TryGetConflictPromptCopy(operations->FindTask(scope.tasks.back()));
+        std::error_code ec;
+        return prompt && prompt->bucket == Bucket::EfsPlaintextAndSparseInflation && prompt->deferredConsent && prompt->defaultAction == Action::Cancel &&
+               prompt->sourceIdentity.has_value() && PromptHasAction(prompt.value(), Action::Proceed) &&
+               PromptHasAction(prompt.value(), Action::RetainSource) && ! std::filesystem::exists(destination, ec) && ! ec;
+    };
+    const auto started = std::chrono::steady_clock::now();
+    const auto summary = RunCrossProviderTransferAnsweringConflict(state,
+                                                                   operations,
+                                                                   scope.tasks,
+                                                                   state.fsLocal,
+                                                                   state.fsLocal,
+                                                                   {source},
+                                                                   LoopbackShareAlias(destinationFolder),
+                                                                   Action::RetainSource,
+                                                                   FILESYSTEM_MOVE,
+                                                                   nullptr,
+                                                                   beforeDecision);
+    if (! summary || summary->resultHr != S_FALSE || summary->publishedItemCount != 1u || summary->errorCount != 0u)
+        return reject(L"one combined decision did not publish a copy with its source kept");
+
+    const auto& results = state.completedTasks.at(scope.tasks.back()).sourceItemResults;
+    if (results.size() != 1u || ! results.front() || results.front()->publication != FileOperations::PublicationState::Published ||
+        results.front()->sourceDisposition != FileOperations::SourceDisposition::Retained)
+        return reject(L"the typed result did not preserve publication and retention");
+    std::string original;
+    std::string published;
+    if (! ReadFileTextFsIo(localIo, source, original) || original != payload || ! ReadFileTextFsIo(localIo, destination, published) || published != payload)
+        return reject(L"the source or destination content is incorrect");
+
+    Debug::Perf::Emit(L"FileOps.SelfTest.CombinedPreContentConsent", L"move kept source", Debug::Perf::ElapsedUs(started), loss, 1u, S_OK);
+    AppendLog(L"One pre-content decision covered both EFS and sparse allocation. Move published the copy and kept the source.");
+    return true;
+}
+
 [[nodiscard]] bool RunFileOpsVerifyAvailabilityChecks(SelfTestState& state) noexcept
 {
     const auto reject = [](std::wstring_view reason) noexcept

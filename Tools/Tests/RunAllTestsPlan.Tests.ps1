@@ -11,7 +11,7 @@ Import-Module $testSupport -Force
 $launchTokens = $null; $launchErrors = $null
 $launchAst = [Management.Automation.Language.Parser]::ParseFile(
     (Join-Path $repoRoot 'Tools/Run-AllTests.ps1'), [ref]$launchTokens, [ref]$launchErrors)
-foreach ($diagnosticName in @('Get-RSLastCommandsCaseBoundary', 'Write-RSSelfTestLaunchDiagnostic')) {
+foreach ($diagnosticName in @('Get-RSCommandsCaseTraceState', 'Get-RSLastCommandsCaseBoundary', 'Write-RSSelfTestLaunchDiagnostic')) {
     $diagnostic = $launchAst.Find({ param($node)
         $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $diagnosticName
     }, $true)
@@ -28,11 +28,12 @@ Describe 'Commands case boundary after native exit' {
         $caseTraceDir = Join-Path $caseTraceFixture 'commands'
         [void][IO.Directory]::CreateDirectory($caseTraceDir)
         $caseTracePath = Join-Path $caseTraceDir 'trace.txt'
-        $caseTraceRequest = @{
+        $caseTraceLocation = @{
             TestRoot = $caseTraceTestRoot
             ArtifactRoot = $caseTraceFixture
-            LaunchStartedUtc = [DateTime]::UtcNow.AddMinutes(-1)
         }
+        $caseTraceRequest = $caseTraceLocation.Clone()
+        $caseTraceRequest.BeforeVersion = (Get-RSCommandsCaseTraceState @caseTraceLocation).Version
     }
 
     It 'reads the last complete boundary in the bounded UTF-16 tail' {
@@ -50,11 +51,17 @@ Describe 'Commands case boundary after native exit' {
         $null -eq (Get-RSLastCommandsCaseBoundary @caseTraceRequest) | Should Be $true
     }
 
-    It 'omits a missing or stale trace and refuses an artifact path outside the sandbox' {
+    It 'omits a missing or unchanged trace and refuses an artifact path outside the sandbox' {
         $null -eq (Get-RSLastCommandsCaseBoundary @caseTraceRequest) | Should Be $true
+        $writeTime = [datetime]::new(2000, 1, 1, 0, 0, 0, [DateTimeKind]::Utc)
         Set-Content -LiteralPath $caseTracePath -Value 'Case: stale_case' -Encoding Unicode
-        [IO.File]::SetLastWriteTimeUtc($caseTracePath, $caseTraceRequest.LaunchStartedUtc.AddMinutes(-1))
+        [IO.File]::SetLastWriteTimeUtc($caseTracePath, $writeTime)
+        $caseTraceRequest.BeforeVersion = (Get-RSCommandsCaseTraceState @caseTraceLocation).Version
         $null -eq (Get-RSLastCommandsCaseBoundary @caseTraceRequest) | Should Be $true
+
+        Set-Content -LiteralPath $caseTracePath -Value 'Case: newer_case_with_same_write_time' -Encoding Unicode
+        [IO.File]::SetLastWriteTimeUtc($caseTracePath, $writeTime)
+        (Get-RSLastCommandsCaseBoundary @caseTraceRequest).CaseName | Should Be 'newer_case_with_same_write_time'
 
         $caseTraceRequest.ArtifactRoot = Split-Path -Parent $caseTraceTestRoot
         { Get-RSLastCommandsCaseBoundary @caseTraceRequest } | Should Throw 'TestSandbox path must remain below'
@@ -90,6 +97,7 @@ Describe 'Commands case boundary after native exit' {
                 param($ProcessStartInfo)
                 $trace = "Case: prior_case`r`nCase returned: prior_case ok=yes failed=no skipped=no`r`nCase: latest_case"
                 Set-Content -LiteralPath $caseTracePath -Value $trace -Encoding Unicode
+                [IO.File]::SetLastWriteTimeUtc($caseTracePath, [datetime]::new(2000, 1, 1, 0, 0, 0, [DateTimeKind]::Utc))
                 $child = [pscustomobject]@{ Id = 42; IsInContainmentJob = $true; ExitCode = $observed.ExitCode }
                 $child | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { }
                 return $child
@@ -214,7 +222,11 @@ public sealed class RSLaunchFatalContextProbe {
                 . ([scriptblock]::Create($definition.Extent.Text))
             }
             $fixtureRoot=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('fatal-context-'+[guid]::NewGuid().ToString('N'))
-            $testRunContext=@{TestRoot=(Get-RSTestSandboxRoot -RepoRoot $repoRoot);RunRoot=$fixtureRoot}
+            $testRunContext = @{
+                TestRoot = Get-RSTestSandboxRoot -RepoRoot $repoRoot
+                RunRoot = $fixtureRoot
+                ArtifactRoot = $fixtureRoot
+            }
             $fatal=[OutOfMemoryException]::new('seeded fatal CLR with context',[InvalidOperationException]::new('ordinary inner context'))
             $fixture=@{Closes=0; Child=$null}
             function Test-RSTestEntryRequiresInteractiveDesktop { param($Entry) $false }
@@ -847,7 +859,11 @@ Describe 'Run-AllTests inventory desktop admission' {
                 . ([scriptblock]::Create($function.Extent.Text))
             }
             $fixtureRoot = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('native-inventory-' + [guid]::NewGuid().ToString('N'))
-            $testRunContext = @{ TestRoot = (Get-RSTestSandboxRoot -RepoRoot $repoRoot); RunRoot = $fixtureRoot }
+            $testRunContext = @{
+                TestRoot = (Get-RSTestSandboxRoot -RepoRoot $repoRoot)
+                RunRoot = $fixtureRoot
+                ArtifactRoot = Join-Path $fixtureRoot 'artifacts/selftest/last_run'
+            }
             $admissions = [Collections.Generic.List[bool]]::new()
             $children = [Collections.Generic.List[object]]::new()
             $closed = [Collections.Generic.List[object]]::new()

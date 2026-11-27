@@ -744,6 +744,7 @@ enum class ConflictClass : uint8_t
     // keep their decisions, records and the task-scoped grant apart from the exact-identity ones.
     PermanentDeleteByNameConfirmation, // the permanent-delete card when a root is deleted by name
     RecycleFailedByName,               // a Recycle escalation to a delete by name
+    EfsPlaintextAndSparseInflation,
     Count,
 };
 
@@ -993,6 +994,7 @@ enum class DeferredConsentRisk : uint8_t
     // deleted by name with corroboration (the card), or before a failed Recycle escalates to that.
     PermanentDeleteByName,
     RecycleEscalationByName,
+    EfsPlaintextAndSparseInflation,
 };
 
 // R4-A02-1: the concrete problem an overlap advisory names (roles of the first conflicting pair).

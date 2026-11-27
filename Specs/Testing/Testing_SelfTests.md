@@ -743,10 +743,13 @@ Environment variables may select alternate test inputs such as profile names, bu
 - After the original Commands child returns a negative native exit and containment closes, the
   runner may emit `[selftest-commands-crash]` to the console before desktop retirement and archive
   processing. The record links the native launch ID and signed exit to the last observed case entry
-  or return. It reads at most 64 KiB of the current run's guarded, launch-fresh Commands trace and
-  publishes only a complete case boundary with a bounded identifier. Missing, stale, unreadable or
-  unsafe traces may omit the record. Use the existing verdict handling and corroborate any
-  callback attribution with the corresponding crash evidence.
+  or return. The runner observes the current run's guarded Commands trace path before launch.
+  A new file or a change in its length, creation time, or write time permits a bounded read after
+  containment closes. This compares the two file observations directly, so coarse filesystem
+  timestamps can precede the launch clock. The runner reads at most 64 KiB and publishes only a
+  complete case boundary with a bounded identifier. Missing, unchanged, unreadable or unsafe
+  traces may omit the record. Use the existing verdict handling and corroborate any callback
+  attribution with the corresponding crash evidence.
 - `Tools/Run-AllTests.ps1` must also write a runner-owned `run-all-tests-results.json` artifact for every invocation. Multi-suite runs must preserve each suite's status counts, case names, failure reasons, skipped reasons, wrapper exit code, canonical `test_root`, and per-run `run_id` in that aggregate file so later suites cannot overwrite earlier evidence. The aggregate must also preserve a non-blocking `test_sandbox_audit` object that records the selected root, allowed run ids, unexpected sibling run directories, and unexpected direct children. Normal execution audits only the selected root and must not enumerate or mutate legacy locations outside it.
 - `Tools/Run-AllTests.ps1` must also derive `run-all-tests-case-history.jsonl` and `run-all-tests-dashboard.md` from the aggregate summary. History rows must include `harness`, `case`, `duration_ms`, `status`, `reason`, `classification`, `seed`, `attempt`, and whether the row came from native case output or retry/shuffle evidence.
 - Runner aggregate summaries must preserve blocking classification metadata: per-suite `classification`, `classification_reason`, `retry_attempts`, and top-level `classifications` counts for `flaky`, `regression`, `isolation_suspect`, and `unclassified_failure`.
