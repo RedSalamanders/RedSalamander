@@ -44,12 +44,16 @@ The selected Plug-in Contract and Viewer PE non-interactive entries reached prom
 
 ## Integrated follow-up
 
-RedSalamander merged the tooling repairs and shared engine pin in PR #357 at `3f2b01251c7e4bc8f8483ebbd8460444174cf1d1`. The test-enabled x64 Release rebuild took 7 minutes 36 seconds and had zero warnings and errors. All 188 output records matched receipt `946bd916ef3e93a02ca5abcf9868baa1f45f8eeac6462611d1e8982047a1b47c`. Fresh CI run `20261127T080428Z-67632-151d4572a667447aa54cc951dd320513` started at 09:04 CET under the approved follow-up window ending at 10:54 CET. The runner retains stdout and stderr in capture `20261127T080427Z-71012-6934f4b8af8642538e47be24ed795227`. The hosted Release jobs are also active on the same source. [PR #357](https://github.com/RedSalamanders/RedSalamander/pull/357) [Hosted qualification](https://github.com/RedSalamanders/RedSalamander/actions/runs/45960884674)
+RedSalamander merged the tooling repairs and shared engine pin in PR #357 at `3f2b01251c7e4bc8f8483ebbd8460444174cf1d1`. The test-enabled x64 Release rebuild took 7 minutes 36 seconds and had zero warnings and errors. All 188 output records matched receipt `946bd916ef3e93a02ca5abcf9868baa1f45f8eeac6462611d1e8982047a1b47c`. Fresh CI run `20261127T080428Z-67632-151d4572a667447aa54cc951dd320513` started at 09:04 CET under the approved follow-up window ending at 10:54 CET. The runner retains stdout and stderr in capture `20261127T080427Z-71012-6934f4b8af8642538e47be24ed795227`. The hosted Release jobs for the same source began native regression. [PR #357](https://github.com/RedSalamanders/RedSalamander/pull/357) [Hosted qualification](https://github.com/RedSalamanders/RedSalamander/actions/runs/45960884674)
 
 The integrated run promoted Tooling Pester with 1,500 passes and zero failures or skips. Terminal result digest `2974f819fb8b21cf75cdea37a08a2e9aba3f95c0573cbd5b3a2be21573460ae0`.
 
 Commands promoted with 965 passes, no failures and five skips. Terminal result digest `4e20b346253d5e8394ec87a10c15ae32ac5e718a56c10cb2d4d5b7ff5cea4bab`.
 The Commands result includes passing Pack and Unpack dialog checks, the ZIP worker round trip, the folder drop guard, and both cases affected by the previous ARM64 foreground failure.
+
+Plug-in Contract promoted with digest `29ff826b183fef266eeed38a15ca00fbca342c25c57e82ca2e5d525722e3cce8`. Its S3 multipart performance and teardown export reported 50 passes, zero failures and `S_OK`. This is the same export that reported 49 passes and one failure in the earlier Full run.
+
+Viewer PE Noninteractive promoted with digest `154624703cd67008b72ff7389bffef11ba93d52f957a2978c6bcb45dfdd34bd9`. Its raw output confirms the ViewerSpace window stayed responsive with `ReadDirectoryInfo` blocked, Close returned within 500 ms, and the provider exited after release. This witnesses the prior failed scenario on the newer build. The earlier Full failure remains in the record.
 
 ### Local File Operations native failure
 
@@ -66,3 +70,31 @@ The matching private symbols resolve the exception thread to `TickPhase7` in `Fo
 All 17 Local scheduler workers were present in the dump. The provider's parallel Delete used 16 contexts and mapped worker ID 16 to slot zero. Either worker could overwrite the other's path arenas and progress state during a Delete. This is a confirmed race on the failing route. The dump does not capture that write. The repair uses the scheduler's full slot count with direct indexing and extends the existing witness to check one successful completion per selected root. [Repair PR #360](https://github.com/RedSalamanders/RedSalamander/pull/360)
 
 The matching executable, provider DLL and private symbols were copied and digest-verified in `20261127T093921Z-65580-357b912006044ade9a4442cef2d4eaf2`. Raw artifacts remain in the owned local evidence sandbox.
+
+The contained launcher stopped the classification retry at the end of the 10:54 CET window. Its trace reached `R0fSmb_NestedTreeCopyToShare`. The runner did not finalize the retry. All four interactive viewer entries remained pending, and the owned process tree drained. The canonical raw run archived with disposition `interrupted` and the launcher streams archived separately.
+
+The fix source `d8b85fac0684204f91649f1ee0c0a89687e526ae` built the test-enabled x64 Release solution in 11 minutes 55 seconds with zero warnings and errors. Receipt `ce5008d9adb017bc9c0b9b38bc7a9d152be0797a5eea5465be0f430ac2c2385f`. Static passed, and 66 selected runner-plan checks passed with zero failures and skips in `20261127T095057Z-42016-754198165825437ba521135d90ef5e15`. A broader standalone Pester diagnostic had 127 passes and two failures while evaluating extracted affected-planning snippets outside the runner context. The dedicated plan result covers exact selection, casing and wider scope refusal. The earlier canonical full tooling entry passed all 1,500 checks on `3f2b01251`.
+
+### Hosted ARM64 regression after the tooling repair
+
+[Hosted ARM64 Release job](https://github.com/RedSalamanders/RedSalamander/actions/runs/45960884674/job/140378452721) completed with failure. Tooling Pester passed 1,499 checks with zero failures and skips, and Compare Directories promoted. The original Commands child exited 1 after 964 passes, one failure and five skips. `cmd_viewer_space_hover_does_not_rebuild_static_cache` recorded `ConsoleWindowClass` under the pointer, no hovered item, and no painted tooltip. The desktop boundary refused restoration over an external console, leaving File Operations and the four viewer entries pending. The hosted archive has no completed repository aggregate for ARM64.
+
+The retirement record contains a SHA-256 of the executable path that matches the standard `C:/Windows/System32/wsl.exe` path encoded as UTF-16LE with the observed casing. The parent had exited before the diagnostic could verify its identity. The repeated console observations are consistent with the runner image issue. The upstream ARM64 image fix remains open as of this run. [Runner image issue](https://github.com/actions/runner-images/issues/14264) [Upstream image fix](https://github.com/actions/runner-images/pull/15362)
+
+The Commands result SHA-256 is `f7c6f287ea5082347e866fda8ff8b4707204738998b23807d1b4d4673db6551e`. ARM64 artifact preservation run `20261127T095914Z-73520-630da9bf9bc5425aa087ed666e9cf389`. Job log preservation run `20261127T100117Z-70728-79864a9faffc45d2900fd159f80999c6`, SHA-256 `39a6c4e4fac2f3cfa7fd362512895900dbcc312c0ed8dd6eab3a99f3d56faee9`.
+
+### Focused Local Delete repair
+
+Five independent native runs passed Setup, `Phase7_DeleteItemsNestedRootsWake` and Cleanup with zero failures and skips. Each run verified one successful completion for each of four selected roots in twenty rounds. The fixture emitted 31–47 ms for the twenty rounds. The same-machine samples describe the test fixture and expose no disk-throughput claim. All five runner exits were `2` with filtered repository coverage.
+
+| Governed x64 Release run | Focused duration (ms) | Fixture metric (µs) |
+| --- | ---: | ---: |
+| `20261127T100117Z-55752-477a4780e3d44e75924f4d50e9ee0ca2` | 78 | 47,000 |
+| `20261127T100349Z-54556-e1baf3ec1c9c488fb8b095e9f6d8cba8` | 62 | 47,000 |
+| `20261127T100438Z-59028-49ee52af45604a95aa44009d239de0e0` | 63 | 31,000 |
+| `20261127T100528Z-60180-3fd4fadbc7324b40aa64310512f32696` | 94 | 47,000 |
+| `20261127T100620Z-70736-8a1017dcc8944ca490b44281c0962726` | 78 | 31,000 |
+
+The initial wrapper supplied an ID associated with the still-live wrapper process. Its native child passed three checks before the sandbox correctly refused archival. The five listed runs use their runner's own identities and completed archival.
+
+The fix merged at `3a82609a0f07313b7707d7fc7dbbfc9e889b082e` after all required checks passed. With fresh desktop agreement, the broader x64 Release File Operations replay began at 11:08 CET on the exact repair build. Run `20261127T100829Z-71032-3a35034d0a544ae7a4b3aa41840a24cf`, launcher capture `20261127T100828Z-63940-23509abeeab44bb69fc99dfb7893995f`. The approved end is 11:58 CET. [Merged PR #360](https://github.com/RedSalamanders/RedSalamander/pull/360)
