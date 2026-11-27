@@ -184,9 +184,14 @@ Describe 'Winget shared publication route' {
         $generator = Get-Content (Join-Path $repoRoot 'Installer/winget/generate-manifest.ps1') -Raw
         $generator | Should Match 'function Resolve-WingetReleaseDate'
         $generator | Should Match 'New-CiWingetManifest -Plan \$plan -Directory \$StageDir -ReleaseDate \$ReleaseDate'
-        $source = Get-Content -LiteralPath (Join-Path $engine 'Tools/Invoke-Publication.ps1') -Raw
-        $source | Should Match 'New-CiWingetManifest \$plan'
-        $source | Should Not Match '(?m)^.*New-CiWingetManifest.*-ReleaseDate'
+        $generator | Should Not Match '\$ReleaseDate = Get-Date -Format'
+        $source = Get-Content (Join-Path $engine 'Tools/Modules/Ci.Publication.psm1') -Raw
+        $hosted = Get-Content -LiteralPath (Join-Path $engine 'Tools/Invoke-Publication.ps1') -Raw
+        $hosted | Should Match 'New-CiWingetManifest \$plan'
+        $hosted | Should Not Match '(?m)^.*New-CiWingetManifest.*-ReleaseDate'
+        $source | Should Not Match 'Get-Date -Format'
+        $source | Should Match 'NestedInstallerFiles:'
+        $source | Should Match 'PortableCommandAlias:'
     }
 }
 

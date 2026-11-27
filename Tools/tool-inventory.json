@@ -5094,7 +5094,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Exercise local client integrity and reparse rejection with system-only PATH in a marked sandbox.",
+      "purpose": "Stage exact pinned client tools and exercise offline client integrity and reparse rejection with system-only PATH in a marked sandbox.",
       "usage": "See command help and the RedMonitor integration contract.",
       "usedBy": [
         "Tools/Tests/RedMonitorConsumption.Tests.ps1"

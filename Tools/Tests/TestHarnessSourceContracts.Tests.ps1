@@ -5597,7 +5597,7 @@ Specs\TestRuns\local_scratch
         $sanitizedMsbuild | Should Match 'coordination''\] = ''shared-dependency'''
         $sanitizedMsbuild | Should Match 'Get-RSMSBuildPropertyValue[\s\S]*?-Name ''Configuration'''
         $sanitizedMsbuild | Should Match 'Get-RSMSBuildPropertyValue[\s\S]*?-Name ''Platform'''
-        $vcpkgInstall | Should Match '(?s)\$vcpkgExitCode = Invoke-RSStreamingProcess\s+`\s*-FilePath \$vcpkgExePath\s+`\s*-Arguments \$vcpkgArguments\.ToArray\(\)\s+`\s*-DelegateArtifactOperation\s+`\s*-WorkingDirectory \$repoRoot'
+        $vcpkgInstall | Should Match '(?s)\$vcpkgExitCode = Invoke-RSStreamingProcess\s+`\s*-FilePath \$vcpkgExePath\s+`\s*-Arguments \$vcpkgArguments\s+`\s*-DelegateArtifactOperation\s+`\s*-WorkingDirectory \$repoRoot'
         $vcpkgInstall | Should Match 'Import-Module \(Join-Path \$PSScriptRoot "Tools\\Modules\\Build\\ProcessStreaming\.psm1"\) -ErrorAction Stop'
         $vcpkgInstall | Should Not Match '\$vcpkgExitCode = Invoke-RSProcess\b'
         $vcpkgInstall | Should Match "coordination = 'shared-dependency'"
