@@ -16162,10 +16162,11 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     releaseDispatch();
     if (! waitFor(changedParentTask, HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH)))
         return false;
-    const auto& changedParent = state.completedTasks.at(changedParentTask);
-    if (changedParent.itemOutcomes.size() != 1u || changedParent.itemOutcomes.front().publication != FileOperations::PublicationState::NotAttempted ||
-        ! hasBytes(namespaceTarget, kSourceBytes) || ! hasBytes(movedLeaf, kOccupantBytes) || hasExactLeaf(refusedTarget) ||
-        hasExactLeaf(movedParent / refusedTarget.filename()) || ! hasBytes(parentDecoy, kOccupantBytes) || ! hasBytes(rootDecoy, kChangedSourceBytes))
+    const auto& changedParent = state.completedTasks.at(changedParentTask).sourceItemResults;
+    if (changedParent.size() != 1u || ! changedParent.front().has_value() ||
+        changedParent.front().value().publication != FileOperations::PublicationState::NotAttempted || ! hasBytes(namespaceTarget, kSourceBytes) ||
+        ! hasBytes(movedLeaf, kOccupantBytes) || hasExactLeaf(refusedTarget) || hasExactLeaf(movedParent / refusedTarget.filename()) ||
+        ! hasBytes(parentDecoy, kOccupantBytes) || ! hasBytes(rootDecoy, kChangedSourceBytes))
         return reject(L"F2 must refuse a replaced parent before dispatch and preserve the original and decoys");
     Debug::Perf::Emit(
         L"FileOps.Smb.CorroboratedRenameControlUs", L"host changed parent before dispatch", Debug::Perf::ElapsedUs(changedParentStart), 1u, 0u, S_OK);
