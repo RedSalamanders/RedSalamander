@@ -2320,9 +2320,16 @@ in the published layout is coerced to Cancel.
 | Destination space unknown | Continue | Same task/risk/destination root when explicitly selected |
 | EFS plaintext destination | Copy/Move without encryption; Copy and keep source on Move | Same task/risk/destination root when explicitly selected |
 | Sparse allocation inflation | Continue | Same task/risk/destination root when explicitly selected |
+| EFS plaintext and sparse inflation together | Copy/Move without encryption or Copy and keep source on Move | Same task, combined risk and destination root when explicitly selected |
 | Placeholder hydration/recall | Download and continue | Same task/risk/destination root when explicitly selected |
 | Security-significant metadata loss on an unpublished Move stage | Move anyway / Copy and keep source / Skip item | Same task/risk/destination root when explicitly selected |
 | Recycle escalation | Delete permanently / Skip; Delete all remaining permanently (multi-item task, a direct action) | Exact item, or the explicit task-scoped choice for later known non-commits on the same profile/root; never the Apply-to-all checkbox |
+
+When the staged transfer has established both EFS loss and sparse inflation before writing file data,
+the deferred-consent gate presents the two consequences together. A matching combined decision covers
+both risks for the item. Any repeat grant is scoped to the combined risk. Placeholder hydration still
+has its own earlier decision before opening a reader. A loss discovered later uses its appropriate
+publication and source-retention rules.
 
 An accepted per-item choice is returned directly to the waiting executor together with its accepted
 prompt observation; validation remains bound to that task, prompt generation, item and destination

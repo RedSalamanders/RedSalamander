@@ -5360,6 +5360,7 @@ void NormalizeDiskFullSkipScope(Task::ConflictDecisionScope& scope) noexcept
         case ConflictBucket::SpaceUnknown:
         case ConflictBucket::EfsPlaintext:
         case ConflictBucket::SparseInflation:
+        case ConflictBucket::EfsPlaintextAndSparseInflation:
         case ConflictBucket::PlaceholderHydration:
         case ConflictBucket::MetadataLoss: scope.applyToAllEligible = true; break;
         case ConflictBucket::DestinationLink: scope.applyToAllEligible = scope.destinationLinkKind != Task::ConflictLinkKind::Unknown; break;
@@ -5507,6 +5508,7 @@ struct ConflictActionPolicy
                 defaultAction = ConflictAction::QueueUntilOtherTaskFinishes;
                 break;
             case ConflictBucket::EfsPlaintext:
+            case ConflictBucket::EfsPlaintextAndSparseInflation:
             case ConflictBucket::MetadataLoss:
                 AddPrimaryIfAvailable(ConflictAction::Proceed);
                 AddPrimaryIfAvailable(ConflictAction::RetainSource);
@@ -5583,6 +5585,7 @@ struct ConflictActionPolicy
         case ConflictBucket::SpaceUnknown:
         case ConflictBucket::EfsPlaintext:
         case ConflictBucket::SparseInflation:
+        case ConflictBucket::EfsPlaintextAndSparseInflation:
         case ConflictBucket::PlaceholderHydration:
         case ConflictBucket::MetadataLoss:
         case ConflictBucket::SameHostOverlap:
@@ -5735,6 +5738,7 @@ struct ConflictActionPolicy
         case ConflictBucket::SparseInflation:
         case ConflictBucket::PlaceholderHydration: policy.Add(ConflictAction::Proceed); break;
         case ConflictBucket::EfsPlaintext:
+        case ConflictBucket::EfsPlaintextAndSparseInflation:
             policy.Add(ConflictAction::Proceed);
             // Copy already retains its source. The distinct source-retention choice belongs
             // only to Move, where it suppresses managed source cleanup after copying.
@@ -6931,6 +6935,7 @@ struct ConflictPromptBeginResult
         case FileOperations::DeferredConsentRisk::SpaceUnknown: return ConflictBucket::SpaceUnknown;
         case FileOperations::DeferredConsentRisk::EfsPlaintext: return ConflictBucket::EfsPlaintext;
         case FileOperations::DeferredConsentRisk::SparseInflation: return ConflictBucket::SparseInflation;
+        case FileOperations::DeferredConsentRisk::EfsPlaintextAndSparseInflation: return ConflictBucket::EfsPlaintextAndSparseInflation;
         case FileOperations::DeferredConsentRisk::PlaceholderHydration: return ConflictBucket::PlaceholderHydration;
         case FileOperations::DeferredConsentRisk::MetadataLoss: return ConflictBucket::MetadataLoss;
         case FileOperations::DeferredConsentRisk::RecycleEscalation: return ConflictBucket::RecycleFailed;
@@ -8617,7 +8622,7 @@ bool DebugFileOpsUnboundCollisionWithholdsDestructiveActionsForSelfTest() noexce
 
 bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
 {
-    static_assert(static_cast<size_t>(ConflictBucket::Count) == 26u);
+    static_assert(static_cast<size_t>(ConflictBucket::Count) == 27u);
     // Capacity is measured in complete typed scopes, not files or question labels. Keep the
     // workload bounded while proving the next new key cannot silently acquire a repeat grant.
     {
@@ -20926,13 +20931,13 @@ struct CrossFileSystemBridge
         FileOperations::BoundObjectAuthority& sourceMetadataAuthority = txn.sourceMetadataAuthority;
         FileSystemMetadataSnapshot& sourceMetadataSnapshot            = txn.sourceMetadataSnapshot;
         FileSystemMetadataTransferResult& metadataResult              = txn.metadataResult;
-        HRESULT hr                                                    = S_OK;
 
         if (txn.hasSourceMetadataSnapshot && txn.sourceMetadata)
         {
             // Compression is never transferred (the destination folder's state is inherited,
             // as in File Explorer), so it is never a pre-content loss.
-            const uint32_t preContentFeatures = sourceMetadataSnapshot.presentFeatures & (FILESYSTEM_METADATA_SPARSE | FILESYSTEM_METADATA_EFS);
+            constexpr uint32_t kPreContentFeatures = FILESYSTEM_METADATA_SPARSE | FILESYSTEM_METADATA_EFS;
+            const uint32_t preContentFeatures      = sourceMetadataSnapshot.presentFeatures & kPreContentFeatures;
             if (txn.destinationStageMetadata)
             {
                 const uint64_t metadataStartUs = PerfNowUs();
@@ -20961,13 +20966,16 @@ struct CrossFileSystemBridge
                 }
             }
 
-            const auto applyPreContentConsent =
-                [&](uint32_t feature, FileOperations::DeferredConsentRisk risk, FileOperationState::LocalizedDiagnosticText retainedReason) noexcept -> HRESULT
+            const uint32_t lostFeatures = metadataResult.lostFeatures & kPreContentFeatures;
+            if (lostFeatures != 0u)
             {
-                if ((metadataResult.lostFeatures & feature) == 0u)
-                {
-                    return S_OK;
-                }
+                using Risk = FileOperations::DeferredConsentRisk;
+                Risk risk  = Risk::SparseInflation;
+                if (lostFeatures == kPreContentFeatures)
+                    risk = Risk::EfsPlaintextAndSparseInflation;
+                else if (lostFeatures == FILESYSTEM_METADATA_EFS)
+                    risk = Risk::EfsPlaintext;
+
                 const DeferredConsentResult consent =
                     RequestBridgeConsent(risk,
                                          FAILED(metadataResult.firstFailure) ? metadataResult.firstFailure : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
@@ -20975,33 +20983,20 @@ struct CrossFileSystemBridge
                                          destinationPath,
                                          &sourceMetadataAuthority,
                                          &sourceMetadataSnapshot);
-                if (FAILED(consent.status))
-                {
-                    return consent.status;
-                }
+                RETURN_IF_FAILED(consent.status);
                 if (consent.action == ConflictAction::RetainSource)
                 {
                     if (managedCleanupRecord.Pending())
                     {
-                        MarkManagedSourceRetained(sourcePath, destinationPath, S_FALSE, retainedReason);
+                        MarkManagedSourceRetained(
+                            sourcePath, destinationPath, S_FALSE, FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_EFS});
                         managedCleanupRecord = {};
                     }
-                    return S_OK;
                 }
-                return consent.action == ConflictAction::Proceed ? S_OK : HRESULT_FROM_WIN32(ERROR_CANCELLED);
-            };
-            hr = applyPreContentConsent(FILESYSTEM_METADATA_EFS,
-                                        FileOperations::DeferredConsentRisk::EfsPlaintext,
-                                        FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_EFS});
-            if (SUCCEEDED(hr))
-            {
-                hr = applyPreContentConsent(FILESYSTEM_METADATA_SPARSE,
-                                            FileOperations::DeferredConsentRisk::SparseInflation,
-                                            FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_SPARSE});
-            }
-            if (FAILED(hr))
-            {
-                return hr;
+                else if (consent.action != ConflictAction::Proceed)
+                {
+                    return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                }
             }
             ReportMetadataOutcome(sourcePath, destinationPath, metadataResult, ! txn.destinationStageMetadata);
         }

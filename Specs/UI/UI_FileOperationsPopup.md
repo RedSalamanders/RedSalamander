@@ -2608,7 +2608,7 @@ count and/or bytes; unknown facts are omitted rather than estimated. The publish
 |---|---|---|
 | Insufficient space / space unknown / sparse inflation | Continue | Cancel |
 | Placeholder hydration | Download and continue | Cancel |
-| EFS encryption cannot be preserved | Copy without encryption (Copy) or Move without encryption (Move); Copy and keep source on Move | Cancel |
+| EFS encryption cannot be preserved, including when sparse allocation is also lost | Copy without encryption (Copy), Move without encryption (Move), or Copy and keep source on Move | Cancel |
 | Metadata loss on Move | Move anyway / Copy and keep source | Cancel |
 | Recycle failure | Delete permanently / Skip / Delete all remaining permanently (multi-item task) / Cancel | Cancel |
 | Recycle failure on a location without file identities (I35 R7.3) | Delete by name / Skip / Delete all remaining by name (multi-item task) / Cancel; the question is "Recycle Bin delete failed. This location can only delete by name." with the by-name consent note | Cancel |
