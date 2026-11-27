@@ -33,6 +33,9 @@
     Perform a clean build
 .PARAMETER Rebuild
     Rebuild all projects
+.PARAMETER Analyze
+    Run MSVC code analysis in a fresh directory under .build/analysis.
+    Analysis uses pinned source dependencies and produces diagnostic outputs without a build receipt.
 .PARAMETER MaxCpuCount
     Optional maximum MSBuild worker count. Zero uses MSBuild's default.
 .PARAMETER Zip
@@ -122,10 +125,16 @@ param(
 
     [string]$DxUiSdkInputDescriptor = '',
 
-    [switch]$EnableTests
+    [switch]$EnableTests,
+
+    [switch]$Analyze
 )
 
 $ErrorActionPreference = "Stop"
+if ($Analyze -and ($Clean -or $Rebuild -or $ProductionOnly -or $OfficialRelease -or
+        $Zip -or $GenerateWingetManifest -or $CanonicalPackageDirectory -or $DxUiSdkInputDescriptor)) {
+    throw '-Analyze requires a source build without Clean, Rebuild, SDK, packaging, or production/release actions.'
+}
 if ($CanonicalPackageDirectory -and -not ($Zip -or $GenerateWingetManifest)) {
     throw 'CanonicalPackageDirectory requires Zip or GenerateWingetManifest.'
 }
@@ -392,13 +401,18 @@ try {
         -RepoRoot $SolutionDir `
         -Scope $artifactOperationScope
 
-$versionContext = Resolve-RSVersionContext `
-    -RepoRoot $SolutionDir `
-    -Configuration $Configuration `
-    -Platform $Platform `
-    -BuildNumber $BuildNumber `
-    -OfficialRelease:$OfficialRelease
-$versionStatePath = Get-RSVersionStatePath -RepoRoot $SolutionDir
+$versionContext = if ($Analyze) {
+    $diagnosticBuildNumber = if ($BuildNumber -eq 0) { 1 } else { $BuildNumber }
+    New-RSVersionContext -RepoRoot $SolutionDir -Configuration $Configuration -Platform $Platform -BuildNumber $diagnosticBuildNumber
+} else {
+    Resolve-RSVersionContext `
+        -RepoRoot $SolutionDir `
+        -Configuration $Configuration `
+        -Platform $Platform `
+        -BuildNumber $BuildNumber `
+        -OfficialRelease:$OfficialRelease
+}
+$versionStatePath = if ($Analyze) { 'Diagnostic invocation' } else { Get-RSVersionStatePath -RepoRoot $SolutionDir }
 
 # Function to find MSBuild
 function Find-MSBuild {
@@ -551,7 +565,7 @@ function Initialize-RSBuildVcpkgEnvironment {
     $environment = [hashtable](Get-RSVcpkgBuildEnvironment -RepoRoot $RepoRoot -ToolRoot $toolRoot -Platform $Platform -Configuration $Configuration -RuntimeOnly)
     $context = Initialize-RSVcpkgToolContext -RepoRoot $RepoRoot
     # Explicit MSBuild inputs replace imported integration and ambient flags.
-    foreach ($name in @('CL','_CL_','LINK','_LINK_','ForceImportBeforeCppTargets','ForceImportAfterCppTargets')) {
+    foreach ($name in @('CL','_CL_','LINK','_LINK_','ForceImportBeforeCppTargets','ForceImportAfterCppTargets','RSAnalysisRunId')) {
         $environment[$name] = $null
     }
     return [pscustomobject]@{ Environment=$environment; ToolCommit=$context.ToolCommit; Baseline=$context.Baseline }
@@ -673,7 +687,9 @@ Write-Host "Detection method: $($msbuildInfo.Method)" -ForegroundColor Gray
 Write-Host ""
 
 # Determine build target
-$buildTarget = if ($Rebuild) {
+$buildTarget = if ($Analyze) {
+    "Analyze"
+} elseif ($Rebuild) {
     "Rebuild"
 } elseif ($Clean) {
     "Clean;Build"
@@ -785,7 +801,52 @@ if ($DxUiSdkInputDescriptor) {
 $vcpkgBinding = Initialize-RSBuildVcpkgEnvironment -RepoRoot $SolutionDir -Platform $Platform -Configuration $Configuration
 $script:buildVcpkgEnvironment = $vcpkgBinding.Environment
 $receiptBuildArguments += @('vcpkg-binding=explicit-link-inputs-v1', "vcpkg-tool=$($vcpkgBinding.ToolCommit)", "vcpkg-baseline=$($vcpkgBinding.Baseline)")
-Restore-RSDxUiDependency -RepoRoot $SolutionDir -MSBuildPath $msbuildPath -Platform $Platform -Configuration $Configuration -CheckUpdates -Rebuild:$Rebuild -ProjectName $repairProjectName -SdkInput $sdkInput
+$commonBuildArguments = @(
+    "/p:Configuration=$Configuration"
+    "/p:Platform=$Platform"
+    $(if ($MaxCpuCount -gt 0) { "/m:$MaxCpuCount" } else { "/m" })
+    "/v:minimal"      # Minimal verbosity
+    "/nologo"         # Suppress MSBuild banner
+    "/p:SolutionDir=$SolutionDirWithSlash"
+    "/p:RSVersionBuildNumber=$($versionContext.BuildNumber)"
+    "/p:RSBuildEnableTests=$($effectiveTestsEnabled.ToString().ToLowerInvariant())"
+    "/p:RSBuildCompilerDebugInformation=$effectiveCompilerDebugInformation"
+)
+Restore-RSDxUiDependency -RepoRoot $SolutionDir -MSBuildPath $msbuildPath -Platform $Platform -Configuration $Configuration -CheckUpdates:(-not $Analyze) -Rebuild:$Rebuild -ProjectName $repairProjectName -SdkInput $sdkInput
+if ($Analyze) {
+    $analysisRunId = [Guid]::NewGuid().ToString('N')
+    $analysisOutput = Resolve-RSGuardedRepositoryPath -RepoRoot $SolutionDir -GuardedRelativeRoot '.build/analysis' `
+        -Path (Join-Path $SolutionDir ".build/analysis/$analysisRunId")
+    if ($analysisOutput -match '[%;"\r\n]') {
+        throw 'The analysis output path contains unsupported MSBuild delimiters.'
+    }
+    if (Test-Path -LiteralPath $analysisOutput) {
+        throw 'The analysis run directory already exists.'
+    }
+    $analysisTarget = if ($null -ne $unionSelection) {
+        $unionSelection.MSBuildTarget
+    } elseif ($ProjectName) {
+        $buildSelection.MSBuildTarget
+    } else {
+        'Build'
+    }
+    $analysisArguments = @(
+        $buildInput
+        "/t:$analysisTarget"
+        "/p:RSAnalysisRunId=$analysisRunId"
+        "/p:RSOutputRoot=$analysisOutput\"
+    ) + $commonBuildArguments
+    Write-Host "MSVC analysis outputs: $analysisOutput" -ForegroundColor Cyan
+    $analysisSourceBefore = Get-RSBuildSourceSnapshot -RepoRoot $SolutionDir
+    $null = Invoke-MSBuild -MSBuildPath $msbuildPath -Arguments $analysisArguments -WorkingDirectory $SolutionDir
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $analysisSourceAfter = Get-RSBuildSourceSnapshot -RepoRoot $SolutionDir
+    if ($analysisSourceAfter.SnapshotId -ne $analysisSourceBefore.SnapshotId) {
+        throw 'Repository source changed during code analysis.'
+    }
+    Write-Host "MSVC code analysis passed for $Platform | $Configuration." -ForegroundColor Green
+    exit 0
+}
 if($null -eq $sdkInput){
     $oldSdkRecord=Resolve-RSGuardedRepositoryPath -RepoRoot $SolutionDir -GuardedRelativeRoot ".build/$Platform/$Configuration" -Path (Join-Path $buildOutputDir 'DxUi.sdk-input.json')
     if(Test-Path -LiteralPath $oldSdkRecord){Remove-Item -LiteralPath $oldSdkRecord}
@@ -846,20 +907,7 @@ if ($ProductionOnly) {
 }
 
 # Build parameters
-$buildParams = @(
-    $buildInput
-    "/t:$msbuildTarget"
-    "/p:Configuration=$Configuration"
-    "/p:Platform=$Platform"
-    $(if ($MaxCpuCount -gt 0) { "/m:$MaxCpuCount" } else { "/m" })
-    "/v:minimal"      # Minimal verbosity
-    "/nologo"         # Suppress MSBuild banner
-)
-
-$buildParams += "/p:SolutionDir=$SolutionDirWithSlash"
-$buildParams += "/p:RSVersionBuildNumber=$($versionContext.BuildNumber)"
-$buildParams += "/p:RSBuildEnableTests=$($effectiveTestsEnabled.ToString().ToLowerInvariant())"
-$buildParams += "/p:RSBuildCompilerDebugInformation=$effectiveCompilerDebugInformation"
+$buildParams = @($buildInput, "/t:$msbuildTarget") + $commonBuildArguments
 $buildParams += "/p:RSBuildArtifactManifestRoot=$($artifactManifestDir.TrimEnd('\'))\"
 $buildParams += $sdkProperties
 if ($null -ne $sdkInput) {
