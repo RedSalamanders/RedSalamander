@@ -1,0 +1,17 @@
+---
+Checks: '-*,bugprone-reserved-identifier,readability-identifier-naming'
+WarningsAsErrors: 'bugprone-reserved-identifier,readability-identifier-naming'
+HeaderFilterRegex: '(^|[/\\])(Common|Plugins|PoC|RedConfigure|RedLauncher|RedSalamander|RedSalamanderSearchService|Tests|Tools)[/\\].*\.(h|hpp|inl)$'
+ExcludeHeaderFilterRegex: '(^|[/\\])(ThirdParty|External|legacy|\.ci-engine|\.build[/\\](dependencies|vcpkg_installed)|Tools[/\\]TerminalEngine)[/\\]'
+CheckOptions:
+  - key: readability-identifier-naming.PrivateMemberCase
+    value: camelBack
+  - key: readability-identifier-naming.PrivateMemberPrefix
+    value: '_'
+  - key: readability-identifier-naming.ProtectedMemberCase
+    value: camelBack
+  - key: readability-identifier-naming.ProtectedMemberPrefix
+    value: '_'
+  - key: readability-identifier-naming.IgnoreMainLikeFunctions
+    value: true
+...

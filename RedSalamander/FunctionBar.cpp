@@ -36,11 +36,11 @@ using Common::WindowSizing::PixelToDip;
 struct FunctionBarRenderResources final : Common::Rendering::HwndRenderTargetResources
 {
     UINT dpi = USER_DEFAULT_SCREEN_DPI;
-    wil::com_ptr<IDWriteFactory> dwriteFactory;
-    wil::com_ptr<IDWriteInlineObject> ellipsisSign;
-    wil::com_ptr<IDWriteTextFormat> keyFormat;
-    wil::com_ptr<IDWriteTextFormat> labelFormat;
-    wil::com_ptr<IDWriteTextFormat> modifierFormat;
+    wil::com_ptr_nothrow<IDWriteFactory> dwriteFactory;
+    wil::com_ptr_nothrow<IDWriteInlineObject> ellipsisSign;
+    wil::com_ptr_nothrow<IDWriteTextFormat> keyFormat;
+    wil::com_ptr_nothrow<IDWriteTextFormat> labelFormat;
+    wil::com_ptr_nothrow<IDWriteTextFormat> modifierFormat;
 };
 
 [[nodiscard]] D2D1_RECT_F RectF(const RECT& rc, float dpi) noexcept
@@ -365,7 +365,7 @@ using Common::Colors::BlendColorRefWeightedTruncate;
         return {};
     }
 
-    wil::com_ptr<IDWriteTextFormat> textFormat;
+    wil::com_ptr_nothrow<IDWriteTextFormat> textFormat;
     const HRESULT hr = DxUi::Typography::CreateTextFormat(dwriteFactory, spec, textFormat.put(), L"");
     if (FAILED(hr) || ! textFormat)
     {

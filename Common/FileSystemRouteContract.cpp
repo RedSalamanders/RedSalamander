@@ -10,7 +10,10 @@
 #define NOMINMAX
 #include <Windows.h>
 
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027 28182) // WIL headers
 #include <wil/com.h>
+#pragma warning(pop)
 
 namespace FileSystemRouteContract
 {
@@ -440,7 +443,7 @@ QueryResult Query(IFileSystem* fileSystem, std::wstring_view path, FileSystemOpe
         return MakeQueryFailure(QueryState::ContractViolation, E_INVALIDARG);
     }
 
-    wil::com_ptr<IFileSystemRouteCapabilities> route;
+    wil::com_ptr_nothrow<IFileSystemRouteCapabilities> route;
     const HRESULT queryHr = fileSystem->QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void());
     if (FAILED(queryHr) || ! route)
     {
@@ -472,7 +475,7 @@ BooleanResult QueryTransferPeerAllowed(
     {
         return BooleanResult{.state = QueryState::ContractViolation, .status = E_INVALIDARG};
     }
-    wil::com_ptr<IFileSystemRouteCapabilities> route;
+    wil::com_ptr_nothrow<IFileSystemRouteCapabilities> route;
     const HRESULT hr = fileSystem->QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void());
     if (FAILED(hr) || ! route)
     {
@@ -513,7 +516,7 @@ ChildNameResult ValidateChildName(IFileSystem* fileSystem, std::wstring_view par
     {
         return ChildNameResult{.state = QueryState::ContractViolation, .status = E_INVALIDARG};
     }
-    wil::com_ptr<IFileSystemRouteCapabilities> route;
+    wil::com_ptr_nothrow<IFileSystemRouteCapabilities> route;
     const HRESULT hr = fileSystem->QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void());
     if (FAILED(hr) || ! route)
     {
@@ -561,7 +564,7 @@ ChildNameContractResult QueryChildNameContract(IFileSystem* fileSystem,
     {
         return ChildNameContractResult{.state = QueryState::ContractViolation, .status = E_POINTER};
     }
-    wil::com_ptr<IFileSystemRouteCapabilities> route;
+    wil::com_ptr_nothrow<IFileSystemRouteCapabilities> route;
     const HRESULT hr = fileSystem->QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void());
     if (FAILED(hr) || ! route)
     {
@@ -599,7 +602,7 @@ StringResult QueryChildNameCollisionKey(IFileSystem* fileSystem,
     {
         return StringResult{.state = QueryState::ContractViolation, .status = E_POINTER};
     }
-    wil::com_ptr<IFileSystemRouteCapabilities> route;
+    wil::com_ptr_nothrow<IFileSystemRouteCapabilities> route;
     const HRESULT queryHr = fileSystem->QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void());
     if (FAILED(queryHr) || ! route)
     {
@@ -630,7 +633,7 @@ StringResult QueryJoinedPath(IFileSystem* fileSystem, std::wstring_view parentPa
     {
         return StringResult{.state = QueryState::ContractViolation, .status = E_POINTER};
     }
-    wil::com_ptr<IFileSystemRouteCapabilities> route;
+    wil::com_ptr_nothrow<IFileSystemRouteCapabilities> route;
     const HRESULT queryHr = fileSystem->QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void());
     if (FAILED(queryHr) || ! route)
     {

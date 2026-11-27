@@ -21,9 +21,9 @@ namespace Common::Rendering
 // caller because font and trimming policy are surface-specific.
 struct HwndRenderTargetResources
 {
-    wil::com_ptr<ID2D1Factory> d2dFactory;
-    wil::com_ptr<ID2D1HwndRenderTarget> target;
-    wil::com_ptr<ID2D1SolidColorBrush> solidBrush;
+    wil::com_ptr_nothrow<ID2D1Factory> d2dFactory;
+    wil::com_ptr_nothrow<ID2D1HwndRenderTarget> target;
+    wil::com_ptr_nothrow<ID2D1SolidColorBrush> solidBrush;
 
     void ResetTarget() noexcept
     {
@@ -71,7 +71,7 @@ struct HwndRenderTargetResources
             const D2D1_RENDER_TARGET_PROPERTIES properties          = D2D1::RenderTargetProperties();
             const D2D1_HWND_RENDER_TARGET_PROPERTIES hwndProperties = D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU(width, height));
 
-            wil::com_ptr<ID2D1HwndRenderTarget> createdTarget;
+            wil::com_ptr_nothrow<ID2D1HwndRenderTarget> createdTarget;
             const HRESULT hr = d2dFactory->CreateHwndRenderTarget(properties, hwndProperties, createdTarget.addressof());
             if (FAILED(hr) || ! createdTarget)
             {
