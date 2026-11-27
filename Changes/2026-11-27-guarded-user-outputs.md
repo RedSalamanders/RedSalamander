@@ -1,4 +1,5 @@
-- Guard viewer exports, file-list reports and local archive outputs against competing changes.
+- Guard settings, viewer exports, file-list reports and local archive outputs against competing changes.
+  - Recover interrupted settings replacements on cold start and retain any competing canonical file.
   - Carry the accepted destination version through staging and publish the completed file without replacing a competing creation.
   - Restore the previous file only into a vacant destination and report a retained recovery sibling.
   - Keep WIC encoding on the owned staging handle and retain the existing cancellation, skip and source-retention rules.

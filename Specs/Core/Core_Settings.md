@@ -112,25 +112,28 @@ Notes:
 
 ### Atomic saves
 
-Saving must be atomic and conflict-aware to prevent partial writes and stale-snapshot overwrites:
+Each publication atomically installs a complete staged file. Existing-profile replacement uses two moves.
+The canonical name can be briefly vacant while its verified previous contents are in a recovery sibling.
 
-1. A loaded `Settings` snapshot retains the exact identity of the canonical save target read from the same
-   handle as its bytes. A missing target is represented explicitly by no stamp.
-2. Serialize the complete document before publication. Malformed UTF-16 is a save failure
-   (`ERROR_NO_UNICODE_TRANSLATION`); it is never replaced by an empty JSON string.
-3. Stage the bytes through `Common::Files::LocalFileTransaction`, which creates a unique sibling in the same
-   directory, uses the bounded zero-progress-safe handle writer, verifies the requested size, and flushes it.
-4. Under the per-target cross-process commit lock, open the existing file with write sharing disabled and
-   compare its handle stamp with the snapshot. A missing target, held writer or changed stamp returns
-   `ERROR_REVISION_MISMATCH`. Recheck the path's stamp immediately before rename. The preferred rename retains
-   the guard. Classic handle rename closes the guard before its own final stamp check. The final
-   name-check-to-rename interval remains because the preferred rename shares delete and the classic rename
-   requires a closed destination handle.
-5. Publish the unique sibling through its open handle. When the snapshot expects a missing target, neither the
-   preferred rename nor its compatibility fallback may replace a destination. A competing creation reports
-   `ERROR_REVISION_MISMATCH` and preserves the other writer's file. The identity returned to the caller comes
-   from the finalized sibling held through the rename. Do not re-stat the destination afterward.
-6. A successful mutable save advances the caller's expected identity so the same snapshot can be saved again.
+1. A loaded `Settings` snapshot retains the canonical save target's identity and data stamp. Check the stamp
+   before and after reading through the same handle. A missing target has no stamp.
+2. Serialize the complete document before publication. Malformed UTF-16 returns
+   `ERROR_NO_UNICODE_TRANSLATION` and preserves the existing file.
+3. Stage the bytes in a unique sibling through `Common::Files::LocalFileTransaction`. Complete the writes,
+   verify the size, and flush before moving the original.
+4. Under the per-profile commit lock, open the expected existing file without write or delete sharing
+   and without following a leaf reparse point. Compare the held file to the accepted revision.
+   A missing file, conflicting writer or changed stamp returns `ERROR_REVISION_MISMATCH`.
+   Persist and flush a versioned `<SettingsFileName>.save-pending` record before moving that handle to
+   `<SettingsFileName>.save-previous-{GUID}.bak`. The record contains that GUID, the original volume and
+   file identity, last write time and size. It carries no path.
+5. Publish through the staged file's open handle. Both the preferred rename and the classic fallback
+   require a vacant name. The same rule applies to a snapshot that expects a missing target. If publication
+   fails, restore the held original only into a vacant name. A competing creation reports
+   `ERROR_REVISION_MISMATCH`. When the previous file cannot return to its canonical name, retain it and the
+   recovery record. Retain the caller's settings edit for retry.
+6. After successful publication, retire the previous file through its held handle. Report any retained backup.
+   A successful mutable save advances the expected stamp from the finalized staged handle.
 
 Moving the canonical settings file to a diagnostic or explicit-replacement backup is also a publication
 transaction. The reader MUST retain the handle to the exact file identity that supplied the
@@ -147,6 +150,22 @@ The replacement itself is never moved or overwritten.
 The immutable `SaveSettings(..., const Settings&)` overload is a one-shot compatibility surface for shutdown
 and focused test snapshots. A caller that may save the same in-memory object again MUST use the mutable overload.
 Schema-file publication uses the same unique-sibling transaction but has no settings-snapshot CAS contract.
+
+#### Interrupted-save recovery
+
+Cold load uses the same profile commit lock to inspect the pending record before choosing a canonical,
+compatibility or default profile. For a vacant canonical name, it opens the recorded sibling without following
+a leaf reparse point, checks the volume, file identity, last write time and size, and restores through the
+verified handle with no replacement. A winning canonical file takes precedence. Recovery preserves any
+previous file already in its recovery sibling and reports its location. After resolving the name, recovery
+retires the matching pending record through its held handle. An invalid or unverifiable record leaves the
+files alone. A missing canonical name with unresolved recovery blocks fallback and saves until recovery can
+finish. The stage can survive an abrupt exit as a private `.save-stage-*.tmp` sibling. Recovery publishes
+only the verified previous file.
+
+An unresolved record blocks new saves, including an attempt from a stale snapshot that expects a missing
+file. An ordinary live reload never repairs the journal or moves its sibling. It returns
+`ERROR_REVISION_MISMATCH` during the vacant-name interval, so the running settings remain available.
 
 ### Recovery behavior
 
@@ -185,7 +204,8 @@ For the normal startup / explicit recovery path (`LoadSettings(...)`):
   standard backup path, then saves against the now-missing canonical target.
 
 For the non-destructive hot-reload path (`TryLoadSettingsNoRecovery(...)`):
-- Missing file returns `S_FALSE`.
+- A missing file without a pending save record returns `S_FALSE`.
+- A vacant canonical name with a pending record returns `ERROR_REVISION_MISMATCH`.
 - Invalid JSON / invalid types / unsupported schema version returns a failure `HRESULT`.
 - The file is left in place; it is **not** renamed to `.bad.*`.
 - The caller decides whether to keep current runtime settings, warn the user, or recover in some other way.
@@ -282,7 +302,7 @@ Return contract:
   atomically moved into place. It MUST NOT re-stat the destination path after replacement, because a
   later external writer may already own that path.
 - Save entry points compare `expectedFileStamp` under the cross-process target lock. Both a changed identity and
-  an unexpected create/delete are conflicts. `ERROR_REVISION_MISMATCH` means no settings bytes were published.
+  an unexpected create/delete are conflicts. `ERROR_REVISION_MISMATCH` means the attempted save published no new settings bytes. If another writer occupied the name after displacement, the accepted original remains in its recovery sibling.
 - `BackupSettingsForExplicitReplacement(...)` applies the same comparison under the same target lock before
   moving the file. `ERROR_REVISION_MISMATCH` means no target or backup path was modified.
 - Numeric accessors for 32-bit fields MUST reject values greater than `UINT32_MAX`; they MUST NOT truncate.

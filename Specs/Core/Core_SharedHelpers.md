@@ -272,6 +272,13 @@ PluginContract's owned-output fixture covers both policies and both handle-renam
 installed after admission, failed publication retaining the namespace pin, exact rollback and a later
 writer reusing the temporary spelling. Candidate publish timings are observational, not a speedup claim.
 
+**Settings publication and recovery.** The settings store supplies a profile-specific backup path and persists
+a bounded, versioned recovery record before displacement. The common transaction still verifies and moves the
+held original and publishes into a vacant name on both rename paths. Cold recovery reopens the recorded
+sibling without following a reparse point, verifies its recorded identity and data stamp and calls
+`RestoreBoundFileIfFree` on that exact handle. The settings store owns the commit lock, journal lifecycle
+and restart policy. [Settings contract](Core_Settings.md#interrupted-save-recovery)
+
 **Guarded user output.** The caller captures a destination revision before approving an overwrite
 and keeps that value through staging. A missing destination grants create-only publication.
 `GuardedSaveDialog.h` captures the existing target from the shell overwrite callback before the

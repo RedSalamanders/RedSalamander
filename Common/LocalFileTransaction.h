@@ -118,6 +118,14 @@ struct TargetRenameCheck
     HRESULT (*verify)(void*, FILE_INFO_BY_HANDLE_CLASS) noexcept = nullptr;
 };
 
+struct GuardedReplacementOptions
+{
+    const std::filesystem::path* backupPath                                   = nullptr;
+    void* context                                                             = nullptr;
+    HRESULT (*prepareBackup)(void*, HANDLE, const LocalFileVersion&) noexcept = nullptr;
+    BY_HANDLE_FILE_INFORMATION* committedInformation                          = nullptr;
+};
+
 #ifdef ENABLE_TESTS
 namespace Testing
 {
@@ -444,24 +452,26 @@ public:
     [[nodiscard]] HRESULT CommitGuarded(const std::optional<LocalFileVersion>& acceptedVersion,
                                         std::filesystem::path& retainedBackup,
                                         std::optional<uint64_t> expectedSize     = std::nullopt,
-                                        wil::unique_hfile* retainedPublishedFile = nullptr) noexcept
+                                        wil::unique_hfile* retainedPublishedFile = nullptr,
+                                        GuardedReplacementOptions options        = {}) noexcept
     {
         retainedBackup.clear();
         _policy = ExistingTargetPolicy::FailIfExists;
         if (! acceptedVersion.has_value())
         {
-            return DestinationConflict(Commit(expectedSize, nullptr, retainedPublishedFile));
+            return DestinationConflict(Commit(expectedSize, options.committedInformation, retainedPublishedFile));
         }
 
         struct Displacement
         {
             const std::filesystem::path& target;
             const LocalFileVersion& accepted;
+            GuardedReplacementOptions options;
             wil::unique_hfile original;
             std::filesystem::path backup;
             std::vector<std::byte> restoreRename;
         };
-        Displacement displacement{_targetPath, acceptedVersion.value(), {}, {}, {}};
+        Displacement displacement{_targetPath, acceptedVersion.value(), options, {}, {}, {}};
         const TargetRenameCheck check{.context = &displacement,
                                       .verify  = [](void* context, FILE_INFO_BY_HANDLE_CLASS) noexcept -> HRESULT
         {
@@ -508,23 +518,42 @@ public:
             {
                 return restoreHr;
             }
-            GUID id{};
-            const HRESULT guidHr = CoCreateGuid(&id);
-            if (FAILED(guidHr))
+            if (state.options.backupPath)
             {
-                return guidHr;
+                state.backup = *state.options.backupPath;
+                if (state.backup.parent_path() != state.target.parent_path() || state.backup == state.target)
+                {
+                    return E_INVALIDARG;
+                }
             }
-            std::array<wchar_t, 40u> guidText{};
-            if (StringFromGUID2(id, guidText.data(), static_cast<int>(guidText.size())) <= 0)
+            else
             {
-                return E_FAIL;
+                GUID id{};
+                const HRESULT guidHr = CoCreateGuid(&id);
+                if (FAILED(guidHr))
+                {
+                    return guidHr;
+                }
+                std::array<wchar_t, 40u> guidText{};
+                if (StringFromGUID2(id, guidText.data(), static_cast<int>(guidText.size())) <= 0)
+                {
+                    return E_FAIL;
+                }
+                state.backup = state.target.parent_path() / std::format(L".$rs-guard-{}.bak", guidText.data());
             }
-            state.backup = state.target.parent_path() / std::format(L".$rs-guard-{}.bak", guidText.data());
             std::vector<std::byte> backupRename;
             const HRESULT prepareHr = PrepareRenameInfo(state.backup.native(), backupRename);
             if (FAILED(prepareHr))
             {
                 return prepareHr;
+            }
+            if (state.options.prepareBackup)
+            {
+                const HRESULT journalHr = state.options.prepareBackup(state.options.context, original.get(), observed);
+                if (FAILED(journalHr))
+                {
+                    return journalHr;
+                }
             }
             const HRESULT moveHr = RenameBoundFileIfFree(original.get(), backupRename);
             if (FAILED(moveHr))
@@ -540,7 +569,7 @@ public:
 #endif
             return S_OK;
         }};
-        const HRESULT result = Commit(expectedSize, nullptr, retainedPublishedFile, check);
+        const HRESULT result = Commit(expectedSize, options.committedInformation, retainedPublishedFile, check);
         if (! displacement.original)
         {
             return DestinationConflict(result);
@@ -563,6 +592,14 @@ public:
             return conflict == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) ? conflict : HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
         }
         return DestinationConflict(result);
+    }
+
+    // The caller must already hold the verified, delete-capable source handle.
+    [[nodiscard]] static HRESULT RestoreBoundFileIfFree(HANDLE file, const std::filesystem::path& target) noexcept
+    {
+        std::vector<std::byte> storage;
+        const HRESULT prepareHr = PrepareRenameInfo(Common::Paths::ToExtendedWin32Path(target.native()), storage);
+        return FAILED(prepareHr) ? prepareHr : DestinationConflict(RenameBoundFileIfFree(file, storage));
     }
 
     [[nodiscard]] HANDLE GetHandle() const noexcept
