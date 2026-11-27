@@ -687,10 +687,21 @@ Write-Output "vcpkg $Platform $VcpkgExe $VcpkgRoot $($ReuseCurrent.IsPresent)"
 param([string]$Configuration, [string]$Platform, [int]$BuildNumber, [switch]$Zip, [switch]$CanonicalPackageDirectory)
 Write-Output "build $Configuration $Platform $BuildNumber $($Zip.IsPresent) $($CanonicalPackageDirectory.IsPresent)"
 '@ | Set-Content -LiteralPath (Join-Path $fixture 'build.ps1')
+        @'
+param([string]$Platform, [string]$Configuration, [switch]$FailDxUi, [switch]$CompilerFree)
+$ErrorActionPreference = 'Stop'
+# The fixture contains only stub restore dependencies. Set the guard in this child process.
+$env:CI_NATIVE_BUILDS_DISABLED = [string]$CompilerFree.IsPresent
+$env:RS_PORTABLE_ENTRY_TEST_FAIL = if ($FailDxUi) { '1' } else { '0' }
+$null = $PSBoundParameters.Remove('FailDxUi')
+$null = $PSBoundParameters.Remove('CompilerFree')
+& (Join-Path $PSScriptRoot 'restore.ps1') @PSBoundParameters
+if (-not $?) { exit $LASTEXITCODE }
+'@ | Set-Content -LiteralPath (Join-Path $fixture 'invoke-stub-restore.ps1')
     }
 
     It 'verifies RedMonitor and forwards the requested profile through the pinned restore sequence' {
-        $command = Join-Path $fixture 'restore.ps1'
+        $command = Join-Path $fixture 'invoke-stub-restore.ps1'
         $default = @(& $pwsh -NoProfile -File $command)
         $LASTEXITCODE | Should Be 0
         ($default -join '|') | Should Be 'client|DxUi x64 Debug|vcpkg x64 pinned-tool pinned-registry True'
@@ -701,15 +712,16 @@ Write-Output "build $Configuration $Platform $BuildNumber $($Zip.IsPresent) $($C
     }
 
     It 'stops before the vcpkg stage and propagates a DxUi restore failure' {
-        $previous = $env:RS_PORTABLE_ENTRY_TEST_FAIL
-        try {
-            $env:RS_PORTABLE_ENTRY_TEST_FAIL = '1'
-            $output = @(& $pwsh -NoProfile -File (Join-Path $fixture 'restore.ps1'))
-            $LASTEXITCODE | Should Be 19
-            ($output -join '|') | Should Be 'client|DxUi x64 Debug'
-        } finally {
-            $env:RS_PORTABLE_ENTRY_TEST_FAIL = $previous
-        }
+        $output = @(& $pwsh -NoProfile -File (Join-Path $fixture 'invoke-stub-restore.ps1') -FailDxUi)
+        $LASTEXITCODE | Should Be 19
+        ($output -join '|') | Should Be 'client|DxUi x64 Debug'
+    }
+
+    It 'rejects restore before touching dependencies in compiler-free checks' {
+        $output = @(& $pwsh -NoProfile -File (Join-Path $fixture 'invoke-stub-restore.ps1') -CompilerFree 2>&1)
+        ($LASTEXITCODE -ne 0) | Should Be $true
+        ($output -join ' ') | Should Match 'Dependency restoration is forbidden in compiler-free PR checks'
+        @($output | Where-Object { $_ -is [string] -and $_ -eq 'client' }).Count | Should Be 0
     }
 
     It 'preserves the packaging version while routing the requested Release architecture to the canonical path' {
