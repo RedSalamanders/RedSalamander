@@ -1,1 +1,0 @@
-- Verify mixed Local and Samba Move on a live share that provides source facts without exact item identity.

@@ -1,1 +1,0 @@
-- Expose the pinned shared scope options through both root test commands, preserve the single-profile and interactive compatibility paths, and classify the plugin fixture README as CI prose.
