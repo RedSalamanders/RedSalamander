@@ -14423,15 +14423,13 @@ HRESULT STDMETHODCALLTYPE FileSystem::DeleteItems(const wchar_t* const* paths,
         // without taking scheduleMutex (kept in sync under scheduleMutex below).
         std::atomic<size_t> readyAtomic{ready.size()};
 
-        // Per scheduler-worker-stream OperationContext, reused across the items a stream runs
-        // (stable progress-stream ids); a stream never runs two steps at once, so the mutex only
-        // serialises lazy init.
-        constexpr size_t kDeleteStreamContextSlots = 16;
-        std::array<std::optional<OperationContext>, kDeleteStreamContextSlots> deleteStreamContexts{};
+        // Each scheduler worker, including the reserve, owns its mutable path arenas and
+        // progress state. The mutex only serializes lazy initialization.
+        std::array<std::optional<OperationContext>, kFileOpsSchedulerWorkerSlots> deleteStreamContexts{};
         std::mutex deleteStreamContextsMutex;
         const auto getDeleteContext = [&](uint64_t streamId) -> OperationContext&
         {
-            const size_t slot = streamId < deleteStreamContexts.size() ? static_cast<size_t>(streamId) : 0;
+            const size_t slot = static_cast<size_t>(streamId);
             std::scoped_lock lock(deleteStreamContextsMutex);
             if (! deleteStreamContexts[slot].has_value())
             {

@@ -4481,8 +4481,27 @@ case SelfTestState::Step::Phase7_DeleteItemsNestedRootsWake:
                                  : L"is still there"));
             return true;
         }
+        for (size_t index = 0u; index < call->paths.size(); ++index)
+        {
+            const auto completions = call->callback.itemCompletionCounts[index];
+            const auto status      = call->callback.itemCompletedStatuses[index];
+            if (completions != 1u || status != S_OK)
+            {
+                Fail(std::format(L"Nested-roots delete check round {} item {}: {} completion reports, status 0x{:08X}.",
+                                 round,
+                                 index,
+                                 completions,
+                                 static_cast<unsigned long>(status)));
+                return true;
+            }
+        }
     }
-    Debug::Perf::Emit(L"FileOps.SelfTest.DeleteItemsNestedRootsWake", std::format(L"rounds={} roots=4 interleavedSibling=1", kRounds), 0u, kRounds, 4u, S_OK);
+    Debug::Perf::Emit(L"FileOps.SelfTest.DeleteItemsNestedRootsWake",
+                      std::format(L"rounds={} roots=4 interleavedSibling=1", kRounds),
+                      (GetTickCount64() - nowTick) * 1000u,
+                      kRounds,
+                      4u,
+                      S_OK);
 
     NextStep(state, SelfTestState::Step::Phase7_SharedPerItemScheduler);
     return false;

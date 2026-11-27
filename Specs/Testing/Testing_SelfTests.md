@@ -1211,11 +1211,13 @@ the same synchronous reporter and counter path as the pointer overload.
   `FileOps_SmbCorroboratedRenameProvider`, `FileOps_SmbRecycleRefusal`, `FileOps_SmbMixedMove`, `C0_CurlCommittedMutationResponseLost`, `FileOps_ProviderCapabilityMatrix`,
   `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage`,
   `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof`, `R0fGraph_FakeGraphReadWriteCreateRenameRecycle`,
-  `Phase16_RemoteOneDrivePersonalInlineRename`, `Phase16_RemoteSftpInlineRename`, or
-  `Delete_IdentityLessPinnedTreeChangedEntry` or `Delete_IdentityLessPinnedTreeArchiveWriter` case filter and no flaky/order proof injection.
+  `Phase16_RemoteOneDrivePersonalInlineRename`, `Phase16_RemoteSftpInlineRename`,
+  `Delete_IdentityLessPinnedTreeChangedEntry`, `Delete_IdentityLessPinnedTreeArchiveWriter` or
+  `Phase7_DeleteItemsNestedRootsWake` case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
   copies and, for progress witnesses, owned HWND WGC capture;
-  the Local direct-API witness uses owned filesystem data and callback controls, including its joined worker;
+  the Local direct-API and nested-roots Delete witnesses use owned filesystem data, direct callback
+  controls and a joined worker;
   the identity-less Delete witnesses use owned sandbox data and submit task decisions directly. The archive writer
   also submits and awaits a real parallel Pack in the pinned tree before it releases the Delete;
   the added storage/route witnesses use owned sandbox data and the same activation blocker;
@@ -1753,9 +1755,9 @@ the same synchronous reporter and counter path as the pointer overload.
   at least one dispatch at the limit (on a machine with four or more logical processors) and no more than
   eight per item plus 256 (a parked walk is dispatched again only after a change it waits for); the copy runs
   with a bounded wait, so a walk that is never woken fails the case. `Phase7_DeleteItemsNestedRootsWake` calls
-  the Local `DeleteItems` with a folder and two items below it twenty times, each with a bounded wait: the
-  parallel delete parks when a worker finds nothing ready, and the step that makes the parent ready must wake
-  it.
+  Local `DeleteItems` with a folder, two nested descendants and a sibling that sorts between the parent
+  and its descendants. Each of twenty rounds must remove the selected roots and report one successful
+  completion per root within a bounded wait. A step that makes the parent ready wakes the parked job.
 - `Phase7_SharedPerItemScheduler` uses two nonqualified copies of twelve selected files and two selected
   directories. It observes the second task waiting for exclusive admission while the first has concurrent
   per-item work and completed progress, then cancels the first. A bounded, cancellation-aware test checkpoint
