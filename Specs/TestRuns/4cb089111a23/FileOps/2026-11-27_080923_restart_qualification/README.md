@@ -144,3 +144,29 @@ The only failure was `R4A19_DiscoveryIndependentVolumes` with `alternate-volume-
 After the viewer processes drained, the approved five-minute window began at 12:01 CET. The same repaired x64 Release receipt ran only `R4A19_DiscoveryIndependentVolumes` with `-AllowAlternateVolumeTestRoot`. The launcher verified the existing marked NTFS C and ReFS Z roots on distinct fixed volumes and restored the original primary resource registration byte for byte.
 
 Run `20261127T110136Z-62592-b63a350bca84466094e2bdebe429c9e7` passed setup, the 3,782 ms independent-volume scenario and fixture cleanup. Native result digest `e02a9f997398e82d35bb23d1078b6d1df8173456d95d8cb667a1705a61344ec4`. The launcher drained with filtered repository verdict `NOT_EVALUATED` and exit 2. Capture `20261127T110135Z-69404-c1c97542efd146918c1c41870a44822c` has stdout digest `8132c9b24c8e784d45da0b3685ef41d4064284b1419dc9ffaa6f4cc2131d7b13`. The sandbox audit listed thirteen pre-existing legacy or stale paths. The isolated 16 MiB-per-task control recorded independent progress overlap. Both streams took 1,172 ms concurrently, with 1,203 ms for the slower isolated control. The original broad File Operations run retains its failed verdict.
+
+### Hosted ARM64 Commands callback failure on the SMB Rename merge
+
+[Hosted ARM64 Release job](https://github.com/RedSalamanders/RedSalamander/actions/runs/45981936673/job/140448172187) failed on `f43444dcbdd4d77c3edcd4fd8ed108f9fbfea41c`. Tooling Pester passed 1,499 checks with zero failures or skips. Compare Directories and the non-interactive Viewer PE and SQLite entries promoted. Commands entered the owned Default desktop and launched native process 3752.
+
+At 12:13:07 UTC the contained Commands child exited with `0xC000041D` (`STATUS_FATAL_USER_CALLBACK_EXCEPTION`). The launch record confirms job closure before desktop retirement. The foreground guard then observed a foreign `ConsoleWindowClass` process and refused restoration. Its path digest `95a9bdfa9774cbec665bce075b37ff65cb5cf6f70e0286eabad32eb453fdfbd1` matches the UTF-16LE spelling of `C:\Windows\System32\wsl.exe`. The outer runner separately recorded a foreground process named `wsl`. The evidence does not establish what raised the native callback exception or whether the foreground change contributed.
+
+The guarded archive refused the retained `gj_…/links/j` reparse point inside the Commands fixture. That fixture name belongs to the Go to link target junction case. The uploaded diagnostics contain no command result, last-case trace or dump that identifies the crashing callback. The canonical run `20261127T111125Z-2752-299fffdc9454406cadccf0e6ab7c0481` therefore has Commands marked running in its last saved state and leaves File Operations and the four interactive viewer entries pending.
+
+Original evidence and workspace uploads are preserved in `20261127T121523Z-75496-146a377aaaf542b6af44be3477ea2411`. The archived run-state SHA-256 is `c2e54e26815880519af33a53337fdf66e67ee311fe3be2bb2b4cf8c4f2a9f91d`. The complete job log is in `20261127T121553Z-64572-219b8e83cbdc4f078a2a5dafca736134` with SHA-256 `1ff5ca67e6d1674376cdb83c5cf889062286fd42fdd419e4b4f85c30f4be7c26`.
+
+### Hosted x64 success on the SMB Rename merge
+
+[Hosted x64 Release job](https://github.com/RedSalamanders/RedSalamander/actions/runs/45981936673/job/140448172110) succeeded on the same `f43444dcbdd4d77c3edcd4fd8ed108f9fbfea41c` source. All 3,027 required tests passed. There were 71 expected skips and zero unexpected skips. The Release assertion probe passed. The native CI run `20261127T110453Z-6456-f1cac1749ded4ce5a0c44847f57623b4` promoted 19 of 19 entries and reported exit 0. Verified hosted build receipt `278c3119885a8f9532ec24f79122fd3c4f4d48e4cc2d9152283794ca7cc9826b`.
+
+File Operations reported 294 passes, zero failures and 36 environment skips. Both the independent-volume case and the repaired nested-roots Delete case passed inside that suite. The x64 Release SQLite executable again reported that its interactive group contained zero compiled cases.
+
+Download archive `20261127T123447Z-79056-5b3ef4e8c2a3483db68a6121d5d45438`. Native summary SHA-256 `a87ed25cdb65c686605da0fadfe53dcaff4685febbf3acf3c87b72d67bc6628b`. Regression receipt SHA-256 `91183a13591b8ee8cc3cc871305734c5884689d531f2eca802182b0968b073ec`. File Operations result SHA-256 `889983445fc7ff6827d76bc28d38c7bc88d1b16c05bdf80c230b11f3fd196454`. The combined test gate and production jobs skipped after the ARM64 failure.
+
+### Integrated non-interactive x64 Release PrePush
+
+The integrated source `fc3fe2499e11ce70eb3b1fc5bc426e3e17bfa197` built the test-enabled x64 Release solution in 7 minutes 58 seconds with zero warnings and errors. The runner verified initial receipt `36e84c4cb767b1334ec51ca9ea629f9a91fa1c13b1d3bf0c22a32bbc40e9ae39`, passed all 35 build-tooling tests, and re-attested receipt `21aa51848139198445f680aead0e3885fb0f8419b25fdaa1c14ee968bdab735f` with another zero-warning, zero-error build.
+
+Fresh run `20261127T115257Z-66576-ae56caf6de77484ebe13ecf8bda2b90f` promoted all 14 selected entries. It reported 1,801 passes, zero failures and 30 Compare Directories environment skips. The full Tooling Pester entry passed 1,501 checks. The archived change verdict is `PASSED`. The repository verdict is `NOT_EVALUATED`, and the runner exited 2 because Commands, File Operations, Viewer PE Interactive and Viewer SQLite Interactive were outside the non-interactive plan.
+
+Canonical result SHA-256 `9458f6fbcf01a61b9b2e511be53172ff7d3ca833baa6bcb13a49ea732794175d`. Runner detail SHA-256 `ac69705f8969031bcac214dd41b944bbd35b3bfa8a6c662c97719234a613241b`. Both files are in the completed-run archive on the marked Z test root.
