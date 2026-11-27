@@ -267,3 +267,19 @@ PR #377 merged at `b7bea3b68fa8a12c7ab1f138c9412520e4d9bc87` after the required 
 ### Follow-up hosted qualification
 
 At 20:18 CET, run `46027552244` on `bcc3f42e2` had successful admission and both x64 and ARM64 jobs had reached their native regression and Release assertion step. GitHub had queued the later runs on Pack merge `ab4523996` and combined metadata merge `b7bea3b68`. [Integrated regression in progress](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244) [Pack qualification](https://github.com/RedSalamanders/RedSalamander/actions/runs/46050953765) [Combined metadata qualification](https://github.com/RedSalamanders/RedSalamander/actions/runs/46055245540)
+
+### Approved conflict and metadata desktop pass
+
+The approved eight-minute window started at 20:27:34 CET. The timed launcher finished the three child runs in 121,985 ms. Each child acquired the canonical interactive-desktop lease and closed its contained process. All three launcher results were exit 2 with filtered repository verdict NOT_EVALUATED and native counts of three passes, zero failures and zero skips.
+
+The test-enabled x64 Release build was source `196c02d8dc53e8b1c30b1201e0cba8611fea5a2a` with verified receipt `35c4bdf6abb56bac20cce67fc5f0fd4a254303dadfb88674085a097e375ac65a`. The launcher used the marked C sandbox. Its archived record `20261127T192734Z-79568-2b272342923b4d37bab23546c163eb8c` contains the three runner logs and the result manifest with SHA-256 `793191f857959cf19aa5da89b886ed711333e48eb4ee3944cef6a8f9c646a977`.
+
+| Native case | Run ID | Case duration | Native result SHA-256 |
+|---|---|---:|---|
+| Read-only replacement | `20261127T192735Z-81880-aa5f51dead374712a4b7d7efa7df59be` | 281 ms | `647935623883231e9d88f2088a420112974aaa9c2c5234deb3d5e811155a77dd` |
+| Retry after a known non-commit | `20261127T192815Z-57912-c5b7e026cf8741478fefbe0944f35687` | 2,532 ms | `db402d2353bdd0f6c3038e9a8ab1fcd88702ee8f165eaa981950d32b716833b0` |
+| Metadata preservation and source retention | `20261127T192856Z-67616-4f9370d504244ef28804bdff1db07170` | 562 ms | `78f4c0df39b0a68872fd39ff51ad86a364a7d77ce4346a05f7012469e966b2bb` |
+
+The read-only collision offered Replace read-only and Keep both. Explicit replacement cleared the destination's read-only attribute. The Retry fixture verified one attempt per explicit choice after a proved sharing failure and eventual completion. The metadata fixture verified preservation of alternate streams, Mark of the Web and sparse allocation. It exercised separate hydration consent, the combined EFS and sparse allocation choice, publication with the source retained, and Cancel before publication. The `FileOps.SelfTest.MetadataMatrix` row recorded all four scenario groups. Performance log SHA-256 `a2b69a06e8a2f9384c46fcc5938b0c85537e646621992ece33be1d8c8f85bf93`.
+
+The selected pass covers these three cases. The wider workflow walkthrough and the integrated native gates stay open.

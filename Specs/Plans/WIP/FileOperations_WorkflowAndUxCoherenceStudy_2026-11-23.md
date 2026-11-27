@@ -9,7 +9,7 @@
 ### Current qualification
 
 - [ ] Finish hosted native qualification on integrated main. At 20:18 CET both native regression jobs in run `46027552244` were still running on `bcc3f42e2`. The follow-up runs for the Pack and combined metadata merges were queued. [Hosted regression in progress](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244)
-- [ ] Run the selected Retry, read-only replacement and metadata preservation desktop checks. The eight-minute window awaits agreement to the time. The two non-activating metadata selections passed on the verified x64 Release build.
+- [x] Run the selected Retry, read-only replacement and metadata preservation desktop checks. All three x64 Release cases passed with their setup and cleanup, for nine passes and zero failures or skips. The launcher drained in 122 seconds within the approved eight-minute window. [Desktop replay evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#approved-conflict-and-metadata-desktop-pass)
 - [ ] Finish archive cleanup qualification and the closeout inventory. Both Pack formats preserve directory originals. A directory cleanup needs a complete worker-captured descendant set, the exact versions read by the writer, matching consent and revalidation before nonrecursive deletion.
 - [ ] Complete the live provider gates. Finish SFTP Batch Rename and Change Case qualification, FTP and SCP sign-in and Rename, and the live Google Drive, OneDrive Business and SharePoint checks. The automatic approval review rejected disabling Windows Hello for the isolated FTP and SCP profiles. Google Drive, OneDrive Business and SharePoint test profiles are currently unavailable. The historical OneDrive Personal fixture was recovered separately. Finish the remaining mixed Move endpoint cases.
 - [x] Merge the Commands diagnostic trace freshness correction. The runner compares the guarded file state before launch and after containment closes. A disk timestamp earlier than the launch clock no longer suppresses a newly written trace. The first canonical attempt found an incomplete inventory fixture. Its corrected x64 Release run promoted 1,519 checks with zero failures or skips. PR #375 merged at `320f1dc04`. [Merged trace repair PR #375](https://github.com/RedSalamanders/RedSalamander/pull/375) [Trace evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#commands-trace-freshness-correction)
@@ -224,7 +224,7 @@ its build to correct the witness. The corrected live Windows SMB case passed on 
 - [ ] **S0.** Finish ingress parity and qualification.
   - [x] Verify folder-picker Move, Viewer Recycle wording and safe cancel, and Cancel all in the focused x64 tests.
   - [x] Rerun the same-folder Ctrl+drag guard through its exact no-activation selection after the Windows provider instance fix.
-  - [ ] Expand clipboard, blocked Retry and read-only case coverage as needed for the workflow walkthrough.
+  - [ ] Finish clipboard and context-menu coverage in the workflow walkthrough. The selected known-noncommit Retry and read-only replacement cases passed in the approved x64 Release desktop window.
   - [ ] Verify the implemented short Copy-only Move question across mixed plans, changed endpoints, and Cut/queue
     preservation. The focused source-retention case passed.
   - [x] Route Local Recycle through the existing bulk executor. The focused Find and Viewer runs verified prompt counts,
@@ -278,7 +278,8 @@ its build to correct the witness. The corrected live Windows SMB case passed on 
     `20261124T145409Z-86896-a97bc8a5503d4a98b153e3aba31f7647`.
   - [x] Land one permanent Leftover Cleanup card for the exact selection in PR #266. The x64 Debug case verified accept, decline, and a changed selection.
   - [x] Land automatic overlap waits in PR #276. The focused cases checked separate task results and preserved storage.
-  - [ ] Qualify archive cleanup consent and the remaining predictable and combined sensitive-metadata scenarios.
+  - [x] Verify metadata preservation, one combined EFS and sparse allocation decision, source retention, and Cancel before publication in the selected x64 Release metadata matrix.
+  - [ ] Qualify exact Pack directory cleanup consent and the remaining predictable sensitive-loss routes.
 - [ ] **S4–S5.** Queue controls and persistence, shared cap, completed grouping, mirror focus and Issues entry.
   Recheck I60/I64 ownership and verify interlocks, pause provenance, retention, UIA and focus.
   - [x] Verify that the popup stores Queue/Parallel and a new owner reads the saved default.
