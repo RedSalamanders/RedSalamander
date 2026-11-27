@@ -3,9 +3,8 @@
           Condition="'$(RSDxUiSdkRoot)'=='' and Exists('$(MSBuildThisFileDirectory)..\.build\dependencies\DxUi\DxUi.resolved.$(Platform).props')" />
   <Import Project="$(DxUiRoot)\Build\DxUi.Consumer.props" Condition="'$(RSDxUiSdkRoot)'=='' and '$(DxUiRoot)'!=''" />
   <Import Project="$(RSDxUiSdkRoot)\DxUi.Sdk.props" Condition="'$(RSDxUiSdkRoot)'!=''" />
-  <!-- The SDK's sample-consumer Windows macros change this application's existing
-       header inclusion order. Keep the Source profile's per-translation-unit
-       Windows macro policy; all shared SDK ABI/profile checks still apply. -->
+  <!-- Remove the SDK's value-one Windows definitions. The first-party empty definitions
+       from Directory.Build.props survive the import and match the source declarations. -->
   <ItemDefinitionGroup Condition="'$(RSDxUiSdkRoot)'!=''">
     <ClCompile><PreprocessorDefinitions>$([MSBuild]::Unescape($([System.Text.RegularExpressions.Regex]::Replace('%(PreprocessorDefinitions)', '(^|;)(WIN32_LEAN_AND_MEAN|NOMINMAX)(=1)?(?=;|$)', ''))))</PreprocessorDefinitions></ClCompile>
   </ItemDefinitionGroup>

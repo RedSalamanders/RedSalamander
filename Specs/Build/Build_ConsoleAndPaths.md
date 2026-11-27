@@ -7,7 +7,8 @@ Last reviewed: 2026-11-20
 
 First-party C++ projects use MSVC 14.52.x/v145, Unicode, stdcpplatest, SDL and
 conformance mode. `Directory.Build.props` also enables the standard MSVC preprocessor with
-`/Zc:preprocessor`. WarningLevel is EnableAllWarnings (/Wall) and
+`/Zc:preprocessor` and defines `WIN32_LEAN_AND_MEAN` and `NOMINMAX` with empty replacement lists.
+Source and SDK consumers use the same first-party definitions. WarningLevel is EnableAllWarnings (/Wall) and
 TreatWarningAsError is false (/WX disabled), in every supported profile.
 The build must finish with **zero warnings and zero errors** before a successful
 receipt or green result is published. Disabling /WX allows collection of all

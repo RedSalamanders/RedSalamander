@@ -333,6 +333,8 @@ Describe 'SDK consumer Windows header policy' {
             @($evaluated.Items.ClCompile).Count | Should BeGreaterThan 0
             foreach ($item in $evaluated.Items.ClCompile) {
                 $item.PreprocessorDefinitions | Should Not Match '(^|;)(WIN32_LEAN_AND_MEAN|NOMINMAX)(=1)?(;|$)'
+                $item.PreprocessorDefinitions | Should Match '(^|;)WIN32_LEAN_AND_MEAN=(;|$)'
+                $item.PreprocessorDefinitions | Should Match '(^|;)NOMINMAX=(;|$)'
                 $item.PreprocessorDefinitions | Should Match '(^|;)NOMINMAX_FEATURE_CONTROL(;|$)'
                 $item.PreprocessorDefinitions | Should Match '(^|;)NDEBUG(;|$)'
                 $item.PreprocessorDefinitions | Should Match '(^|;)UNICODE(;|$)'
@@ -346,6 +348,8 @@ Describe 'SDK consumer Windows header policy' {
             $definitions = @(Get-Content -LiteralPath $lines)
             $definitions.Count | Should BeGreaterThan 4
             foreach ($definition in $definitions) {$definition | Should Not Match ';'}
+            @($definitions | Where-Object { $_ -ceq 'WIN32_LEAN_AND_MEAN=' }).Count | Should Be 1
+            @($definitions | Where-Object { $_ -ceq 'NOMINMAX=' }).Count | Should Be 1
             ($definitions -ccontains 'NOMINMAX_FEATURE_CONTROL') | Should Be $true
             ($definitions -ccontains 'NDEBUG') | Should Be $true
             ($definitions -ccontains 'UNICODE') | Should Be $true
