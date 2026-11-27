@@ -205,7 +205,7 @@ std::wstring TransformLeafName(std::wstring_view leafName, const Options& option
     {
         return E_INVALIDARG;
     }
-    wil::com_ptr<IFileSystemRouteCapabilities> route;
+    wil::com_ptr_nothrow<IFileSystemRouteCapabilities> route;
     const HRESULT routeInterfaceHr = fileSystem.QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void());
     if (FAILED(routeInterfaceHr) || ! route)
     {
@@ -309,7 +309,7 @@ std::wstring TransformLeafName(std::wstring_view leafName, const Options& option
                 progress(progressUpdate, progressCookie);
             }
 
-            wil::com_ptr<IFilesInformation> info;
+            wil::com_ptr_nothrow<IFilesInformation> info;
             const HRESULT readHr          = fileSystem.ReadDirectoryInfo(directory.c_str(), info.addressof());
             const HRESULT readDisposition = ClassifyDirectoryReadResult(readHr, static_cast<bool>(info), candidate.provenDirectory);
             if (FAILED(readDisposition))

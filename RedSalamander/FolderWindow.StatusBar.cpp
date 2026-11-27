@@ -43,14 +43,14 @@ struct StatusBarRenderResources final : Common::Rendering::HwndRenderTargetResou
 {
     UINT dpi                 = USER_DEFAULT_SCREEN_DPI;
     bool fluentIconAvailable = false;
-    wil::com_ptr<IDWriteFactory> dwriteFactory;
-    wil::com_ptr<IDWriteInlineObject> ellipsisSign;
-    wil::com_ptr<IDWriteTextFormat> selectionFormat;
-    wil::com_ptr<IDWriteTextFormat> securityFormat;
-    wil::com_ptr<IDWriteTextFormat> sortTextFormat;
-    wil::com_ptr<IDWriteTextFormat> arrowFormat;
-    wil::com_ptr<IDWriteTextFormat> iconLeadingFormat;
-    wil::com_ptr<IDWriteTextFormat> iconCenteredFormat;
+    wil::com_ptr_nothrow<IDWriteFactory> dwriteFactory;
+    wil::com_ptr_nothrow<IDWriteInlineObject> ellipsisSign;
+    wil::com_ptr_nothrow<IDWriteTextFormat> selectionFormat;
+    wil::com_ptr_nothrow<IDWriteTextFormat> securityFormat;
+    wil::com_ptr_nothrow<IDWriteTextFormat> sortTextFormat;
+    wil::com_ptr_nothrow<IDWriteTextFormat> arrowFormat;
+    wil::com_ptr_nothrow<IDWriteTextFormat> iconLeadingFormat;
+    wil::com_ptr_nothrow<IDWriteTextFormat> iconCenteredFormat;
 };
 
 [[nodiscard]] D2D1_RECT_F RectF(const RECT& rc, float dpi) noexcept
