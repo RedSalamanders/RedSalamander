@@ -387,3 +387,14 @@ The two File Operations runs each passed setup, case and cleanup. The two Comman
 The retained ARM64 evidence in run `46027552244` on `bcc3f42e2e114953556605f3ef54e30919ada1bc` includes the original Commands result. It records 963 passes, two failures and five skips. The Direct2D failure-surface case reported that disabling Cancel all did not leave keyboard focus on Close. The mouse-opened main menu case had observed a readable popup, but its HWND was already invalid when the driver tried to post Down. Native result SHA-256 `f5e2a36e830560c8cfcda57419f2d56138544daf0c8dd3bbd7ba178d05dfc10f`. Native trace SHA-256 `08afdd4b28b6b3e26e4cae53de4913f418f9ac53695d5020e7025f300c79a43f`. [Retained ARM64 evidence](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244/artifacts/15231407555)
 
 The captured image digest for the separate retirement refusal matches the SHA-256 of the `C:\Windows\System32\wsl.exe` path encoded as UTF-16LE. PID 884 was created at 21:00:27.523 UTC. Its recorded parent PID 9292 could not be opened at retirement and returned Win32 error 87. The exact test-job relationship was unavailable. Startup preparation had finished at 20:13:28 UTC after retiring the approved account and search surfaces. Launch attribution remains open. Local evidence capture `20261127T230013Z-65064-7e827c14d0f7447b96441adb2053920b`. [ARM64 job log](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244/job/140671268108)
+
+### Local replay of the two historical ARM64 Commands cases
+
+The approved x64 Release replay used the same verified Pack receipt. The two exact cases passed all three repetitions each with zero failures or skips. The desktop interval started at 00:07:11 CET on 28 November 2026 and ended at 00:08:51 CET. Launcher archive `20261127T230711Z-59680-b05a8ca3256646ac9d1a3857e088b871`, results SHA-256 `a1e2057ca323e6f3c30b4a4515d6f4761cc5a994cc6bd6f36b27dcf49a6b7bc1`.
+
+| Case | Durations | Run ID | Native result SHA-256 |
+|---|---|---|---|
+| Fallback Cancel all focus | 4,548, 4,593 and 4,539 ms | `20261127T230713Z-75860-e502bf5951f54d6d9f9c5ac358bf7110` | `314b60ed8b0057a23979bbcd634310d06676d2bd6475fee64382dc9d1e4dbc1a` |
+| Mouse-opened main menu keyboard input | 461, 472 and 436 ms | `20261127T230810Z-43548-cfb4c4e19f4649ad99889572084627ad` | `248902ab90aba90163b25c7c2c4be511bbda426641070928a7e09458ed220363` |
+
+The focused repository verdict is `NOT_EVALUATED` in both cases. The native ARM64 follow-up remains open.
