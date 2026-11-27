@@ -3,21 +3,22 @@
 //
 // The quarantine tests exercise ONLY the extracted pure decision function
 // CrashQuarantine::SelectPluginsToDisable (exposed under ENABLE_TESTS) and the apply helper
-// DisablePluginIdInSettingsForTest. They never call OfferPluginDisableIfPreviousCrashDetected with a
+// DisablePluginIdInSettingsForTest. They never call OfferPreviousCrashRecovery with a
 // real marker present, so no SessionState is read, no known-folder path is resolved, and no UI /
 // HostShowPrompt is invoked -- guaranteeing no UI appears.
 //
 // The crash-handler tests (Step 5) exercise CrashHandler.cpp's pure helpers via the *ForTest seams:
 // dump-path naming (BuildDumpPath) and the marker write<->read round-trip (WriteMarkerFile /
-// ReadMarkerDumpPath). They never invoke the fused SEH/minidump/UI paths (Install,
-// WriteDumpForException, ShowPreviousCrashUiIfPresent, TriggerCrashTest) and write only under the
-// unified TestSandbox scratch root.
+// ReadMarkerDumpPath), the once-only claim, and retention in the governed scratch root.
+// Fatal entry points run only in separate child processes with their own artifact directories.
 //
 // The `markerExists` boolean argument stands in for "a crash marker file exists at the crash path":
 // the production code computes it via std::filesystem::exists(GetCrashMarkerPath()) and passes the
 // result in. Testing the bool directly keeps the unit free of file I/O and the un-injectable
 // AppDataPaths root.
 
+#include <chrono>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <format>
@@ -34,6 +35,7 @@
 #include "CrashHandler.h"
 #include "CrashQuarantine.h"
 #include "SettingsStore.h"
+#include "TestSupport/TestSupport.Tests.ChildProcess.h"
 #include "TestSupport/TestSupport.Tests.FailureReports.h"
 #include "TestSupport/TestSupport.Tests.Runner.h"
 
@@ -350,10 +352,107 @@ bool TestMarkerPathEmptyWhenBaseUnavailable() noexcept
     Check(CrashHandler::GetCrashMarkerPathForTest().empty(), L"GetCrashMarkerPath: empty base -> empty path", success);
     return success;
 }
+
+bool TestPendingClaim(const std::filesystem::path& root)
+{
+    bool success      = true;
+    const auto marker = root / L"last_crash.txt";
+    const auto dump   = CrashHandler::BuildDumpPathForTest(root);
+    if (dump.empty() || FAILED(CrashHandler::WriteMarkerFileForTest(dump, L"dump fixture")) ||
+        FAILED(CrashHandler::WriteMarkerFileForTest(marker, dump.native())))
+    {
+        Check(false, L"pending claim: prepare the isolated dump and marker", success);
+        return false;
+    }
+    Check(! CrashHandler::TakePendingReportForTest(root, false) && std::filesystem::exists(marker),
+          L"pending claim: a headless start leaves the marker",
+          success);
+    const auto report = CrashHandler::TakePendingReportForTest(root, true);
+    Check(report && report->directory == root && report->dumpPath == dump.native(), L"pending claim: the first interactive start receives the dump", success);
+    Check(! std::filesystem::exists(marker) && ! CrashHandler::TakePendingReportForTest(root, true),
+          L"pending claim: a second interactive start receives no report",
+          success);
+    Check(std::filesystem::exists(dump), L"pending claim: consuming the notice preserves the dump", success);
+    return success;
+}
+
+int RunCrashProbeChild(std::wstring_view mode, std::wstring_view leaf)
+{
+    if (mode != L"single" && mode != L"workers" && mode != L"abort")
+        return 2;
+    std::error_code error;
+    const auto directory = RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = kCrashHandlingHarnessSegment,
+                                                                             .leafSegment         = leaf,
+                                                                             .fallbackRunIdPrefix = L"crash-handling",
+                                                                             .kind                = RedSalamander::TestSupport::TestDirectoryKind::Artifacts,
+                                                                             .cleanExisting       = false},
+                                                                            error);
+    if (error || directory.empty() || FAILED(CrashHandler::InstallForProbe(directory)))
+        return 2;
+    if (mode == L"abort")
+        std::abort();
+    CrashHandler::TriggerCrashTest(mode == L"workers");
+}
+
+bool TestCrashProbeChildren()
+{
+    using namespace RedSalamander::TestSupport;
+    bool success = true;
+    std::error_code error;
+    const auto sandbox = ResolveTestSandboxBase(error);
+    if (error || sandbox.empty())
+    {
+        Check(false, L"crash probe: locate the governed sandbox", success);
+        return false;
+    }
+    const auto executable = Common::Testing::GetCurrentModulePath(error);
+    const auto runId      = ResolveTestRunId(L"crash-handling");
+    if (error || executable.empty() || runId.empty())
+    {
+        Check(false, L"crash probe: resolve the child executable and run identity", success);
+        return false;
+    }
+#if defined(RS_ASAN_DEBUG_BUILD) || defined(__SANITIZE_ADDRESS__)
+    constexpr DWORD probeCode = 0xE000CAFEu;
+#else
+    constexpr DWORD probeCode = EXCEPTION_ACCESS_VIOLATION;
+#endif
+    for (const std::wstring_view mode : {L"single", L"workers", L"abort"})
+    {
+        std::wcout << L"[ crash probe ] " << mode << L'\n';
+        const auto leaf   = std::format(L"{}-{}-{}", mode, GetCurrentProcessId(), GetTickCount64());
+        const auto result = RunChildProcess(
+            {.executablePath       = executable,
+             .arguments            = {L"--crash-probe-fixture", std::wstring(mode), leaf},
+             .workingDirectory     = executable.parent_path(),
+             .timeout              = std::chrono::seconds(45),
+             .environmentOverrides = {{std::wstring(kTestRootEnvironmentVariable), sandbox.native()}, {std::wstring(kTestRunIdEnvironmentVariable), runId}}});
+        const DWORD expectedCode = mode == L"abort" ? 0xE000CAF4u : probeCode;
+        Check(result.Completed() && result.exitCode == expectedCode, L"crash probe: child terminates with the expected code", success);
+
+        const auto directory = sandbox / L"runs" / runId / L"artifacts" / kCrashHandlingHarnessSegment / leaf;
+        const auto dumpPath  = CrashHandler::ReadMarkerDumpPathForTest(directory / L"last_crash.txt");
+        size_t dumpCount     = 0;
+        bool matchesMarker   = false;
+        for (std::filesystem::directory_iterator entry(directory, error), end; ! error && entry != end; entry.increment(error))
+        {
+            if (entry->path().extension() == L".dmp")
+            {
+                ++dumpCount;
+                std::error_code fileError;
+                matchesMarker = entry->path().native() == dumpPath && entry->file_size(fileError) != 0 && ! fileError;
+            }
+        }
+        Check(! error && dumpCount == 1 && matchesMarker, L"crash probe: one nonempty dump and its exact pending marker", success);
+    }
+    return success;
+}
 } // namespace
 
-int wmain()
+int wmain(int argc, wchar_t** argv)
 {
+    if (argc == 4 && std::wstring_view(argv[1]) == L"--crash-probe-fixture")
+        return RunCrashProbeChild(argv[2], argv[3]);
     RedSalamander::TestSupport::RouteFailureReportsAwayFromDialogs();
 
     bool success = true;
@@ -369,10 +468,9 @@ int wmain()
 
     // Crash-handler paths (Step 5) — under a TestSandbox case root, cleaned up.
     std::error_code ec;
-    const std::filesystem::path tempRoot = AcquireCrashHandlingTestSandbox(L"marker-files", ec);
-    std::filesystem::remove_all(tempRoot, ec); // clear any residue from a prior run
-    std::filesystem::create_directories(tempRoot, ec);
-    if (ec)
+    const auto scratchName               = std::format(L"marker-files-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    const std::filesystem::path tempRoot = AcquireCrashHandlingTestSandbox(scratchName, ec);
+    if (ec || tempRoot.empty())
     {
         std::wcerr << L"[ FAILED  ] could not create temp directory: " << tempRoot.wstring() << L"\n";
         return 1;
@@ -385,11 +483,12 @@ int wmain()
     success &= TestMarkerReadMissingIsEmpty(tempRoot);
     success &= TestWriteMarkerEmptyPathRejected();
     success &= TestMarkerPathEmptyWhenBaseUnavailable();
-
-    std::filesystem::remove_all(tempRoot, ec); // cleanup hygiene (exe may be run repeatedly)
+    success &= TestPendingClaim(tempRoot);
+    success &= TestCrashProbeChildren();
 
     if (success)
     {
+        std::filesystem::remove_all(tempRoot, ec);
         std::wcout << L"All CrashHandlingTests passed.\n";
         return 0;
     }
