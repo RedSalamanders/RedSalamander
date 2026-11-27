@@ -7,9 +7,11 @@ Run `45907308619`, attempt 1, built and tested `09c663878b9902385db71600367fc9ac
 | Lane | Canonical run | Result |
 | --- | --- | --- |
 | x64 | `20261126T234216Z-8804-2c476e53b9a347faa530c15334f32331` | 3,021 passed, 6 failed, 71 skipped. All six interactive entries were promoted. The only failed entry was Tooling Pester. |
-| ARM64 | `20261126T235409Z-9592-5bf543a64bb84b2e8d6156ec6e75e8b8` | Tooling Pester failed the same six checks. Compare Directories was promoted. Commands stopped during hosted desktop retirement and its terminal promotion is absent. File Operations and the four later interactive viewer entries remained pending. The aggregate verdict is unavailable. |
+| ARM64 | `20261126T235409Z-9592-5bf543a64bb84b2e8d6156ec6e75e8b8` | Tooling Pester failed the same six checks. Compare Directories was promoted. Commands recorded 962 passes, two failures and six skips in its original native result. The isolated ViewerSpace hover retry failed again, then hosted retirement refused the foreground console. File Operations and all four interactive viewer entries remained pending. The complete aggregate verdict is unavailable. |
 
-The ARM64 retirement log records `Progman` at capture and `ConsoleWindowClass` at refusal. The foreground process was in a job but membership in the exact test job was unavailable. Its parent process was unavailable to the identity query. The fixture refused to restore over that console. This observation leaves ownership unresolved. [ARM64 regression job](https://github.com/RedSalamanders/RedSalamander/actions/runs/45907308619/job/140213035613)
+The ARM64 retirement log records `Progman` at capture and `ConsoleWindowClass` at refusal. The foreground process was in a job, and membership in the exact test job and the parent process were unavailable to the identity query. An offline comparison of the recorded SHA-256 UTF-16LE image-path digest matched the standard System32 WSL executable path. The console’s ownership remained unresolved. The fixture refused to restore over it. [ARM64 regression job](https://github.com/RedSalamanders/RedSalamander/actions/runs/45907308619/job/140213035613)
+
+The archived original Commands result has SHA-256 `9a263f04967b9866a43f78f92f35d617f1bb0d9020280ece5cfa717341c1ed02`. The file-action version case failed before its body while settling foreground ownership. The ViewerSpace hover case found the pointer over `ConsoleWindowClass` and never observed its own tooltip. Its isolated retry retained the same pointer failure and returned native exit 1 before the retirement refusal. Retry result SHA-256 `fa3dbb60b6c2aaa0b01081b597211403faae3cdb6f4022b62132bf7509b90d0b`.
 
 The previous run on `94516001bcf582b646a6496002ab0cad48f32a69` had 3,017 passes, five failures and 71 skips on x64. ARM64 also failed at the foreign-foreground restoration boundary. [Previous hosted workflow](https://github.com/RedSalamanders/RedSalamander/actions/runs/45890003061)
 
@@ -36,4 +38,135 @@ The product integrated merge revision `317dfd0f03b21ef338cd250fd26847f215b5c3f9`
 
 ## Local x64 Release desktop pass
 
-The shutdown profile refused reuse before taking focus. The follow-up used the byte-verified x64 Release solution receipt `5aaaae600267450f00e8a3e8c0fcabcd32331ba59c72a6de7d86dad247a47e29` on `96e495135b127a79f48c8ecd6e2157930991c898`, the head of PR #348. Fresh CI run `20261127T070925Z-27348-dd7cbf0dec974bf49844d7b72bb08804` started in the approved window ending at 08:55 CET. Commands, File Operations, Viewer PE Interactive, Viewer SQLite Interactive, and the two Viewer Text dialogs are scheduled. The native results will be added after the owned runner drains.
+The shutdown profile refused reuse before taking focus. The follow-up used the byte-verified x64 Release solution receipt `5aaaae600267450f00e8a3e8c0fcabcd32331ba59c72a6de7d86dad247a47e29` on `96e495135b127a79f48c8ecd6e2157930991c898`, the head of PR #348. Fresh CI run `20261127T070925Z-27348-dd7cbf0dec974bf49844d7b72bb08804` began at 08:09 CET.
+
+The selected Plug-in Contract and Viewer PE non-interactive entries reached promotion in this run. The original Tooling Pester invocation reported 1,491 passes and five failures, all in the tooling cases covered by the merged repair. CI then repeated the Pester entry for failure classification. At the 08:55 CET cut-off, that retry was still running and all six desktop entries remained pending. The contained launcher closed the owned process tree. It retained stdout and stderr in capture `20261127T070923Z-58036-5fac4f1c7d584a48966bdaa56fb4a435`. The runner evidence was archived as interrupted under the original run ID. The archived launcher stdout has SHA-256 `50d0fadf2ea4845f91233628330b291e5b8ac4f96aa64c20e4a743ee4d6eca3b`. The final native aggregate is unavailable.
+
+## Integrated follow-up
+
+RedSalamander merged the tooling repairs and shared engine pin in PR #357 at `3f2b01251c7e4bc8f8483ebbd8460444174cf1d1`. The test-enabled x64 Release rebuild took 7 minutes 36 seconds and had zero warnings and errors. All 188 output records matched receipt `946bd916ef3e93a02ca5abcf9868baa1f45f8eeac6462611d1e8982047a1b47c`. Fresh CI run `20261127T080428Z-67632-151d4572a667447aa54cc951dd320513` started at 09:04 CET under the approved follow-up window ending at 10:54 CET. The runner retains stdout and stderr in capture `20261127T080427Z-71012-6934f4b8af8642538e47be24ed795227`. The hosted Release jobs for the same source began native regression. [PR #357](https://github.com/RedSalamanders/RedSalamander/pull/357) [Hosted qualification](https://github.com/RedSalamanders/RedSalamander/actions/runs/45960884674)
+
+The integrated run promoted Tooling Pester with 1,500 passes and zero failures or skips. Terminal result digest `2974f819fb8b21cf75cdea37a08a2e9aba3f95c0573cbd5b3a2be21573460ae0`.
+
+Commands promoted with 965 passes, no failures and five skips. Terminal result digest `4e20b346253d5e8394ec87a10c15ae32ac5e718a56c10cb2d4d5b7ff5cea4bab`.
+The Commands result includes passing Pack and Unpack dialog checks, the ZIP worker round trip, the folder drop guard, and both cases affected by the previous ARM64 foreground failure.
+
+Plug-in Contract promoted with digest `29ff826b183fef266eeed38a15ca00fbca342c25c57e82ca2e5d525722e3cce8`. Its S3 multipart performance and teardown export reported 50 passes, zero failures and `S_OK`. This is the same export that reported 49 passes and one failure in the earlier Full run.
+
+Viewer PE Noninteractive promoted with digest `154624703cd67008b72ff7389bffef11ba93d52f957a2978c6bcb45dfdd34bd9`. Its raw output confirms the ViewerSpace window stayed responsive with `ReadDirectoryInfo` blocked, Close returned within 500 ms, and the provider exited after release. This witnesses the prior failed scenario on the newer build. The earlier Full failure remains in the record.
+
+### Local File Operations native failure
+
+The first File Operations process (PID 71312) started at 09:55 CET and exited at 10:29 CET with `0xC0000374` (`STATUS_HEAP_CORRUPTION`). Windows Error Reporting recorded `ntdll.dll` and report ID `4ff6ce0a-6d82-4da0-b508-13a213aa9dbc`. The final trace checkpoint was `Phase7_DeleteItemsNestedRootsWake`. The last JSON is partial and provides no terminal suite verdict. CI began its automatic classification retry under the same approved lease. Four local viewer entries were still pending.
+
+The matching private symbols resolve the exception thread to `TickPhase7` in `FolderWindow.FileOperations.Tests.Phases07_09.cpp:4425`. The heap manager reported the corruption during a `std::filesystem::path` allocation while the test prepared a nested-delete round. This is the detection site. The dump does not locate the original write.
+
+| Preserved artifact | Run | SHA-256 |
+| --- | --- | --- |
+| Original File Operations trace | `20261127T093150Z-76092-b58767c5debd44aaaf1c8cc683d5361e` | `30deb671f949053f5402b39e62de7671257a8514f41b5baacb6fd301f17512f8` |
+| Original WER dump | `20261127T093315Z-73340-823abf554bf24f089fbf1b781bf3b675` | `9ce818432cdcbb819bb108987fa90c3bcd0c54bf8e7767b56f44008a7473f1dc` |
+| Source-resolved stack and thread stacks | `20261127T093818Z-70840-dc3487fda9a447e6954d6030e4557542` | `b90ba71166a499a611e86d3f1091798f78c60be1d198c9b7a9ece361b5418cd0` |
+
+All 17 Local scheduler workers were present in the dump. The provider's parallel Delete used 16 contexts and mapped worker ID 16 to slot zero. Either worker could overwrite the other's path arenas and progress state during a Delete. This is a confirmed race on the failing route. The dump does not capture that write. The repair uses the scheduler's full slot count with direct indexing and extends the existing witness to check one successful completion per selected root. [Repair PR #360](https://github.com/RedSalamanders/RedSalamander/pull/360)
+
+The matching executable, provider DLL and private symbols were copied and digest-verified in `20261127T093921Z-65580-357b912006044ade9a4442cef2d4eaf2`. Raw artifacts remain in the owned local evidence sandbox.
+
+The contained launcher stopped the classification retry at the end of the 10:54 CET window. Its trace reached `R0fSmb_NestedTreeCopyToShare`. The runner did not finalize the retry. All four interactive viewer entries remained pending, and the owned process tree drained. The canonical raw run archived with disposition `interrupted` and the launcher streams archived separately.
+
+The fix source `d8b85fac0684204f91649f1ee0c0a89687e526ae` built the test-enabled x64 Release solution in 11 minutes 55 seconds with zero warnings and errors. Receipt `ce5008d9adb017bc9c0b9b38bc7a9d152be0797a5eea5465be0f430ac2c2385f`. Static passed, and 66 selected runner-plan checks passed with zero failures and skips in `20261127T095057Z-42016-754198165825437ba521135d90ef5e15`. A broader standalone Pester diagnostic had 127 passes and two failures while evaluating extracted affected-planning snippets outside the runner context. The dedicated plan result covers exact selection, casing and wider scope refusal. The earlier canonical full tooling entry passed all 1,500 checks on `3f2b01251`.
+
+### Hosted ARM64 regression after the tooling repair
+
+[Hosted ARM64 Release job](https://github.com/RedSalamanders/RedSalamander/actions/runs/45960884674/job/140378452721) completed with failure. Tooling Pester passed 1,499 checks with zero failures and skips, and Compare Directories promoted. The original Commands child exited 1 after 964 passes, one failure and five skips. `cmd_viewer_space_hover_does_not_rebuild_static_cache` recorded `ConsoleWindowClass` under the pointer, no hovered item, and no painted tooltip. The desktop boundary refused restoration over an external console, leaving File Operations and the four viewer entries pending. The hosted archive has no completed repository aggregate for ARM64.
+
+The retirement record contains a SHA-256 of the executable path that matches the standard `C:/Windows/System32/wsl.exe` path encoded as UTF-16LE with the observed casing. The parent had exited before the diagnostic could verify its identity. The repeated console observations are consistent with the runner image issue. The upstream ARM64 image fix remains open as of this run. [Runner image issue](https://github.com/actions/runner-images/issues/14264) [Upstream image fix](https://github.com/actions/runner-images/pull/15362)
+
+The Commands result SHA-256 is `f7c6f287ea5082347e866fda8ff8b4707204738998b23807d1b4d4673db6551e`. ARM64 artifact preservation run `20261127T095914Z-73520-630da9bf9bc5425aa087ed666e9cf389`. Job log preservation run `20261127T100117Z-70728-79864a9faffc45d2900fd159f80999c6`, SHA-256 `39a6c4e4fac2f3cfa7fd362512895900dbcc312c0ed8dd6eab3a99f3d56faee9`.
+
+### Focused Local Delete repair
+
+Five independent native runs passed Setup, `Phase7_DeleteItemsNestedRootsWake` and Cleanup with zero failures and skips. Each run verified one successful completion for each of four selected roots in twenty rounds. The fixture emitted 31–47 ms for the twenty rounds. The same-machine samples describe the test fixture and expose no disk-throughput claim. All five runner exits were `2` with filtered repository coverage.
+
+| Governed x64 Release run | Focused duration (ms) | Fixture metric (µs) |
+| --- | ---: | ---: |
+| `20261127T100117Z-55752-477a4780e3d44e75924f4d50e9ee0ca2` | 78 | 47,000 |
+| `20261127T100349Z-54556-e1baf3ec1c9c488fb8b095e9f6d8cba8` | 62 | 47,000 |
+| `20261127T100438Z-59028-49ee52af45604a95aa44009d239de0e0` | 63 | 31,000 |
+| `20261127T100528Z-60180-3fd4fadbc7324b40aa64310512f32696` | 94 | 47,000 |
+| `20261127T100620Z-70736-8a1017dcc8944ca490b44281c0962726` | 78 | 31,000 |
+
+The initial wrapper supplied an ID associated with the still-live wrapper process. Its native child passed three checks before the sandbox correctly refused archival. The five listed runs use their runner's own identities and completed archival.
+
+The fix merged at `3a82609a0f07313b7707d7fc7dbbfc9e889b082e` after all required checks passed. With fresh desktop agreement, the broader x64 Release File Operations replay began at 11:08 CET on the exact repair build. Run `20261127T100829Z-71032-3a35034d0a544ae7a4b3aa41840a24cf`, launcher capture `20261127T100828Z-63940-23509abeeab44bb69fc99dfb7893995f`. The approved end is 11:58 CET. [Merged PR #360](https://github.com/RedSalamanders/RedSalamander/pull/360)
+
+### Live SMB namespace witness
+
+The first x64 Release compile rejected the wrong completion member in the test recorder. Corrected `843f88712e819a8410b02691eb261d631e53b906` reads the captured source-row receipt. That test-enabled x64 Release solution built in 7 minutes 45 seconds with zero warnings and errors. Verified receipt `78dda21b7329c33122cc0e8b6d02f165d2f01d44a53e7635be938e4230720ca4`.
+
+| Live endpoint and identity mode | Governed run | Result | Same-name decoys (µs) | Replaced parent (µs) |
+| --- | --- | --- | ---: | ---: |
+| RubyGloom Samba, natural missing exact ID | `20261127T101512Z-12936-a57a7c13a8984420aa42842a33aa8be2` | 3 passed, 0 failed, 0 skipped | 271,281 | 146,032 |
+| Windows SMB, controlled missing-ID path | `20261127T101702Z-75836-df53b4ff675e49cd8f24cedccc0f31c9` | 3 passed, 0 failed, 0 skipped | 28,537 | 23,263 |
+
+Both focused witnesses kept ancestor decoys byte-for-byte and refused publication after moving the original file back through a replacement parent. The test also exercised 100 provider Renames on each endpoint. Both fixture cleanups passed. The Windows launcher restored the sandbox resource manifest to its original bytes.
+
+Raw result SHA-256 values are `e344c7c1e5a562858daab048a086ab606c7251b7c61ba236782708675c30569f` for Samba and `f3a2994071aa556c45e89d0b10294eeca67615169cae69e789c885abf105d702` for Windows SMB. Launcher archive `20261127T101454Z-22036-f4fc735368884ac684d575833878c2c5`. The protected merge reached `f43444dcbdd4d77c3edcd4fd8ed108f9fbfea41c`. [Merged PR #359](https://github.com/RedSalamanders/RedSalamander/pull/359)
+
+### Hosted x64 regression after the tooling repair
+
+The [hosted x64 Release job](https://github.com/RedSalamanders/RedSalamander/actions/runs/45960884674/job/140378451388) succeeded on `3f2b01251`. The canonical archive records 3,026 passes, zero failures and 72 expected skips. All 19 CI entries promoted, including File Operations and the four interactive viewer entries. The Release assertion probe passed. Result digest `5efb744898ad468fe08d16486d18e09b1cd27a307de83913ecd229418dcac1e6`. Raw evidence archive `20261127T102332Z-65416-6641c4f2c663406e8c0f8bde7d74c2bb` and regression receipt archive `20261127T102237Z-41692-1ab0392960054e2a8da6da1b7e3b8950`. The combined test gate and both production Release branches did not run after ARM64 failed.
+
+### Dedicated viewer desktop selection
+
+The exact selection in PR #362 passed 68 planning checks in `20261127T101832Z-64300-051ffb0f71c0471bb77f612885fbfd13`. Read-only ExplainPlan `20261127T101832Z-76544-fb0f2647358041c49cf98040b042d5d8` listed Viewer PE Interactive, Viewer SQLite Interactive, Viewer Text Find and Viewer Text Go To in canonical CI order. The focused source and shared-scope suite passed 252 checks in `20261127T102838Z-68900-203427e89e3b406fa68a6989cccf44de`. The test-enabled x64 Release candidate `36c07a80367f3986f05172fcd89b7b75aa5a4855` built in 7 minutes 38 seconds with zero warnings and errors. Receipt `e03407c5c0b2bc4cd0d1d3cfac87e3fe889c6a52665dac1a008b5e5edacaf0fb`. [Viewer selector PR #362](https://github.com/RedSalamanders/RedSalamander/pull/362)
+
+The four-entry viewer run started at 11:53 CET and drained at 11:58 CET, inside the approved window ending at 12:05 CET. Canonical run `20261127T105332Z-79564-ae0ecf66a8a84f0a8379ff50bd2775aa` executed all four requested entries in order and recorded three promoted entries and one failure. The runner result digest is `4b64ba4293a5e953886095287f1b1fb762f1f645b8d1462353cd3a87f2d95fd1`. Launcher capture `20261127T105330Z-42956-4fe4f0b48b5f49feb29ae4fb9a35c5aa` has stdout digest `341bd12bc4646159002c62aac124dd607afc3d4a3f9db827556b3db10436592a`.
+
+| Entry | Exact x64 Release observation | Output SHA-256 |
+| --- | --- | --- |
+| Viewer PE Interactive | The VLC and ImgRaw children exited normally in the original and retry respectively. Each parent then observed changed input and an unrelated foreground, refused restoration and stopped before the next child. | `1a3c2ec2e82ba429534ac1e9416b0590057889b9e7eb8091661c364ca483db75`, retry `9890960fcb004ba20fcc88bf5c30801001d54c77ff2bc3ca6719948dab81175f` |
+| Viewer SQLite Interactive | Entry promoted after exit 0. The executable reported zero compiled interactive cases. The Tab assertions require the Debug viewer snapshot and paging hooks. | `3354a43ecd8c96552bdd39a8c9519c9d50bfaf33d70c4dfa50a31ccd34b95887` |
+| Viewer Text Find prompt | Passed the owned DxUi dialog, focus and close assertions. | `a22bb5fbf9fffa79b3da92fa871b058be1f2a30acf78fdef99f28320659d230c` |
+| Viewer Text Go To prompt | Passed the owned DxUi dialog, focus and close assertions. | `9f6136fa7c1994c61185726324cbad79f7434af332e77b45d9ea733f2411f49b` |
+
+The same Debug-only SQLite scope applies to the promoted Release entry in the hosted x64 aggregate.
+
+The Debug solution built on the same source in 6 minutes 31 seconds with zero warnings and errors. Debug receipt `eb9fa049e81ca26846afca61fcc4e6c6ceec46d9c521dfa46fd01ea6e7e6f707`. All 188 outputs in each profile verified before the follow-up. The original PE logs identified the foreground process IDs and input timestamps. Their still-live instances started before the viewer run: the initial saved Visual Studio Code window gave way to Edge, then the retry observed a separate RedSalamander instance outside both test profiles.
+
+### Repaired x64 Release File Operations replay
+
+The approved File Operations replay completed and retired its child at 11:52 CET, before the 11:58 cutoff. The native suite reported 300 passes, one failure and 29 skips in 42 minutes 34 seconds. The nested-roots delete case completed its twenty rounds inside the suite and emitted `FileOps.SelfTest.DeleteItemsNestedRootsWake` with `S_OK`. The earlier heap exit remains in its separate archive.
+
+The only failure was `R4A19_DiscoveryIndependentVolumes` with `alternate-volume-test-root-not-authorized`. This replay omitted the explicit alternate-volume flag and the case failed before allocating on another drive. A follow-up must select the exact marked alternate root and pass `-AllowAlternateVolumeTestRoot`. The run keeps its failed suite verdict. Native result digest `5ddefc87c5f34e600c9c3c998475bc0b13c69281d9706a748477f987b5681cde`.
+
+### Independent-volume recheck
+
+After the viewer processes drained, the approved five-minute window began at 12:01 CET. The same repaired x64 Release receipt ran only `R4A19_DiscoveryIndependentVolumes` with `-AllowAlternateVolumeTestRoot`. The launcher verified the existing marked NTFS C and ReFS Z roots on distinct fixed volumes and restored the original primary resource registration byte for byte.
+
+Run `20261127T110136Z-62592-b63a350bca84466094e2bdebe429c9e7` passed setup, the 3,782 ms independent-volume scenario and fixture cleanup. Native result digest `e02a9f997398e82d35bb23d1078b6d1df8173456d95d8cb667a1705a61344ec4`. The launcher drained with filtered repository verdict `NOT_EVALUATED` and exit 2. Capture `20261127T110135Z-69404-c1c97542efd146918c1c41870a44822c` has stdout digest `8132c9b24c8e784d45da0b3685ef41d4064284b1419dc9ffaa6f4cc2131d7b13`. The sandbox audit listed thirteen pre-existing legacy or stale paths. The isolated 16 MiB-per-task control recorded independent progress overlap. Both streams took 1,172 ms concurrently, with 1,203 ms for the slower isolated control. The original broad File Operations run retains its failed verdict.
+
+### Hosted ARM64 Commands callback failure on the SMB Rename merge
+
+[Hosted ARM64 Release job](https://github.com/RedSalamanders/RedSalamander/actions/runs/45981936673/job/140448172187) failed on `f43444dcbdd4d77c3edcd4fd8ed108f9fbfea41c`. Tooling Pester passed 1,499 checks with zero failures or skips. Compare Directories and the non-interactive Viewer PE and SQLite entries promoted. Commands entered the owned Default desktop and launched native process 3752.
+
+At 12:13:07 UTC the contained Commands child exited with `0xC000041D` (`STATUS_FATAL_USER_CALLBACK_EXCEPTION`). The launch record confirms job closure before desktop retirement. The foreground guard then observed a foreign `ConsoleWindowClass` process and refused restoration. Its path digest `95a9bdfa9774cbec665bce075b37ff65cb5cf6f70e0286eabad32eb453fdfbd1` matches the UTF-16LE spelling of `C:\Windows\System32\wsl.exe`. The outer runner separately recorded a foreground process named `wsl`. The evidence does not establish what raised the native callback exception or whether the foreground change contributed.
+
+The guarded archive refused the retained `gj_…/links/j` reparse point inside the Commands fixture. That fixture name belongs to the Go to link target junction case. The uploaded diagnostics contain no command result, last-case trace or dump that identifies the crashing callback. The canonical run `20261127T111125Z-2752-299fffdc9454406cadccf0e6ab7c0481` therefore has Commands marked running in its last saved state and leaves File Operations and the four interactive viewer entries pending.
+
+Original evidence and workspace uploads are preserved in `20261127T121523Z-75496-146a377aaaf542b6af44be3477ea2411`. The archived run-state SHA-256 is `c2e54e26815880519af33a53337fdf66e67ee311fe3be2bb2b4cf8c4f2a9f91d`. The complete job log is in `20261127T121553Z-64572-219b8e83cbdc4f078a2a5dafca736134` with SHA-256 `1ff5ca67e6d1674376cdb83c5cf889062286fd42fdd419e4b4f85c30f4be7c26`.
+
+### Hosted x64 success on the SMB Rename merge
+
+[Hosted x64 Release job](https://github.com/RedSalamanders/RedSalamander/actions/runs/45981936673/job/140448172110) succeeded on the same `f43444dcbdd4d77c3edcd4fd8ed108f9fbfea41c` source. All 3,027 required tests passed. There were 71 expected skips and zero unexpected skips. The Release assertion probe passed. The native CI run `20261127T110453Z-6456-f1cac1749ded4ce5a0c44847f57623b4` promoted 19 of 19 entries and reported exit 0. Verified hosted build receipt `278c3119885a8f9532ec24f79122fd3c4f4d48e4cc2d9152283794ca7cc9826b`.
+
+File Operations reported 294 passes, zero failures and 36 environment skips. Both the independent-volume case and the repaired nested-roots Delete case passed inside that suite. The x64 Release SQLite executable again reported that its interactive group contained zero compiled cases.
+
+Download archive `20261127T123447Z-79056-5b3ef4e8c2a3483db68a6121d5d45438`. Native summary SHA-256 `a87ed25cdb65c686605da0fadfe53dcaff4685febbf3acf3c87b72d67bc6628b`. Regression receipt SHA-256 `91183a13591b8ee8cc3cc871305734c5884689d531f2eca802182b0968b073ec`. File Operations result SHA-256 `889983445fc7ff6827d76bc28d38c7bc88d1b16c05bdf80c230b11f3fd196454`. The combined test gate and production jobs skipped after the ARM64 failure.
+
+### Integrated non-interactive x64 Release PrePush
+
+The integrated source `fc3fe2499e11ce70eb3b1fc5bc426e3e17bfa197` built the test-enabled x64 Release solution in 7 minutes 58 seconds with zero warnings and errors. The runner verified initial receipt `36e84c4cb767b1334ec51ca9ea629f9a91fa1c13b1d3bf0c22a32bbc40e9ae39`, passed all 35 build-tooling tests, and re-attested receipt `21aa51848139198445f680aead0e3885fb0f8419b25fdaa1c14ee968bdab735f` with another zero-warning, zero-error build.
+
+Fresh run `20261127T115257Z-66576-ae56caf6de77484ebe13ecf8bda2b90f` promoted all 14 selected entries. It reported 1,801 passes, zero failures and 30 Compare Directories environment skips. The full Tooling Pester entry passed 1,501 checks. The archived change verdict is `PASSED`. The repository verdict is `NOT_EVALUATED`, and the runner exited 2 because Commands, File Operations, Viewer PE Interactive and Viewer SQLite Interactive were outside the non-interactive plan.
+
+Canonical result SHA-256 `9458f6fbcf01a61b9b2e511be53172ff7d3ca833baa6bcb13a49ea732794175d`. Runner detail SHA-256 `ac69705f8969031bcac214dd41b944bbd35b3bfa8a6c662c97719234a613241b`. Both files are in the completed-run archive on the marked Z test root.

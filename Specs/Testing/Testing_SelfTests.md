@@ -665,6 +665,16 @@ If a suite encounters a fatal setup failure before all declared cases can run:
 - unreached declared cases must still be emitted as `skipped`,
 - each backfilled skipped case must explain that it was not executed because of suite setup failure.
 
+### Select standalone interactive viewer entries
+
+`Run-AllTests.ps1 -Suite CI -ValidationMode Fresh -SkipBuild -ViewerDesktopEntryId <ids>` can
+select `viewer-pe.interactive`, `viewer-sqlite.interactive`, `viewer-pe.find-prompt` and
+`viewer-pe.goto-prompt` by exact case-sensitive ID. The four standalone entries have no preceding
+artifact writers. Use an exact test-enabled solution receipt on the native host architecture.
+Execute the entries in canonical CI order with their existing native commands, resource classes,
+desktop lease, warning and teardown. The person at the desktop agrees to the window.
+`-ExplainPlan` prints the selection without entering the desktop lease.
+
 ## Conditional Coverage Rules
 
 Conditional coverage must remain part of the suite membership. Preconditions change execution status, not case existence.
@@ -1211,14 +1221,21 @@ the same synchronous reporter and counter path as the pointer overload.
   `FileOps_SmbCorroboratedRenameProvider`, `FileOps_SmbRecycleRefusal`, `FileOps_SmbMixedMove`, `C0_CurlCommittedMutationResponseLost`, `FileOps_ProviderCapabilityMatrix`,
   `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage`,
   `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof`, `R0fGraph_FakeGraphReadWriteCreateRenameRecycle`,
-  `Phase16_RemoteOneDrivePersonalInlineRename`, `Phase16_RemoteSftpInlineRename`, or
-  `Delete_IdentityLessPinnedTreeChangedEntry` or `Delete_IdentityLessPinnedTreeArchiveWriter` case filter and no flaky/order proof injection.
+  `Phase16_RemoteOneDrivePersonalInlineRename`, `Phase16_RemoteSftpInlineRename`,
+  `Delete_IdentityLessPinnedTreeChangedEntry`, `Delete_IdentityLessPinnedTreeArchiveWriter` or
+  `Phase7_DeleteItemsNestedRootsWake` case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
   copies and, for progress witnesses, owned HWND WGC capture;
-  the Local direct-API witness uses owned filesystem data and callback controls, including its joined worker;
+  the Local direct-API and nested-roots Delete witnesses use owned filesystem data, direct callback
+  controls and a joined worker;
   the identity-less Delete witnesses use owned sandbox data and submit task decisions directly. The archive writer
   also submits and awaits a real parallel Pack in the pinned tree before it releases the Delete;
   the added storage/route witnesses use owned sandbox data and the same activation blocker;
+  the corroborated SMB Rename case requires its new name beside the captured source while same-name
+  decoys in both owned ancestor directories retain their bytes. The paused case moves the original
+  file back to the captured path through a replacement parent. Rename must report a revision
+  mismatch before mutation and preserve that file and the decoy in the moved directory. This
+  witness uses an owned child of the registered SMB fixture. The exact-ID route has a separate test;
   the Curl reply-loss case runs the owned loopback FTP endpoint through a joined worker with no UI;
   the repeated non-clipboard Copy and Move cases use owned task controls and sandbox files under the activation blocker;
   `FileOps_DeferredExitRefusesNewWork` also compares F7 prompt appearance from a displayed Dummy listing with a delayed direct read of the same parent, then verifies the worker's numbered creation and pane refresh.
@@ -1228,16 +1245,20 @@ the same synchronous reporter and counter path as the pointer overload.
   `Phase16_RemoteOneDrivePersonalInlineRename` uses saved sign-in and a fresh test-only fixture child, with exact file and folder Rename, case-only spelling, occupied-name refusal, and Recycle verification;
   `Phase16_RemoteSftpInlineRename` requires saved sign-in and the approved existing SFTP test folder.
   It creates one fresh child and verifies occupied-name refusal and scheduled file, case-only and
-  folder Rename. Cleanup verifies every generated payload and removes only the named fixture entries
-  nonrecursively.
+  folder Rename from Inline F2 admission. The same live provider disables both scheduled command
+  commands. Direct Batch Rename and Change Case must warn before any dialog. The subsequent
+  Inline Rename verifies the source and occupant bytes. Cleanup verifies each generated payload
+  and removes only the named fixture entries nonrecursively.
   `FileOps_SmbRecycleRefusal` uses one fresh child of `path.smb.primary`. It checks that the guarded Local Shell route
   reports a known non-commit on the share, offers one item-specific permanent-delete decision on the independently
   probed exact or by-name route and retains the same bytes
   after Skip. Cleanup verifies the file contents and removes only that file and its empty parent. A missing or
   unreachable registration is an environment skip.
   `FileOps_SmbMixedMove` uses one fresh child of `path.smb.primary` and the marked Local sandbox.
-  It skips before mutation when exact SMB identity is unavailable. It uses direct task controls to
-  check the two typed Move results, both destination payloads, source removal and nonrecursive SMB fixture cleanup.
+  When the SMB source opens without exact identity, it verifies the provider's corroborated source
+  facts before admission. It uses direct task controls to check the Native Local and Managed SMB
+  results, both destination payloads, source removal and nonrecursive SMB fixture cleanup.
+  The metric records whether the SMB source had exact identity or corroborated facts.
   The provider capability matrix uses private providers, owned data and direct task controls.
   its managed cleanup witness checks Retry for sharing, access and disk-full failures and verifies that a path-length failure offers Skip and Cancel;
   the exact cadence case uses a private nonactivating popup and preserves its existing
@@ -1753,9 +1774,9 @@ the same synchronous reporter and counter path as the pointer overload.
   at least one dispatch at the limit (on a machine with four or more logical processors) and no more than
   eight per item plus 256 (a parked walk is dispatched again only after a change it waits for); the copy runs
   with a bounded wait, so a walk that is never woken fails the case. `Phase7_DeleteItemsNestedRootsWake` calls
-  the Local `DeleteItems` with a folder and two items below it twenty times, each with a bounded wait: the
-  parallel delete parks when a worker finds nothing ready, and the step that makes the parent ready must wake
-  it.
+  Local `DeleteItems` with a folder, two nested descendants and a sibling that sorts between the parent
+  and its descendants. Each of twenty rounds must remove the selected roots and report one successful
+  completion per root within a bounded wait. A step that makes the parent ready wakes the parked job.
 - `Phase7_SharedPerItemScheduler` uses two nonqualified copies of twelve selected files and two selected
   directories. It observes the second task waiting for exclusive admission while the first has concurrent
   per-item work and completed progress, then cancels the first. A bounded, cancellation-aware test checkpoint

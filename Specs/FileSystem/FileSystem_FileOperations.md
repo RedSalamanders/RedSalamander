@@ -1147,7 +1147,9 @@ dynamic jobs clamp their concurrency below the actual created pool size whenever
 workers, including partial thread-creation failure. One throttled job must leave capacity for another
 job's first unit; round-robin dispatch cannot preempt a file already in flight. Per-operation transfer
 limits remain at most sixteen. Every global worker stream, including the reserve, owns a distinct
-progress/throttle/context slot; the reserve must never alias stream zero.
+progress, throttle and context slot. Parallel Delete indexes its operation contexts by the scheduler's
+full worker range. Each worker exclusively mutates its own path arenas and progress state. Shared
+scheduling state remains protected separately.
 
 The scheduler dispatches a dynamic job's
 step (a Local walk's, a parallel Delete's) only while the job has a ready unit and fewer steps in flight than

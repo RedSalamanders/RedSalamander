@@ -97,7 +97,8 @@
     FileOps_SmbExactRenameProvider or FileOps_SmbCorroboratedRenameProvider for the relevant binding route.
     FileOps_SmbRecycleRefusal supports -NonInteractive. It checks that the guarded Shell route retains
     the file and asks for exact-item consent on a registered SMB share.
-    FileOps_SmbMixedMove supports -NonInteractive. It checks one Local Native plus one SMB Managed
+    Phase7_DeleteItemsNestedRootsWake supports -NonInteractive. It uses a joined Local Delete worker
+    with owned nested roots and an interleaved sibling. FileOps_SmbMixedMove supports -NonInteractive. It checks one Local Native plus one SMB Managed
     source in a single Move to a marked Local sandbox, using a registered exact-identity SMB share.
     FileOps_ClearCompletedScope also supports -NonInteractive through a private popup and test-owned data.
     C0_CurlCommittedMutationResponseLost supports -NonInteractive and uses only loopback FTP fixtures.
@@ -176,6 +177,14 @@
     exact canonical entry IDs and retains the Full plan's artifact ordering.
     The shared command sees exit 0 only for verified selected execution. The
     archive keeps its filtered verdict and its ordinary failure or incomplete exit.
+.PARAMETER ViewerDesktopEntryId
+    Select exact, case-sensitive standalone viewer desktop entries from Fresh CI.
+    Available entries are viewer-pe.interactive, viewer-sqlite.interactive,
+    viewer-pe.find-prompt and viewer-pe.goto-prompt. Requires SkipBuild and an
+    exact test-enabled solution receipt. Each entry uses the canonical desktop
+    lease and can take desktop input. Agree to the test window before running.
+    ExplainPlan shows the selection without launching tests. Execution reports
+    filtered coverage and cannot issue a complete qualification reference.
 .PARAMETER ResultReferencePath
     Create-only exact summary reference beneath the marked sandbox, for an unfiltered
     Fresh CI or Full run. Parent must exist. Existing destinations are refused before
@@ -301,6 +310,7 @@ param(
     [switch]$NonInteractive,
 
     [ValidateNotNullOrEmpty()][string[]]$ScopedEntryId = @(),
+    [ValidateNotNullOrEmpty()][string[]]$ViewerDesktopEntryId = @(),
     [switch]$UseSharedAffectedPlanner
 )
 
@@ -321,6 +331,10 @@ function Exit-RSInvalidRunnerInvocation {
 if ($ScopedEntryId.Count -and ($Suite -cne 'Full' -or $ValidationMode -cne 'Fresh' -or
         -not $NonInteractive -or $CaseFilter -or $CommandsFamily -or $ExplainPlan -or $ResultReferencePath)) {
     Exit-RSInvalidRunnerInvocation 'ScopedEntryId requires Fresh Full with NonInteractive and exact entry selection.'
+}
+if ($ViewerDesktopEntryId.Count -and ($Suite -cne 'CI' -or $ValidationMode -cne 'Fresh' -or -not $SkipBuild -or
+        $ScopedEntryId.Count -or $NonInteractive -or $CaseFilter -or $CommandsFamily -or $ExePath -or $ResultReferencePath)) {
+    Exit-RSInvalidRunnerInvocation 'ViewerDesktopEntryId requires Fresh CI with SkipBuild and an exclusive exact viewer selection.'
 }
 
 if ($UseSharedAffectedPlanner -and ($Suite -cne 'Full' -or $ValidationMode -cne 'Affected' -or -not $NonInteractive)) {
@@ -366,17 +380,18 @@ if (-not [string]::IsNullOrWhiteSpace($CommandsFamily)) {
 $expectedExeFullPath = [IO.Path]::GetFullPath(
     (Join-Path $repoRoot ".build\$Platform\$Configuration\RedSalamander.exe"))
 $scopedExecutionEntries = @()
-if ($ScopedEntryId.Count) {
+if ($ScopedEntryId.Count -or $ViewerDesktopEntryId.Count) {
     if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ine $Platform) {
         Exit-RSInvalidRunnerInvocation "Shared scoped execution requires a native $Platform host."
     }
     try {
-        $fullEntries = @(Get-RSTestRunPlan -Suite Full -RepoRoot $repoRoot -Platform $Platform `
+        $suiteEntries = @(Get-RSTestRunPlan -Suite $Suite -RepoRoot $repoRoot -Platform $Platform `
                 -Configuration $Configuration -RedSalamanderExePath $expectedExeFullPath `
                 -TimeoutMultiplier $TimeoutMultiplier -FailFast:$FailFast -RepeatCount $SelfTestRepeat `
                 -ShuffleSeed $SelfTestShuffleSeed -PerfBudgetPath $PerfBudgetPath -RequirePerfBudgets:$RequirePerfBudgets `
                 -SelfTestFlakyProofCase $SelfTestFlakyProofCase -SelfTestOrderProofCase $SelfTestOrderProofCase)
-        $scopedExecutionEntries = @(Select-RSScopedTestRunEntries -Entries $fullEntries -EntryId $ScopedEntryId)
+        $selectedIds = if ($ViewerDesktopEntryId.Count) { $ViewerDesktopEntryId } else { $ScopedEntryId }
+        $scopedExecutionEntries = @(Select-RSScopedTestRunEntries -Entries $suiteEntries -EntryId $selectedIds -ViewerDesktop:($ViewerDesktopEntryId.Count -gt 0))
     } catch {
         Exit-RSInvalidRunnerInvocation $_.Exception.Message
     }
@@ -1481,19 +1496,23 @@ if ($ExplainPlan) {
     if (-not [string]::IsNullOrWhiteSpace($ExePath)) {
         Exit-RSInvalidRunnerInvocation '-ExplainPlan does not accept -ExePath because it does not launch an executable.'
     }
-    $explainEntries = @(Get-RSTestRunPlan `
+    $explainEntries = if ($ViewerDesktopEntryId.Count) {
+        $scopedExecutionEntries
+    } else {
+        @(Get-RSTestRunPlan `
             -Suite $Suite -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration `
             -RedSalamanderExePath $expectedExeFullPath -TimeoutMultiplier $TimeoutMultiplier `
             -FailFast:$FailFast -CaseFilter $CaseFilter -CommandsFamily $CommandsFamily -RepeatCount $SelfTestRepeat `
             -ShuffleSeed $SelfTestShuffleSeed -PerfBudgetPath $PerfBudgetPath `
             -RequirePerfBudgets:$RequirePerfBudgets -SelfTestFlakyProofCase $SelfTestFlakyProofCase `
             -SelfTestOrderProofCase $SelfTestOrderProofCase)
-        if ($NonInteractive) {
+    }
+    if ($NonInteractive) {
         $explainPending = @($explainEntries | Where-Object RequiresInteractiveDesktop)
         $explainEntries = @($explainEntries | Where-Object { -not $_.RequiresInteractiveDesktop })
         Write-Host "PENDING_INTERACTIVE ($($explainPending.Count)): $(@($explainPending | ForEach-Object Name) -join ', ')"
     }
-    $coverageScope = if ($NonInteractive -or -not [string]::IsNullOrWhiteSpace($CaseFilter)) {
+    $coverageScope = if ($ViewerDesktopEntryId.Count -or $NonInteractive -or -not [string]::IsNullOrWhiteSpace($CaseFilter)) {
         'filtered'
     } elseif (-not [string]::IsNullOrWhiteSpace($CommandsFamily) -or $Suite -in @('Compare', 'Commands', 'FileOps')) {
         'family'
@@ -1829,8 +1848,8 @@ if ($null -eq $receipt) {
     Write-Host "BLOCKED ATTESTATION: validation requires a schema-valid build receipt for $Configuration|$Platform." -ForegroundColor Red
     exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
 }
-if ($ScopedEntryId.Count -and -not $receipt.tests_enabled) {
-    Write-Host 'BLOCKED ATTESTATION: shared scoped execution requires a test-enabled build receipt.' -ForegroundColor Red
+if (($ScopedEntryId.Count -or $ViewerDesktopEntryId.Count) -and -not $receipt.tests_enabled) {
+    Write-Host 'BLOCKED ATTESTATION: exact scoped execution requires a test-enabled build receipt.' -ForegroundColor Red
     exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
 }
 
@@ -1845,7 +1864,7 @@ if ((-not $useAffectedSelectedBuild -or @($prebuildAffectedEntries | Where-Objec
 
 # --- Determine test plan ---
 
-$testPlan = if ($ScopedEntryId.Count) { $scopedExecutionEntries } else { @(Get-RSRunnerRequestedTestPlan) }
+$testPlan = if ($ScopedEntryId.Count -or $ViewerDesktopEntryId.Count) { $scopedExecutionEntries } else { @(Get-RSRunnerRequestedTestPlan) }
 $testPlan = @($testPlan)
 if ($useAffectedSelectedBuild) {
     $afterBuildWorkspace = Get-RSWorkspaceSnapshot -RepoRoot $repoRoot -ImpactBase $ImpactBase
@@ -1885,7 +1904,7 @@ if ($Suite -in @('PR', 'CI', 'Full') -and
     Write-Host 'BLOCKED ATTESTATION: the verified receipt does not contain the complete selected executable/plugin test plan closure.' -ForegroundColor Red
     exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
 }
-$validationCoverageScope = if ($useAffectedSelectedBuild -or $NonInteractive -or -not [string]::IsNullOrWhiteSpace($CaseFilter)) {
+$validationCoverageScope = if ($ViewerDesktopEntryId.Count -or $useAffectedSelectedBuild -or $NonInteractive -or -not [string]::IsNullOrWhiteSpace($CaseFilter)) {
     'filtered'
 } elseif (-not [string]::IsNullOrWhiteSpace($CommandsFamily) -or $Suite -in @('Compare', 'Commands', 'FileOps')) {
     'family'

@@ -1186,6 +1186,12 @@ two-second assertion remains a failed native result and makes the hosted diagnos
 the candidate measurements and comparison remain useful diagnostic evidence. Missing evidence,
 other failed assertions and candidate timing failures cannot be classified as timing-only RED.
 
+The exact `Phase7_DeleteItemsNestedRootsWake` x64 Release witness records the time spent in twenty
+fixture and parallel Delete rounds in `FileOps.SelfTest.DeleteItemsNestedRootsWake`. The metric stores
+round count in `value0`, roots per round in `value1`, and the terminal HRESULT. The fixture requires
+one successful completion per root and bounded return for every round. This sample is diagnostic
+for the nested-root scheduler and does not measure standalone disk throughput.
+
 R0e-OR1 fixed-volume Local reader cancellation evidence uses the test-enabled Release Commands case
 `cmd_pane_fileops_local_blocked_reader_cancel_is_bounded`. One real Local `Win32FileReader` issues an
 overlapped one-byte read against a connected outbound byte pipe whose server produces no bytes. The
@@ -2624,10 +2630,13 @@ Full exact Rename qualification also needs host cancellation and handle peaks.
 
 `FileOps_SmbCorroboratedRenameProvider` uses a dedicated SMB child on an endpoint that can open
 ordinary objects without exact IDs. It drives the normal F2 worker for a nested folder, a
-name collision with Keep both, a case-only rename, and cancellation before dispatch.
-It also runs 100 independent provider captures and renames, checking content, spelling
-and receipt for each one. Collect `FileOps.Smb.CorroboratedRenameControlUs` for host-folder
-completion, the cancellation round and the provider series. The provider emits capture
+name collision with Keep both, a case-only rename, cancellation, and changed source and
+parent checks before dispatch. The parent control restores the original file at the same
+path through a different directory. The free-name control preserves same-name decoys
+in two owned ancestors. It also runs 100 independent provider captures and renames,
+checking content, spelling and receipt for each one. Collect
+`FileOps.Smb.CorroboratedRenameControlUs` for host-folder completion, cancellation, the
+revision and namespace controls, and the provider series. The provider emits capture
 and mutation duration and guarded directory counts under `FileOps.Local.CorroboratedRename`.
 The Debug plugin contract separately exercises a blocked source handle, a replaced ancestor
 and a lost response after a real mutation.

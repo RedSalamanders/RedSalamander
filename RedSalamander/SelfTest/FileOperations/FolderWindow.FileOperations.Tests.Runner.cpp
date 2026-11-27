@@ -14310,13 +14310,9 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
 
     constexpr auto bindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
     wil::com_ptr<IFileSystemBoundObject> share;
-    const HRESULT shareIdentity = binding->BindObject(remoteRoot.c_str(), bindFlags, share.put());
-    if (shareIdentity == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && ! share)
-    {
-        unavailableReason = L"the registered share does not provide exact SMB identities for Managed Move";
-        return true;
-    }
-    if (shareIdentity != S_OK || ! share)
+    const HRESULT shareIdentity        = binding->BindObject(remoteRoot.c_str(), bindFlags, share.put());
+    const bool shareLacksExactIdentity = shareIdentity == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && ! share;
+    if (! shareLacksExactIdentity && (shareIdentity != S_OK || ! share))
         return reject(std::format(L"the registered root identity probe returned 0x{:08X}", static_cast<uint32_t>(shareIdentity)));
     share.reset();
 
@@ -14352,8 +14348,17 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
         return reject(L"could not write both fixture files");
 
     wil::com_ptr<IFileSystemBoundObject> sourceBinding;
-    const HRESULT sourceIdentity = binding->BindObject(managedSource.c_str(), bindFlags, sourceBinding.put());
-    if (sourceIdentity != S_OK || ! sourceBinding)
+    const HRESULT sourceIdentity        = binding->BindObject(managedSource.c_str(), bindFlags, sourceBinding.put());
+    const bool sourceLacksExactIdentity = sourceIdentity == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && ! sourceBinding;
+    if (sourceLacksExactIdentity)
+    {
+        const auto factsProvider = state.fsLocal.try_query<IFileSystemExpectedOccupantPublication>();
+        FileSystemExpectedOccupant facts{};
+        facts.sizeBytes = sizeof(facts);
+        if (! factsProvider || factsProvider->ReadExpectedOccupant(managedSource.c_str(), &facts) != S_OK || facts.fileSizeBytes != managedBytes.size())
+            return reject(L"the SMB provider could not corroborate the opened source without an exact ID");
+    }
+    else if (sourceIdentity != S_OK || ! sourceBinding)
         return reject(std::format(L"the owned SMB file identity probe returned 0x{:08X}", static_cast<uint32_t>(sourceIdentity)));
     sourceBinding.reset();
 
@@ -14417,11 +14422,10 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
     // The child is empty after Managed cleanup. Remove only that exact child.
     if (! isOrdinaryDirectory(remoteRoot) || ! isOrdinaryDirectory(remoteFixture) || ! RemoveDirectoryW(remoteFixture.c_str()) || ! isAbsent(remoteFixture))
         return reject(L"could not retire the empty SMB fixture nonrecursively");
-    removed = true;
-    Debug::Perf::Emit(
-        L"FileOps.SelfTest.SmbMixedMove", L"local-native-and-smb-managed", Debug::Perf::ElapsedUs(started), 2u, result.bridgeStageCreateCount, S_OK);
-    AppendLog(
-        L"SMB mixed Move: one task completed the Local Native and SMB Managed items. Both destinations matched their sources and the SMB fixture retired.");
+    removed                       = true;
+    const std::wstring_view route = sourceLacksExactIdentity ? L"local-native-and-smb-managed-by-facts" : L"local-native-and-smb-managed";
+    Debug::Perf::Emit(L"FileOps.SelfTest.SmbMixedMove", route, Debug::Perf::ElapsedUs(started), 2u, result.bridgeStageCreateCount, S_OK);
+    AppendLog(std::format(L"SMB mixed Move: one task completed {} with exact payloads, absent originals and retired fixture.", route));
     return true;
 }
 
@@ -15392,7 +15396,8 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
 [[nodiscard]] HRESULT RunRemoteInlineRenameForSelfTest(const wil::com_ptr<IFileSystem>& fileSystem,
                                                        std::wstring_view pluginId,
                                                        const std::filesystem::path& source,
-                                                       std::wstring_view destinationLeaf) noexcept
+                                                       std::wstring_view destinationLeaf,
+                                                       bool verifyScheduledRenameRefusal = false) noexcept
 {
     RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
     if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
@@ -15411,6 +15416,29 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     if (! information || information->GetMetaData(&metadata) != S_OK || ! metadata || ! metadata->shortId)
         return E_UNEXPECTED;
     RETURN_IF_FAILED(owner.SetFileSystemInstanceForPane(pane, fileSystem, std::wstring(pluginId), metadata->shortId, L"remote-rename-selftest"));
+
+    if (verifyScheduledRenameRefusal)
+    {
+        // The Files menu and both shortcut ingresses must agree on the live provider.
+        // Stop before invoking either command if that provider now supports scheduled Rename.
+        if (owner.CanScheduleRename(pane))
+            return E_UNEXPECTED;
+        const auto verifyRefusal = [&](std::wstring_view command, auto&& invoke) noexcept
+        {
+            const auto started = std::chrono::steady_clock::now();
+            invoke();
+            FolderView::AlertOverlayDebugSnapshot alert{};
+            const bool refused =
+                owner.DebugGetPaneAlertSnapshot(pane, alert) && alert.visible && ! alert.blocksInput && alert.hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            Debug::Perf::Emit(L"FileOps.SelfTest.SftpScheduledRenameRefusalUs", command, Debug::Perf::ElapsedUs(started), 1u, 0u, refused ? S_OK : E_FAIL);
+            owner.DismissPaneAlertOverlay(pane);
+            return refused;
+        };
+        if (! verifyRefusal(L"Batch Rename", [&] { owner.CommandBatchRename(pane, source.parent_path(), {source}); }) ||
+            ! verifyRefusal(L"Change Case", [&] { owner.CommandChangeCase(pane); }))
+            return E_UNEXPECTED;
+        AppendLog(L"Live SFTP Batch Rename and Change Case refused before showing a prompt.");
+    }
 
     auto* operations = owner.DebugGetFileOperationState();
     if (! operations)
@@ -15523,9 +15551,9 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
             return reject(L"occupied-name refusal did not keep both exact files before dispatch", collision);
         source.reset();
 
-        const HRESULT renamedHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdSftp, original, L"renamed.txt");
+        const HRESULT renamedHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdSftp, original, L"renamed.txt", /*verifyScheduledRenameRefusal=*/true);
         if (renamedHr != S_OK || ! notFound(original) || ! hasBytes(renamed, fileBytes))
-            return reject(L"scheduled file Rename did not prove the new name and exact bytes", renamedHr);
+            return reject(L"scheduled Rename refusals or Inline Rename did not prove the required results and bytes", renamedHr);
         const HRESULT caseHr = RunRemoteInlineRenameForSelfTest(fs, kPluginIdSftp, renamed, L"Renamed.txt");
         if (caseHr != S_OK || ! notFound(renamed) || ! hasBytes(caseOnly, fileBytes))
             return reject(L"case-only Rename did not prove the exact spelling and bytes", caseHr);
@@ -16084,10 +16112,10 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         ! hasBytes(caseOnly, kSourceBytes))
         return reject(L"the case-only F2 Rename did not verify its stored spelling");
 
-    const auto pauseBeforeDispatch = [&](const std::filesystem::path& destination, uint64_t& taskId) noexcept
+    const auto pauseBeforeDispatch = [&](const std::filesystem::path& from, const std::filesystem::path& destination, uint64_t& taskId) noexcept
     {
         SetFileOpsInlineRenameBeforeMutationPauseForSelfTest(true);
-        if (! start(caseOnly, destination, taskId))
+        if (! start(from, destination, taskId))
             return false;
         const auto blocked = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept {
             return HasFileOpsInlineRenameBeforeMutationPauseEnteredForSelfTest();
@@ -16101,7 +16129,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     };
     const auto canceled   = nested / L"cancel-not-published.txt";
     uint64_t canceledTask = 0u;
-    if (! pauseBeforeDispatch(canceled, canceledTask))
+    if (! pauseBeforeDispatch(caseOnly, canceled, canceledTask))
         return false;
     task = operations->FindTask(canceledTask);
     if (! task)
@@ -16117,7 +16145,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     const auto stale                               = nested / L"stale-not-published.txt";
     constexpr std::string_view kChangedSourceBytes = "I66 source changed while paused";
     uint64_t staleTask                             = 0u;
-    if (! pauseBeforeDispatch(stale, staleTask))
+    if (! pauseBeforeDispatch(caseOnly, stale, staleTask))
         return false;
     if (! SelfTest::WriteTextFile(caseOnly, kChangedSourceBytes))
         return reject(L"could not change the owned source while its captured task waited");
@@ -16127,6 +16155,49 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         hasExactLeaf(stale))
         return reject(L"an edited source must produce a pre-dispatch revision refusal and preserve its new bytes");
     Debug::Perf::Emit(L"FileOps.Smb.CorroboratedRenameControlUs", L"host stale source before dispatch", Debug::Perf::ElapsedUs(staleStart), 1u, 0u, S_OK);
+
+    const auto namespaceParent = nested / L"namespace";
+    const auto movedParent     = nested / L"namespace-moved";
+    const auto namespaceSource = namespaceParent / L"source.txt";
+    const auto namespaceTarget = namespaceParent / L"qualified.txt";
+    const auto parentDecoy     = nested / namespaceTarget.filename();
+    const auto rootDecoy       = fixture / namespaceTarget.filename();
+    if (! std::filesystem::create_directory(namespaceParent, error) || ! SelfTest::WriteTextFile(namespaceSource, kSourceBytes) ||
+        ! SelfTest::WriteTextFile(parentDecoy, kOccupantBytes) || ! SelfTest::WriteTextFile(rootDecoy, kChangedSourceBytes))
+        return reject(L"could not seed the owned namespace and same-name decoys");
+
+    const auto namespaceStart = std::chrono::steady_clock::now();
+    uint64_t namespaceTask    = 0u;
+    if (! start(namespaceSource, namespaceTarget, namespaceTask) || ! waitFor(namespaceTask, S_OK) || ! hasExactLeaf(namespaceTarget) ||
+        ! hasBytes(namespaceTarget, kSourceBytes) || hasExactLeaf(namespaceSource) || ! hasBytes(parentDecoy, kOccupantBytes) ||
+        ! hasBytes(rootDecoy, kChangedSourceBytes))
+        return reject(L"Rename left its captured directory or changed a same-name decoy");
+    Debug::Perf::Emit(L"FileOps.Smb.CorroboratedRenameControlUs", L"same-name decoys in owned ancestors", Debug::Perf::ElapsedUs(namespaceStart), 1u, 0u, S_OK);
+
+    const auto refusedTarget   = namespaceParent / L"unpublished.txt";
+    const auto movedLeaf       = movedParent / namespaceTarget.filename();
+    uint64_t changedParentTask = 0u;
+    if (! pauseBeforeDispatch(namespaceTarget, refusedTarget, changedParentTask))
+        return false;
+
+    // Put the same file back at its captured path through a different directory.
+    // A check of the file alone would still encounter the original object.
+    if (! MoveFileExW(namespaceParent.c_str(), movedParent.c_str(), 0u) || ! std::filesystem::create_directory(namespaceParent, error) ||
+        ! MoveFileExW(movedLeaf.c_str(), namespaceTarget.c_str(), 0u) || ! SelfTest::WriteTextFile(movedLeaf, kOccupantBytes))
+        return reject(L"could not replace the owned parent and restore the original file while F2 waited");
+
+    const auto changedParentStart = std::chrono::steady_clock::now();
+    releaseDispatch();
+    if (! waitFor(changedParentTask, HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH)))
+        return false;
+    const auto& changedParent = state.completedTasks.at(changedParentTask).sourceItemResults;
+    if (changedParent.size() != 1u || ! changedParent.front().has_value() ||
+        changedParent.front().value().publication != FileOperations::PublicationState::NotAttempted || ! hasBytes(namespaceTarget, kSourceBytes) ||
+        ! hasBytes(movedLeaf, kOccupantBytes) || hasExactLeaf(refusedTarget) || hasExactLeaf(movedParent / refusedTarget.filename()) ||
+        ! hasBytes(parentDecoy, kOccupantBytes) || ! hasBytes(rootDecoy, kChangedSourceBytes))
+        return reject(L"F2 must refuse a replaced parent before dispatch and preserve the original and decoys");
+    Debug::Perf::Emit(
+        L"FileOps.Smb.CorroboratedRenameControlUs", L"host changed parent before dispatch", Debug::Perf::ElapsedUs(changedParentStart), 1u, 0u, S_OK);
 
     for (unsigned int index = 0u; index < kCount; ++index)
     {

@@ -65,6 +65,18 @@ This evaluates their solution and deployed runtime union and publishes a selecte
 receipt. Selftest-only All/Compare/Commands/FileOps accept their exact application
 union with byte verification; PR/CI/Full and package gates retain full-solution
 receipts. Selection cannot grant contamination repair rights for the full solution.
+After agreeing to a desktop window, use the exact viewer entry selector to run only the four
+standalone interactive viewer entries from a verified build.
+
+```powershell
+$viewerEntries = 'viewer-pe.interactive','viewer-sqlite.interactive','viewer-pe.find-prompt','viewer-pe.goto-prompt'
+./Tools/Run-AllTests.ps1 -Suite CI -ValidationMode Fresh -Configuration Release -Platform x64 `
+    -SkipBuild -ViewerDesktopEntryId $viewerEntries
+```
+
+Add `-ExplainPlan` to list the exact selection without running it. Each selected executable retains
+its canonical desktop lease and command arguments. The resulting evidence is filtered.
+
 All runner build modes enable the native test surface. Before desktop admission or
 launch, in-product cases require both a test-enabled receipt and the actual PE's
 ENABLE_TESTS resource marker; production artifacts fail closed, including SkipBuild.
@@ -333,7 +345,8 @@ The exact FileOps-only `FileOps_IdentityInterlockWaiting`, `FileOps_ReviewRemedi
 `FileOps_SmbExactRenameProvider` and `FileOps_SmbCorroboratedRenameProvider` storage and route regressions
 run without activation or a desktop
 lease, alongside `FileOps_RepeatDecisionContracts`, `FileOps_AlertOverlayUxAccessibility` and the reviewed folder-progress
-witnesses. The exact `FileOps_DeferredExitRefusesNewWork` case verifies the deferred-close ingress
+witnesses. The exact `Phase7_DeleteItemsNestedRootsWake` case uses only owned files and a joined Local Delete
+worker, so it also runs without a desktop lease. The exact `FileOps_DeferredExitRefusesNewWork` case verifies the deferred-close ingress
 gates using owned windows. The exact `FileOps_ClearCompletedScope` case uses a private popup.
 The exact `C0_CurlCommittedMutationResponseLost` case uses a loopback FTP fixture and no desktop lease.
 The exact `FileOps_ProviderCapabilityMatrix` case uses owned providers and task controls.
