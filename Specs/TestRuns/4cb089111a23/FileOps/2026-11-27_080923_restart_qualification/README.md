@@ -114,8 +114,31 @@ Raw result SHA-256 values are `e344c7c1e5a562858daab048a086ab606c7251b7c61ba2367
 
 ### Hosted x64 regression after the tooling repair
 
-The [hosted x64 Release job](https://github.com/RedSalamanders/RedSalamander/actions/runs/45960884674/job/140378451388) succeeded on `3f2b01251`. Its actual regression and Release assertion step passed. The combined test gate and both production Release branches did not run after ARM64 failed.
+The [hosted x64 Release job](https://github.com/RedSalamanders/RedSalamander/actions/runs/45960884674/job/140378451388) succeeded on `3f2b01251`. The canonical archive records 3,026 passes, zero failures and 72 expected skips. All 19 CI entries promoted, including File Operations and the four interactive viewer entries. The Release assertion probe passed. Result digest `5efb744898ad468fe08d16486d18e09b1cd27a307de83913ecd229418dcac1e6`. Raw evidence archive `20261127T102332Z-65416-6641c4f2c663406e8c0f8bde7d74c2bb` and regression receipt archive `20261127T102237Z-41692-1ab0392960054e2a8da6da1b7e3b8950`. The combined test gate and both production Release branches did not run after ARM64 failed.
 
 ### Dedicated viewer desktop selection
 
-The exact selection in PR #362 passed 68 planning checks in `20261127T101832Z-64300-051ffb0f71c0471bb77f612885fbfd13`. Read-only ExplainPlan `20261127T101832Z-76544-fb0f2647358041c49cf98040b042d5d8` listed Viewer PE Interactive, Viewer SQLite Interactive, Viewer Text Find and Viewer Text Go To in canonical CI order. The local native run awaits the exact build and a separate desktop window. [Draft PR #362](https://github.com/RedSalamanders/RedSalamander/pull/362)
+The exact selection in PR #362 passed 68 planning checks in `20261127T101832Z-64300-051ffb0f71c0471bb77f612885fbfd13`. Read-only ExplainPlan `20261127T101832Z-76544-fb0f2647358041c49cf98040b042d5d8` listed Viewer PE Interactive, Viewer SQLite Interactive, Viewer Text Find and Viewer Text Go To in canonical CI order. The focused source and shared-scope suite passed 252 checks in `20261127T102838Z-68900-203427e89e3b406fa68a6989cccf44de`. The test-enabled x64 Release candidate `36c07a80367f3986f05172fcd89b7b75aa5a4855` built in 7 minutes 38 seconds with zero warnings and errors. Receipt `e03407c5c0b2bc4cd0d1d3cfac87e3fe889c6a52665dac1a008b5e5edacaf0fb`. [Viewer selector PR #362](https://github.com/RedSalamanders/RedSalamander/pull/362)
+
+The four-entry viewer run started at 11:53 CET and drained at 11:58 CET, inside the approved window ending at 12:05 CET. Canonical run `20261127T105332Z-79564-ae0ecf66a8a84f0a8379ff50bd2775aa` executed all four requested entries in order and recorded three promoted entries and one failure. The runner result digest is `4b64ba4293a5e953886095287f1b1fb762f1f645b8d1462353cd3a87f2d95fd1`. Launcher capture `20261127T105330Z-42956-4fe4f0b48b5f49feb29ae4fb9a35c5aa` has stdout digest `341bd12bc4646159002c62aac124dd607afc3d4a3f9db827556b3db10436592a`.
+
+| Entry | Exact x64 Release observation | Output SHA-256 |
+| --- | --- | --- |
+| Viewer PE Interactive | The VLC and ImgRaw children exited normally in the original and retry respectively. Each parent then observed changed input and an unrelated foreground, refused restoration and stopped before the next child. | `1a3c2ec2e82ba429534ac1e9416b0590057889b9e7eb8091661c364ca483db75`, retry `9890960fcb004ba20fcc88bf5c30801001d54c77ff2bc3ca6719948dab81175f` |
+| Viewer SQLite Interactive | Entry promoted after exit 0. The executable reported zero compiled interactive cases. The Tab assertions require the Debug viewer snapshot and paging hooks. | `3354a43ecd8c96552bdd39a8c9519c9d50bfaf33d70c4dfa50a31ccd34b95887` |
+| Viewer Text Find prompt | Passed the owned DxUi dialog, focus and close assertions. | `a22bb5fbf9fffa79b3da92fa871b058be1f2a30acf78fdef99f28320659d230c` |
+| Viewer Text Go To prompt | Passed the owned DxUi dialog, focus and close assertions. | `9f6136fa7c1994c61185726324cbad79f7434af332e77b45d9ea733f2411f49b` |
+
+The same Debug-only SQLite scope applies to the promoted Release entry in the hosted x64 aggregate.
+
+### Repaired x64 Release File Operations replay
+
+The approved File Operations replay completed and retired its child at 11:52 CET, before the 11:58 cutoff. The native suite reported 300 passes, one failure and 29 skips in 42 minutes 34 seconds. The nested-roots delete case completed its twenty rounds inside the suite and emitted `FileOps.SelfTest.DeleteItemsNestedRootsWake` with `S_OK`. The earlier heap exit remains in its separate archive.
+
+The only failure was `R4A19_DiscoveryIndependentVolumes` with `alternate-volume-test-root-not-authorized`. This replay omitted the explicit alternate-volume flag and the case failed before allocating on another drive. A follow-up must select the exact marked alternate root and pass `-AllowAlternateVolumeTestRoot`. The run keeps its failed suite verdict. Native result digest `5ddefc87c5f34e600c9c3c998475bc0b13c69281d9706a748477f987b5681cde`.
+
+### Independent-volume recheck
+
+After the viewer processes drained, the approved five-minute window began at 12:01 CET. The same repaired x64 Release receipt ran only `R4A19_DiscoveryIndependentVolumes` with `-AllowAlternateVolumeTestRoot`. The launcher verified the existing marked NTFS C and ReFS Z roots on distinct fixed volumes and restored the original primary resource registration byte for byte.
+
+Run `20261127T110136Z-62592-b63a350bca84466094e2bdebe429c9e7` passed setup, the 3,782 ms independent-volume scenario and fixture cleanup. Native result digest `e02a9f997398e82d35bb23d1078b6d1df8173456d95d8cb667a1705a61344ec4`. The launcher drained with filtered repository verdict `NOT_EVALUATED` and exit 2. Capture `20261127T110135Z-69404-c1c97542efd146918c1c41870a44822c` has stdout digest `8132c9b24c8e784d45da0b3685ef41d4064284b1419dc9ffaa6f4cc2131d7b13`. The sandbox audit listed thirteen pre-existing legacy or stale paths. The original broad File Operations run retains its failed verdict.

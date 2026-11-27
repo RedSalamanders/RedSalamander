@@ -23,3 +23,9 @@ installed settings digest and removed the isolated settings files before
 archival. The local recovery sources reused the focused selector to launch a
 bounded fixture-specific body. The original broad timeout and failed cleanup
 remain in the [earlier run records](../2026-11-25_144010_graph_live_preflight/README.md).
+
+## 2026-11-27 exact recovery recheck
+
+The approved OneDrive Personal sync folder showed the old Upload directory present with no direct children. The same recovery-only `a08db7f8d` x64 Debug executable passed byte verification on its recorded receipt. It used a fresh isolated profile and the original archived upload payload as the verification input. The exact provider recovery returned native exit zero and 3 passes, zero failures and zero skips in `20261127T104046Z-68048-e1b06bd2ae174334bf25653349222c76`.
+
+The recovery used nonrecursive Recycle and recorded that both exact historical fixture roots were absent. An independent sync-folder read confirmed both absences. The launcher verified the installed settings digest and removed its isolated profile before archival. Native result SHA-256 `0d324f8e8f732ee18c0494bc881eea829054381d68f639de16aa394c0f1a706f`. Archived input SHA-256 `826d03fd16604a69f74ed238cb50f97edf3f3cd2cbcacbb3b05fd49c1a8ada6f`. The earlier Copy remains without a terminal result.
