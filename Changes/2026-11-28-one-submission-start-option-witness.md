@@ -1,0 +1,1 @@
+- Show the current Queue/Parallel default in Copy and Move with Options when the queue is empty. Apply a different Start choice to that task.
