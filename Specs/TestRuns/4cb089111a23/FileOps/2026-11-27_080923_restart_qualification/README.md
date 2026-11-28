@@ -446,3 +446,9 @@ The GitHub runner-images tracker records the same recurring WSL prompt on the na
 The x64 Release Commands entry on `05252ae38332641222c55ba1fb11a9f1abf264ae` passed 965 cases with zero failures and five skips in 1,279,206 ms. The native result SHA-256 is `23f04ec980182e56abc702efdfbd7dd57a9d9919797726136e4e49fc69ca5e23` in run `20261127T231106Z-58756-cb5c3c7c52a1429aa066841fab1ae55b` at `artifacts/archive/4cb089111a23/Commands/2026-11-28_013004/commands_results.json`.
 
 Both cases from the preceding ARM64 Commands run passed locally. Conflict-inspection teardown took 154 ms and ViewerSpace hover took 76,817 ms. The Pack and Unpack round trip, Find result shortcuts and file actions, Cut and Paste, and the host queue paste route also passed. These are local x64 results. The broader Full sequence continued to File Operations and the ARM64 gate stayed open.
+
+### Pack cleanup source-contract follow-up
+
+The canonical x64 Release Tooling Pester selection on `f8e90684f5099d93491dc47ea4625cd715898d29` had 1,518 passes, one failure and zero skips. The HWND factory, target and brush check passed. The failing Observatory Pack source guard expected the previous pane-only cleanup dispatch. Exact Pack directory cleanup now runs in the Pack worker, and regular files still use the receipt-bound Delete request. The focused gate rejected `tooling.pester`. Run `20261128T000631Z-58780-a5e96683c36d488982248a59600ab07d`. Legacy result SHA-256 `08ffa0cbf078eac797b026dab321c2ae7d4be2102cd5191b5b5c4f5080d6b558`.
+
+Candidate `c092f3a60d8509bbc861eb68583b1f7e5600ac16` scopes the static checks to the Pack completion and worker paths. The source contract checks publication, instance and receipt binding before the regular-file Delete request. It also checks that tree removal is conditioned on published output, approval and successful strict rebind. The focused Pester run is in progress.
