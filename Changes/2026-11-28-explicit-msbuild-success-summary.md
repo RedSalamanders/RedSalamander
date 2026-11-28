@@ -1,0 +1,1 @@
+- Require a complete zero-warning MSBuild summary in both native build console modes.

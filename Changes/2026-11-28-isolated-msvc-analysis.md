@@ -1,0 +1,1 @@
+- Add `build.ps1 -Analyze` for isolated first-party MSVC diagnostics without replacing ordinary build receipts.

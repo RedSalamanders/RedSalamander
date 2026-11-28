@@ -1,0 +1,1 @@
+- Enable the standard MSVC preprocessor and shared Windows header definitions for first-party C++ builds.
