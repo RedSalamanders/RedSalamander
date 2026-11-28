@@ -71,7 +71,7 @@ case SelfTestState::Step::FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationPro
             static std::atomic<uint32_t> nextCutSequence{0x41A51000u};
             const uint32_t cutSequence  = nextCutSequence.fetch_add(1u, std::memory_order_relaxed);
             const auto cutBarrierCalled = std::make_shared<std::atomic<bool>>(false);
-            std::vector<Task*> tasksBefore, tasksAfter;
+            std::vector<FolderWindow::FileOperationState::Task*> tasksBefore, tasksAfter;
             state.fileOps->CollectTasks(tasksBefore);
             const uint64_t promptsBefore = HostGetTestPromptRequestCount();
             uint64_t canceledTaskId      = 0u;
