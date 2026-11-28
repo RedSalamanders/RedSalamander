@@ -469,3 +469,14 @@ File Operations passed 306 cases with zero failures and 24 skips in 2,663,900 ms
 Commands, File Operations and Viewer PE Interactive passed. The Release SQLite interactive entry exited successfully and reported zero compiled interactive cases. The previously recorded x64 Debug SQLite Tab result remains the interaction witness. Compare Directories passed 255 with 29 skips. Seventeen entries promoted and Tooling remained incomplete.
 
 The contained runner drained at 02:21:38 CET after roughly 130 minutes. The original C machine-resource manifest was restored and independently rehashed to `1779448ad25c15b19c41f1cd0a1c81d68c7711cfe834df2b9ee7599a3bbd7a22`. The inner archive `20261127T231106Z-58756-cb5c3c7c52a1429aa066841fab1ae55b` stores the canonical result with SHA-256 `c13fd5dfdde6f86756b4e6d0cacc7c4557b6b2d5a7d7632aea513e736acac33f` and the detailed result with SHA-256 `cedb364430091a423b41ddd60a3ebd138afe09d2a5de637de28224e6baf9d5cb`. The launcher archive `20261127T231104Z-35576-a767e8721c16434087f1f522b7f6b3dc` stores the original console with SHA-256 `9e89c1d99a7a334b1c5ad3f607506ccf626312c45006eb6201b6c1380236f3df`.
+
+### Focused replay on the merged Pack repair tree
+
+The replay on the exact x64 Release tree `c092f3a60d8509bbc861eb68583b1f7e5600ac16` used receipt `40b6b04330edf92a2ceb6034311fcfe788fca998d538f8e37028136c6109c0b3`. The desktop interval ran from 02:23:20 to 02:28:51 CET. Both Commands selections passed all three repetitions with zero failures and skips, and retained the scoped repository verdict `NOT_EVALUATED`. The native ARM64 gate remains open.
+
+| Case | Durations | Run ID | Native result SHA-256 |
+|---|---|---|---|
+| Late conflict-inspection teardown | 154, 140 and 139 ms | `20261128T012321Z-63660-4c03b154a87243a69dee3b28932daeac` | `4548dc92b00cb2e900430fd5dacd48cb1bed12e2be6337581f744df565b81be3` |
+| ViewerSpace hover and static-cache reuse | 74,356, 75,031 and 74,961 ms | `20261128T012415Z-59792-36856b46fff94bd68860feecdf030885` | `d152ab9c1b8a3bcd6a718837e84be37f4fbf7dd878e48c00eed5a7be9cea4660` |
+
+Launcher archive `20261128T012320Z-83620-ac6af69b045d4678887c892de1ad796a`, result SHA-256 `98534fdb8f741ba9e0c31e8e31314391060f8eeebb13922931e79cc8a208be67`. A fresh corrected Full run started after the replay drained. The native runner is `20261128T013006Z-46208-de4321aec9534bfabbec57a5e7d4e641` and the timed launcher is `20261128T013004Z-67052-fa4ead283b86415b99ac7c9578fd104e`.
