@@ -357,3 +357,76 @@ Both Windows SMB checks ran through the existing approved SINON fixture on the f
 | Windows SMB mixed Local Native and SMB Managed Move | 110 ms | `20261127T222342Z-69648-9a70cbf8427746e98ea52ee5792cb0b3` | `bf6d38f945058f66ea88fd23391648bdb7c170795227eb248bc0bb2575bd22ab` |
 
 Both Windows SMB runs retain the filtered repository verdict `NOT_EVALUATED`.
+
+### Follow-up checks on the Pack build
+
+Four canonical non-activating File Operations selections ran on x64 Release source `af79501c8d7b0fd1c7ecc469f0e59316e74642a2`. The runner byte-verified receipt `96a4e3da9f8bb0147d3eec1f70a0c1668003a02639bbcbadcfda342e3c90e35b` for each run. All passed setup, the selected case and cleanup, for 12 passes and zero failures or skips. The filtered repository verdict is `NOT_EVALUATED` for each selection.
+
+| Case | Body duration | Run ID | Native result SHA-256 |
+|---|---:|---|---|
+| Identity-less Delete and Pack writer interlock | 250 ms | `20261127T225237Z-23716-884c81862d934f8d96c5a73cac489228` | `0031e67c39ef50205e18a433d2243b5ab87429c35597ca9b3c307de4d6d65540` |
+| Deferred exit rejects new work | 19,828 ms | `20261127T225319Z-16148-654e72083b4b4196bf774d3492063b00` | `c3dc62bd55d45e1cfcce7d91b5782f3aa81e10da6557d7beda8677ad4eca90ac` |
+| Copy-only Move retains sources without destination proof | 313 ms | `20261127T225423Z-38824-899ab5092a25449cadcdcf376e8b6967` | `b31de1df6cba3fc030b1f66c53f84ed6014a67ef1f5dc165adb5ea91cbe086b3` |
+| Provider capability matrix | 2,156 ms | `20261127T225507Z-21448-da5661c651a14e0fbe3f677d4ee104f6` | `c6f3bfeb0700bd14e01e737ef9b3f9b90ae24824539cdba2e9388f16855598f2` |
+
+### Approved clipboard, consent and File Operations desktop pass
+
+The approved 12-minute window began at 23:56:24 CET on 27 November 2026. All four canonical runners verified the x64 Release Pack receipt and used the interactive desktop lease. Their contained processes drained at 23:59:30 CET, after about 185 seconds. Launcher archive `20261127T225624Z-73372-fbb5a7b2ca9d4883a6e6f277115d4b5e`, results SHA-256 `858fd811a4334bb60e8e06b77017d3e530df2bf16ef6a5522cae5e56dbab9d59`.
+
+| Case | Body duration | Run ID | Native result SHA-256 |
+|---|---:|---|---|
+| Clipboard Move admission and retained actions | 110 ms | `20261127T225626Z-84476-385832b37f9347a981ca3487f9f1e3c8` | `53f836d46bf6c16f9deb196ce8f92ee98a404f6bd2627521b44b29d9d6d8bbe9` |
+| Deferred consent and Recycle escalation | 2,219 ms | `20261127T225708Z-81900-10a2f2ae880447188b63e22070011c1e` | `c61bf363d2c9b183b7cb1f87bfd529fa61e712a6f1d5fd70b65b60768ab6673a` |
+| File Operations footer menu actions | 1,581 ms | `20261127T225754Z-51968-ea7c6e600c4540479618a458ae2452ac` | `ff074b3cb5fbd6e32fe8c60a77f0ad27fcc1a6ced7317202d1696ae6beca09e9` |
+| Retained source and mixed-result controls | 2,158 ms | `20261127T225842Z-77184-5b1a4df6e31b416787f56c167187638e` | `2e69e6c37084fc3e6bcac868b8180d3af5984af42bfb60e8a8592491b4dbce73` |
+
+The two File Operations runs each passed setup, case and cleanup. The two Commands cases each passed. The total was eight passes with zero failures or skips. Each filtered run retains repository verdict `NOT_EVALUATED`.
+
+### Earlier ARM64 Commands and desktop trace
+
+The retained ARM64 evidence in run `46027552244` on `bcc3f42e2e114953556605f3ef54e30919ada1bc` includes the original Commands result. It records 963 passes, two failures and five skips. The Direct2D failure-surface case reported that disabling Cancel all did not leave keyboard focus on Close. The mouse-opened main menu case had observed a readable popup, but its HWND was already invalid when the driver tried to post Down. Native result SHA-256 `f5e2a36e830560c8cfcda57419f2d56138544daf0c8dd3bbd7ba178d05dfc10f`. Native trace SHA-256 `08afdd4b28b6b3e26e4cae53de4913f418f9ac53695d5020e7025f300c79a43f`. [Retained ARM64 evidence](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244/artifacts/15231407555)
+
+The captured image digest for the separate retirement refusal matches the SHA-256 of the `C:\Windows\System32\wsl.exe` path encoded as UTF-16LE. PID 884 was created at 21:00:27.523 UTC. Its recorded parent PID 9292 could not be opened at retirement and returned Win32 error 87. The exact test-job relationship was unavailable. Startup preparation had finished at 20:13:28 UTC after retiring the approved account and search surfaces. Launch attribution remains open. Local evidence capture `20261127T230013Z-65064-7e827c14d0f7447b96441adb2053920b`. [ARM64 job log](https://github.com/RedSalamanders/RedSalamander/actions/runs/46027552244/job/140671268108)
+
+### Local replay of the two historical ARM64 Commands cases
+
+The approved x64 Release replay used the same verified Pack receipt. The two exact cases passed all three repetitions each with zero failures or skips. The desktop interval started at 00:07:11 CET on 28 November 2026 and ended at 00:08:51 CET. Launcher archive `20261127T230711Z-59680-b05a8ca3256646ac9d1a3857e088b871`, results SHA-256 `a1e2057ca323e6f3c30b4a4515d6f4761cc5a994cc6bd6f36b27dcf49a6b7bc1`.
+
+| Case | Durations | Run ID | Native result SHA-256 |
+|---|---|---|---|
+| Fallback Cancel all focus | 4,548, 4,593 and 4,539 ms | `20261127T230713Z-75860-e502bf5951f54d6d9f9c5ac358bf7110` | `314b60ed8b0057a23979bbcd634310d06676d2bd6475fee64382dc9d1e4dbc1a` |
+| Mouse-opened main menu keyboard input | 461, 472 and 436 ms | `20261127T230810Z-43548-cfb4c4e19f4649ad99889572084627ad` | `248902ab90aba90163b25c7c2c4be511bbda426641070928a7e09458ed220363` |
+
+The focused repository verdict is `NOT_EVALUATED` in both cases. The native ARM64 follow-up remains open.
+
+### Hosted x64 follow-up after the Commands trace fix
+
+The x64 job on `651a700fc66de7927ad6684b08a8abc1553e1afa` finished with 3,045 passes, two failures and 71 skips. Commands passed 965 with five skips. File Operations passed 294 with 36 skips. All four interactive viewer entries passed. Tooling failed both attempts at the HWND render-target source assertion. Viewer PE non-interactive failed its first WebView2 private-origin observation and passed its retry. The hosted classifier retained one regression and one blocking flaky result. [Hosted x64 job](https://github.com/RedSalamanders/RedSalamander/actions/runs/46061664377/job/140741316649)
+
+The original x64 job log is preserved in `20261127T231756Z-73420-0ed1a0cd3ac34ceca26562bef5678857`. SHA-256 `c27195e3d584326b434566e7283f4c9d77f7f16b6a232f24561dd3bac0e2f5d2`.
+
+The HWND assertion expected `wil::com_ptr` for the shared factory, target and brush. Their existing `wil::com_ptr_nothrow` ownership predates both hosted revisions. The focused Pester 3.4.0 baseline reproduced the failure in `20261127T232000Z-82176-ac3ad0d4234540b3a9e6747fe4338bf2` with 2/1/0, SHA-256 `d11334610fb945f99122a4ea5148fffb89acb2ddbdd48d0351c25f2d5fe47dd4`. Candidate `fe5d6e248bade5b7e35058a035baa6d0f88820a2` passed all three checks in `20261127T232045Z-31404-2cf21bf5d28044b8ba268666f6aa853c`, SHA-256 `17c66fb622cde05978307d59acf05fce459ee66d666b25e50b5dc805d95480cd`. [Source-contract repair PR #389](https://github.com/RedSalamanders/RedSalamander/pull/389)
+
+PR #389 merged at `db658051844f10de7c07452bf54b9b160d8dade9` after the required checks passed. Its source-contract test and specification match the reviewed head on main.
+
+### ViewerWeb private origin follow-up
+
+The original non-interactive Viewer PE console confirms that only its raw HTML source assertion failed within the private-origin child. The isolated profile, script disablement, raw byte checks, and local and virtual PDF checks passed. The original console SHA-256 is `5f7e9b59b9f2f3ae781c762643978b60d1ce627cae82bb5d0ff19612d87b73a8`. The full x64 artifact is preserved locally in `20261127T232122Z-37168-94cfd42c925646baa43dc150962a6e9c`. [Hosted x64 artifact](https://github.com/RedSalamanders/RedSalamander/actions/runs/46061664377/artifacts/15237492399)
+
+The pre-change x64 Release non-activating Viewer PE entry passed on `fe5d6e248bade5b7e35058a035baa6d0f88820a2`. This contains the HWND contract correction and unchanged viewer source. Receipt `8c2cff1733f7b30d221cb8695e191eb070a9d3b7eb038acc62abec61e7d6a2f1`, run `20261127T232334Z-39372-07dad03628ad4bf997b216bca421f17a`, console SHA-256 `4cac7e242a5992be3ddc3e330c0713dd330b5b84abf5d5f647df88303fe9ea21`. The filtered repository verdict was `NOT_EVALUATED`.
+
+The first two exact ViewerWeb candidate launches stopped before compilation because the isolated checkout lacked its pinned vcpkg inputs. Their run IDs are `20261127T232709Z-59132-39712ba67d284d32a9c6e4c3a0af64a4` and `20261127T233003Z-67196-2167e0c047014d75bf7f0def457c04fd`.
+
+The prepared checkout built candidate `f8e90684f5099d93491dc47ea4625cd715898d29` with zero warnings and errors. The x64 Release test-enabled solution receipt was `2e9b6e0b31e2fe44ef0ae8fcdd748b0cc8a63ba63ea716e59971621882ccf6b1`. The canonical non-activating Viewer PE selection `20261127T233558Z-69264-01d67640cf0a43ce8cd65789f8cd9ddf` passed with zero failures or skips. Both controller startup and the exact browser source `https://viewer.redsalamander.invalid/web/1.html` were observed. Navigation completed successfully. The console SHA-256 is `a5d767efac6775a188a220dc88de3063b386162cbf8a1715814f78d4f7f49669`. Repository verdict `NOT_EVALUATED`.
+
+PR #390 merged at `ae26292aee7c36f2a40e4dcce9b589d89426b085` after the required checks passed. The original intermittent hosted symptom did not reproduce on either local run. [ViewerWeb repair PR #390](https://github.com/RedSalamanders/RedSalamander/pull/390)
+
+### Hosted ARM64 follow-up after the Commands trace fix
+
+The ARM64 Release test-enabled build succeeded on `651a700fc66de7927ad6684b08a8abc1553e1afa`. The native regression step finished failed. The tooling suite reproduced the HWND contract failure in both attempts. The non-interactive Viewer PE entry promoted. [Hosted ARM64 job](https://github.com/RedSalamanders/RedSalamander/actions/runs/46061664377/job/140741316586)
+
+Commands originally reported 963 passes, two failures and five skips. The failures were `cmd_pane_fileops_conflict_pending_inspection_teardown` and `cmd_viewer_space_hover_does_not_rebuild_static_cache`. The hover witness recorded zero tooltip paints and `ConsoleWindowClass` at the pointer instead of its viewer. The conflict-inspection case passed in the single-case replay. Original and replay result SHA-256 digests are `56bdbbf8c2fbe929ae39cc16ab7e31cdb886b484c228efcea179f7cd90ac5a51` and `b7e6abedce776c70eac07e922d21e5f068e2ac1ea664bd09bae26217b2d35361`.
+
+At replay retirement the Default desktop boundary refused restoration over a foreign foreground. The captured image digest `95a9bdfa9774cbec665bce075b37ff65cb5cf6f70e0286eabad32eb453fdfbd1` matches the exact UTF-16LE path of System32 `wsl.exe`. PID 10916 was created at 23:42:28.4513297Z. Its reported parent PID 8212 could not be opened (Win32 error 87). The stock preparation snapshots showed no WSL console before either boundary. The exact arguments and launch ownership remain unproved. The hover replay, File Operations and all four interactive viewer entries stayed pending.
+
+Job log and the downloaded native evidence use local run `20261127T235131Z-79960-2fde120a957943a4a7f6fdf4bd17fcd8`. Raw job log SHA-256 `0768232a9690ccb397a17d2fbf0580ca7208b09fff29f50bcb7461cf60bfee14`. The direct Pack run and the two intervening Pack descendants finished with native regression skipped at admission after main advanced. [Pack merge admission](https://github.com/RedSalamanders/RedSalamander/actions/runs/46076994462) The next Pack-bearing source, `ae26292aee7c36f2a40e4dcce9b589d89426b085`, was admitted and both native regression jobs started. [Current x64 and ARM64 qualification](https://github.com/RedSalamanders/RedSalamander/actions/runs/46085203828)
