@@ -71,3 +71,5 @@ The local integrated build first reached missing Shell API declarations in the i
 Exact `3db5a417702763ef5399544e1946c90dabddf68b` built with zero warnings and errors using the updated preprocessor and explicit Shell and Viewer PE headers. The test-enabled receipt is `a9e9c4e816115a850ee66bdedb476ce9a0ea1252bfb8e7adbc65a9f33d0ef2d6`.
 
 The focused FailureReportRouting Pester selection passed all 20 checks. It verified the single exact production crash-probe exception, ordinary routing immediately after that dispatch check, the exact four product switches, and both Release ProductUi assertion switches. Sandbox archive `20261128T104626Z-22496-8fd118129fbf4b56a1c2cdc9f79a2e0c` records result SHA-256 `a52a08f8d8ec8240f215b43cd50491d5ac42a9bae44c0d7584d0982bd36a06b0`.
+
+The matching non-activating selection promoted Settings Schema, Crash Handling, Plugin Contract and Viewer PE Noninteractive. Each passed and the scoped repository verdict was `NOT_EVALUATED`. The native run is `20261128T104551Z-78880-722f83bef52b402f8f3dbecb62913794`. The terminal summary has SHA-256 `340a9c9ec1c2e659fef07b86da318a51c2c491f1bb80b7c29774411cdc343cd6`.
