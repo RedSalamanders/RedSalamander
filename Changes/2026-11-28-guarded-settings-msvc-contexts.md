@@ -1,0 +1,1 @@
+- Make guarded file publication and settings tests compatible with the strict MSVC warning profile.

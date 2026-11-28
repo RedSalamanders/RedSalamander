@@ -464,6 +464,20 @@ public:
 
         struct Displacement
         {
+            Displacement(const std::filesystem::path& destinationPath,
+                         const LocalFileVersion& acceptedRevision,
+                         GuardedReplacementOptions replacementOptions) noexcept
+                : target(destinationPath),
+                  accepted(acceptedRevision),
+                  options(replacementOptions)
+            {
+            }
+
+            Displacement(const Displacement&)            = delete;
+            Displacement(Displacement&&)                 = delete;
+            Displacement& operator=(const Displacement&) = delete;
+            Displacement& operator=(Displacement&&)      = delete;
+
             const std::filesystem::path& target;
             const LocalFileVersion& accepted;
             GuardedReplacementOptions options;
@@ -471,7 +485,7 @@ public:
             std::filesystem::path backup;
             std::vector<std::byte> restoreRename;
         };
-        Displacement displacement{_targetPath, acceptedVersion.value(), options, {}, {}, {}};
+        Displacement displacement(_targetPath, acceptedVersion.value(), options);
         const TargetRenameCheck check{.context = &displacement,
                                       .verify  = [](void* context, FILE_INFO_BY_HANDLE_CLASS) noexcept -> HRESULT
         {
