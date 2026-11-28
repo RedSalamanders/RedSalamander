@@ -516,3 +516,15 @@ The corrected Pack tree `c092f3a60d8509bbc861eb68583b1f7e5600ac16` used its re-a
 | `settings_terminal_plugin_roundtrip` | 99, 95 and 94 ms | `20261128T054916Z-67720-6a4f172136154f0a830b48bde5efe3f3` | `4a76c606a351e82ebde5b47dbc5cd38cc8a7d8498d82d641c12f02a7a9239ea9` |
 
 The Z sandbox retained the launcher archive `20261128T054726Z-73492-130671ecea544ba2bec8888b10f2c058`. Its results digest is `373cd6fad8e87442db01e2f6ff7688bd061196b85875750339e6a09317b7b733`. These isolated x64 passes leave the hosted ARM64 focus and Terminal outcomes open.
+
+### Completed-card paint and queue desktop checks
+
+PR #398 merged at `02755d02bde37f7e8050a366d70db45cb75adefa`. It uses the expanded card's painted body to decide when to check the original Dismiss and action-count assertions. The initial build compiled with zero warnings and errors. The source barrier rejected its receipt after the formatter edited whitespace during compilation. The clean formatted source `70a2593a130690d130465e37e9a990d527b99eb3` then built x64 Release with zero warnings and errors, receipt `a8b9a8988348b3b7b411ec961b951a91a63ac985859a86b6776f39b37f4dacb2`. [Merged PR](https://github.com/RedSalamanders/RedSalamander/pull/398)
+
+| Selected case | Native totals | Case durations (ms) | Run ID | Native result SHA-256 |
+|---|---:|---:|---|---|
+| `cmd_pane_fileops_completed_group_and_navigation` | 3 passed | 1,012, 983 and 1,058 | `20261128T061526Z-56756-f553354d8c524dbc85b38fec1ba51620` | `585a50330b65842c11cc1e00039e6d01cbdae238ffaf47ecbbc7436a71eb08cb` |
+| `Phase5_DiscoverySingleTraversal` | 3 passed | 141 | `20261128T061621Z-21020-1f2bd5967c20490b93efdaa69a0e9f06` | `20af940d922f2517a76efa77327984184212765932dcd97d5ef75523c97663ff` |
+| `Phase6_PopupSmokeResizeAndPause` | 3 passed | 20,203 | `20261128T061715Z-60188-1c7eac83e6c849cdbac6c541305aba9f` | `990b1548841a9dc58a58cbaae4260582ede65a0fc845d924b3913066ba3b9b3d` |
+
+All three selections had zero failures and skips, with filtered repository verdict `NOT_EVALUATED`. The File Operations totals include setup and cleanup. The Start now control released the selected task's scheduling gate and kept the competing mutation interlock. Pause all and Resume all were invoked through the popup on an active transfer. The launcher ran from 07:15:24 to 07:18:31 CET and drained. Z archive `20261128T061524Z-71128-50d56e814b354eb9b02eb600842ac867`, launcher result SHA-256 `698aa31fa94e5d68d308fb5324f1e79ee1433fac3e503b95175d1c0ba7ec33a1`.
