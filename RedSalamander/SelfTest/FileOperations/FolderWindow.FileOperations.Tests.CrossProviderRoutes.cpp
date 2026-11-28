@@ -938,6 +938,123 @@ private:
     return (fileSystemFlags & FILE_NAMED_STREAMS) != 0u;
 }
 
+[[nodiscard]] bool RunFileOpsVirtualPaneMoveFolderPickerChecks(SelfTestState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    constexpr auto sourcePane          = FolderWindow::Pane::Left;
+    constexpr std::wstring_view leaf   = L"workshop inventory.txt";
+    constexpr std::string_view payload = "Inventory from the virtual source pane.";
+    const auto reject                  = [](std::wstring_view reason) noexcept
+    {
+        AppendLog(std::format(L"Virtual pane Move folder picker: {}", reason));
+        return false;
+    };
+
+    Common::Settings::Settings settings{};
+    wil::unique_hwnd privateHost(
+        CreateWindowExW(WS_EX_NOACTIVATE, L"STATIC", L"", WS_POPUP, 0, 0, 640, 480, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));
+    FolderWindow owner;
+    owner.SetSettings(&settings);
+    if (! privateHost || ! owner.Create(privateHost.get(), 0, 0, 640, 480) || FAILED(owner.SetFileSystemPluginForPane(sourcePane, kPluginIdDummy)))
+        return reject(L"the private virtual pane could not be created");
+
+    auto* operations            = owner.DebugGetFileOperationState();
+    const HWND sourceView       = owner.GetFolderViewHwnd(sourcePane);
+    const auto* dummyEntry      = FindLoadedPluginEntry(kPluginIdDummy);
+    const auto sourceFileSystem = owner.GetFileSystem(sourcePane);
+    const auto sourceIo         = sourceFileSystem ? sourceFileSystem.try_query<IFileSystemIO>() : wil::com_ptr<IFileSystemIO>{};
+    const auto localIo          = state.fsLocal ? state.fsLocal.try_query<IFileSystemIO>() : wil::com_ptr<IFileSystemIO>{};
+    if (! operations || ! sourceView || ! dummyEntry || dummyEntry->shortId.empty() || ! sourceIo || ! localIo)
+        return reject(L"the virtual source and Local destination routes were unavailable");
+
+    const auto fixtureName                 = std::format(L"i66-move-picker-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    const std::filesystem::path sourceRoot = L"/" + fixtureName;
+    const auto source                      = sourceRoot / leaf;
+    const auto destination                 = state.tempRoot / fixtureName;
+    const auto copied                      = destination / leaf;
+    std::error_code error;
+    if (! std::filesystem::create_directory(destination, error) || ! EnsureDummyFolderExists(sourceFileSystem.get(), sourceRoot.native()))
+        return reject(L"the owned source and destination directories could not be created");
+
+    const bool autoAccept                   = HostGetAutoAcceptPrompts();
+    const HostPromptResult originalOverride = HostGetTestPromptResultOverride();
+    const auto restorePrompt                = wil::scope_exit([&]() noexcept
+    {
+        FolderView::DebugSetNextMoveSelectedItemsDestinationForSelfTest(std::nullopt);
+        HostSetAutoAcceptPrompts(autoAccept);
+        HostSetTestPromptResultOverride(originalOverride);
+    });
+    const auto removeVirtualFixture         = [&]() noexcept
+    {
+        return CancelOutstandingSelfTestOperations(operations) &&
+               SUCCEEDED(sourceFileSystem->DeleteItem(sourceRoot.c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr));
+    };
+    auto removeOnFailure = wil::scope_exit([&]() noexcept { static_cast<void>(removeVirtualFixture()); });
+    if (! WriteFileTextFsIo(sourceIo, source, payload))
+        return reject(L"the virtual source file could not be written");
+
+    const auto displayedRoot = MakePluginDisplayPath(dummyEntry->shortId, sourceRoot.native());
+    owner.SetFolderPath(sourcePane, displayedRoot);
+    const auto listed = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return CurrentPanePathEquals(&owner, sourcePane, displayedRoot) && owner.DebugHasItemDisplayName(sourcePane, leaf);
+    }, {.timeout = SelfTest::Scale(10s), .operationName = L"virtual Move folder picker listing"});
+    if (! listed.conditionMet)
+        return reject(listed.timeoutDiagnostic);
+    owner.SetPaneSelectionByDisplayNamePredicate(sourcePane, [](std::wstring_view name) noexcept { return name == leaf; });
+    if (owner.DebugGetSelectedCount(sourcePane) != 1u || ! owner.DebugIsItemSelected(sourcePane, leaf))
+        return reject(L"the unique virtual source file was not selected");
+
+    size_t completionCount = 0u;
+    std::optional<FolderWindow::FileOperationCompletedEvent> completed;
+    const auto completionWatch = owner.AddFileOperationCompletedCallback([&](const FolderWindow::FileOperationCompletedEvent& event)
+    {
+        ++completionCount;
+        completed = event;
+    });
+    const auto detach          = wil::scope_exit([&]() noexcept { owner.RemoveFileOperationCompletedCallback(completionWatch); });
+    HostSetAutoAcceptPrompts(false);
+    const auto invokePicker = [&](HostPromptResult response) noexcept
+    {
+        HostSetTestPromptResultOverride(response);
+        const uint64_t promptsBefore = HostGetTestPromptRequestCount();
+        FolderView::DebugSetNextMoveSelectedItemsDestinationForSelfTest(destination);
+        SendMessageW(sourceView, WM_COMMAND, MAKEWPARAM(IDM_FOLDERVIEW_CONTEXT_MOVE, 0), 0);
+        HostPromptDebugSnapshot prompt{};
+        return HostGetTestPromptRequestCount() == promptsBefore + 1u && HostGetTestLastPromptDebugSnapshot(prompt) &&
+               prompt.presentation == HOST_PROMPT_PRESENTATION_COPY && prompt.defaultResult == HOST_PROMPT_RESULT_CANCEL && ! prompt.hasFileOperationOptions &&
+               prompt.message.find(destination.native()) != std::wstring::npos;
+    };
+
+    std::string sourceBytes;
+    if (! invokePicker(HOST_PROMPT_RESULT_CANCEL) || operations->HasActiveOperations() || completionCount != 0u || std::filesystem::exists(copied, error) ||
+        error || ! ReadFileTextFsIo(sourceIo, source, sourceBytes) || sourceBytes != payload)
+        return reject(L"Cancel did not leave both endpoints untouched after one Copy-only question");
+    const uint64_t promptsBefore = HostGetTestPromptRequestCount();
+    if (! invokePicker(HOST_PROMPT_RESULT_OK))
+        return reject(L"Copy did not ask once for the captured Local destination");
+    const auto finished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return completed.has_value() && ! operations->HasActiveOperations();
+    }, {.timeout = SelfTest::Scale(10s), .operationName = L"virtual Move folder picker completion"});
+    if (! finished.conditionMet)
+        return reject(finished.timeoutDiagnostic);
+
+    std::string copiedBytes;
+    if (completionCount != 1u || completed->operation != FILESYSTEM_MOVE || completed->sourcePane != sourcePane ||
+        completed->destinationFolder != destination || completed->sourcePaths.size() != 1u || completed->sourcePaths.front().filename() != leaf ||
+        completed->hr != S_FALSE || completed->itemOutcomes.size() != 1u ||
+        completed->itemOutcomes.front().publication != FileOperations::PublicationState::Published ||
+        completed->itemOutcomes.front().sourceDisposition != FileOperations::SourceDisposition::Retained ||
+        HostGetTestPromptRequestCount() != promptsBefore + 1u || ! ReadFileTextFsIo(localIo, copied, copiedBytes) || copiedBytes != payload ||
+        ! ReadFileTextFsIo(sourceIo, source, sourceBytes) || sourceBytes != payload)
+        return reject(L"the captured route did not publish one matching Local copy while keeping the virtual source");
+
+    static_cast<void>(removeOnFailure.release());
+    if (! removeVirtualFixture())
+        return reject(L"the owned virtual source fixture could not be retired");
+    AppendLog(L"Virtual pane Move folder picker kept the source on Cancel, then published the matching Local copy with one question and one receipt.");
+    return true;
+}
+
 [[nodiscard]] bool RunFileOpsLateMoveMetadataLossChecks(SelfTestState& state)
 {
     const auto reject = [](std::wstring_view reason)
