@@ -4198,7 +4198,7 @@ void RetireBatchRenamePaneFixture(const std::filesystem::path& root, CaseState& 
 {
     CloseBatchRenameWindowIfOpen();
     constexpr auto pane = FolderWindow::Pane::Left;
-    const auto path = g_folderWindow.GetCurrentPath(pane);
+    const auto path     = g_folderWindow.GetCurrentPath(pane);
     if (path.has_value() && OrdinalString::EqualsNoCasePath(path.value(), root))
     {
         const auto parent = root.parent_path();
@@ -4222,7 +4222,7 @@ void RetireBatchRenamePaneFixture(const std::filesystem::path& root, CaseState& 
     }
 
     const std::filesystem::path root = suiteRoot / L"work" / (L"batch_rename_pane_refresh_" + NewGuidText());
-    const auto retire = wil::scope_exit([&]() noexcept { RetireBatchRenamePaneFixture(root, state); });
+    const auto retire                = wil::scope_exit([&]() noexcept { RetireBatchRenamePaneFixture(root, state); });
     if (! SetupBatchRenamePaneFixture(state, root, {L"pane-alpha.batch", L"pane-beta.batch"}, {}))
     {
         return false;
@@ -4287,7 +4287,7 @@ void RetireBatchRenamePaneFixture(const std::filesystem::path& root, CaseState& 
     }
 
     const std::filesystem::path root = suiteRoot / L"work" / (L"batch_rename_source_replacement_" + NewGuidText());
-    const auto retire = wil::scope_exit([&]() noexcept { RetireBatchRenamePaneFixture(root, state); });
+    const auto retire                = wil::scope_exit([&]() noexcept { RetireBatchRenamePaneFixture(root, state); });
     if (! SetupBatchRenamePaneFixture(state, root, {L"source.batch"}, {}))
     {
         return false;
