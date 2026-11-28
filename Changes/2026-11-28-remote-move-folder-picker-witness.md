@@ -1,0 +1,1 @@
+- Verify that the virtual-pane Move folder picker sends the selected source to the chosen Windows folder and preserves Copy-only consent.

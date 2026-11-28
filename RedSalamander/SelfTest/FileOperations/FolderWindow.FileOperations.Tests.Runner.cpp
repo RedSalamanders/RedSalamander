@@ -18223,6 +18223,11 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 Fail(L"Interrupted Move writer, selection, notice ownership or history-retention contracts failed.");
                 return true;
             }
+            if (! RunFileOpsVirtualPaneMoveFolderPickerChecks(state))
+            {
+                Fail(L"The context-menu Move picker did not preserve the virtual-to-Local direction and Copy-only consent.");
+                return true;
+            }
             std::wstring recycleIngressFailure;
             if (! RunFileOpsRecycleIngressChecks(state, recycleIngressFailure))
             {
