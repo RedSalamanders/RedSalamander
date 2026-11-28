@@ -1008,14 +1008,15 @@ HRESULT WriteFileBytesAtomic(const std::filesystem::path& path,
     std::filesystem::path backupPath;
     struct PendingSave
     {
-        PendingSave(const std::filesystem::path& journalPath, const std::optional<Common::Settings::SettingsFileStamp>& acceptedStamp) noexcept :
-            recordPath(journalPath), expected(acceptedStamp)
+        PendingSave(const std::filesystem::path& journalPath, const std::optional<Common::Settings::SettingsFileStamp>& acceptedStamp) noexcept
+            : recordPath(journalPath),
+              expected(acceptedStamp)
         {
         }
-        PendingSave(const PendingSave&) = delete;
+        PendingSave(const PendingSave&)            = delete;
         PendingSave& operator=(const PendingSave&) = delete;
-        PendingSave(PendingSave&&) = delete;
-        PendingSave& operator=(PendingSave&&) = delete;
+        PendingSave(PendingSave&&)                 = delete;
+        PendingSave& operator=(PendingSave&&)      = delete;
 
         const std::filesystem::path& recordPath;
         const std::optional<Common::Settings::SettingsFileStamp>& expected;
