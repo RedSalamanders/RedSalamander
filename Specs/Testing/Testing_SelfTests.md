@@ -215,6 +215,8 @@ remain in the interactive suite.
 
 On a registered Windows SMB share with exact binding, `FileOps_SmbExactRenameProvider` also verifies the host File Operations admission for a Batch Rename to a new name and a Change Case of the same file. It requires the exact completion receipt and spelling, unchanged content and an untouched unrelated destination. `FileOps.Smb.SharedRenameTaskUs` records admission through completion for each origin. The case uses its existing owned fixture. When the provider opens the file and establishes that exact identity is unavailable, both scheduled origins must return a failed, not-attempted receipt and preserve the source spelling, bytes and unrelated sibling. The case records both refusal timings before reporting the exact-binding checks as skipped. The owned Windows SMB control exercises this path with test-only identity suppression. Live Samba runs use the provider's actual capabilities.
 
+On the exact route, the same case pauses a scheduled Batch Rename before provider mutation and requests cancellation. The task must report `ERROR_CANCELLED` with no publication, preserve the source and unrelated sibling, and leave the new name absent. `FileOps.Smb.SharedRenameCancelUs` measures the interval from the cancellation request to the completion event.
+
 Remote scheduled Rename witnesses use a private `FolderWindow` and engine for their completion receipts. The remaining
 Win32 audit classifies the owned parent by source path, the `Owned remote Rename test` title, the hidden `WS_POPUP`
 style and the fixed fixture geometry. The test uses the activation blocker and retires its private tasks on exit.

@@ -15827,10 +15827,37 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
                 completion = event;
         });
         const auto unsubscribe      = wil::scope_exit([&]() noexcept { folder->RemoveFileOperationCompletedCallback(subscription); });
+        constexpr HRESULT kCanceled = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        const bool testCancellation = expectedStatus == kCanceled;
+        if (testCancellation)
+            SetFileOpsBatchRenameBeforeExecutionPauseForSelfTest(true);
+        const auto releasePause = wil::scope_exit([&]() noexcept
+        {
+            if (testCancellation)
+            {
+                ReleaseFileOpsBatchRenameBeforeExecutionPauseForSelfTest();
+                SetFileOpsBatchRenameBeforeExecutionPauseForSelfTest(false);
+            }
+        });
         const auto started          = std::chrono::steady_clock::now();
         const HRESULT admitted      = operations->AdmitScheduledRename(pane, paneFileSystem, origin, {std::move(row)}, {}, {}, &taskId);
         if (admitted != S_OK || taskId == 0u)
             return reject(std::format(L"scheduled Rename admission failed (0x{:08X})", static_cast<unsigned long>(admitted)));
+        auto cancelStarted = started;
+        bool canceledAtBarrier = false;
+        if (testCancellation)
+        {
+            const auto paused = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+                return HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest() || completion.has_value();
+            }, {.timeout = SelfTest::Scale(std::chrono::seconds(4)), .operationName = L"SMB Rename before dispatch"});
+            auto* const task = operations->FindTask(taskId);
+            canceledAtBarrier = paused.conditionMet && ! completion.has_value() && task &&
+                                HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest();
+            cancelStarted = std::chrono::steady_clock::now();
+            if (task)
+                task->RequestCancel();
+            ReleaseFileOpsBatchRenameBeforeExecutionPauseForSelfTest();
+        }
         const auto finished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
             return completion.has_value();
         }, {.timeout = SelfTest::Scale(std::chrono::seconds(20)), .operationName = L"SMB scheduled Rename"});
@@ -15844,6 +15871,24 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
             if (! stopped.conditionMet)
                 cleanup.release();
             return reject(L"scheduled Rename did not deliver an owned completion");
+        }
+
+        if (testCancellation)
+        {
+            const auto elapsed = Debug::Perf::ElapsedUs(cancelStarted);
+            const bool unchanged =
+                canceledAtBarrier && completion->hr == kCanceled && completion->operation == FILESYSTEM_RENAME &&
+                std::ranges::all_of(completion->itemOutcomes,
+                                    [](const FolderWindow::FileOperationItemOutcome& outcome) noexcept
+                { return outcome.publication == FileOperations::PublicationState::NotAttempted; }) &&
+                leafMatches(from, true) && leafMatches(to, false) && hasBytes(from, kSourceBytes) && hasBytes(occupied, kOccupantBytes);
+            Debug::Perf::Emit(L"FileOps.Smb.SharedRenameCancelUs", detail, elapsed, 1u, 0u, unchanged ? S_OK : E_FAIL);
+            AppendLog(std::format(L"SMB Rename: Cancel result=0x{:08X}, at barrier={}, fixtures unchanged={}, settled in {} us.",
+                                  static_cast<uint32_t>(completion->hr),
+                                  canceledAtBarrier,
+                                  unchanged,
+                                  elapsed));
+            return unchanged || reject(L"scheduled Rename cancellation did not preserve its owned fixture before dispatch");
         }
 
         if (FAILED(expectedStatus))
@@ -15974,8 +16019,10 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
 
     const auto scheduled   = nested / L"scheduled-batch.txt";
     const auto changedCase = nested / L"SCHEDULED-BATCH.TXT";
+    const auto canceled    = nested / L"canceled-batch.txt";
     if (! verifyScheduledRename(FileOperations::RenameOrigin::BatchRename, L"Batch Rename", caseOnly, scheduled, S_OK) ||
-        ! verifyScheduledRename(FileOperations::RenameOrigin::ChangeCase, L"Change Case", scheduled, changedCase, S_OK))
+        ! verifyScheduledRename(FileOperations::RenameOrigin::ChangeCase, L"Change Case", scheduled, changedCase, S_OK) ||
+        ! verifyScheduledRename(FileOperations::RenameOrigin::BatchRename, L"Batch Rename", changedCase, canceled, HRESULT_FROM_WIN32(ERROR_CANCELLED)))
         return false;
     return removeFixture();
 }
