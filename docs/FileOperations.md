@@ -47,7 +47,7 @@ Task controls (what you can click):
 - **Collapse/expand**: hide/show details while keeping the operation's original name or selection summary visible. Long names shorten in the middle; their full text remains available to accessibility and in the tooltip.
 - **Throughput**: hide or show the history plot. Speed stays at the right of the Throughput heading, and remaining time stays beside the counts above the paths. Your plot choice survives collapsing the card.
 - **Pause / Resume**: pauses the task at the next safe checkpoint.
-- **Cancel**: requests cancellation of only that task; its card shows Stopping until the worker reaches a safe stop and the final result is known.
+- **Cancel** requests cancellation of this task. The card shows **Stopping** until the worker stops safely and reports the result. You can still inspect the source and destination paths while the task stops.
 - **Skip counting**: shown while the card is counting ahead of the work. It stops the count from running ahead so the operation can use its full speed. It does not skip any check (see [“Counting items…” and totals](#counting-items-and-totals)).
 - **Speed Limit** *(Copy/Move)*: sets a per-task bandwidth cap:
   - **Unlimited**

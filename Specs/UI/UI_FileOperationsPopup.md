@@ -492,9 +492,9 @@ success or partial/indeterminate outcomes after a late cancellation request.
 
 Stopping contributes to active task and taskbar progress accounting, with a distinct localized
 stopping count in the global summary. It is excluded from Pause all/Resume all eligibility.
-Its pending conflict decisions and per-task Pause/Resume, Cancel, Start now, reorder, destination,
-discovery Skip and speed decisions are withdrawn from paint, hit testing and accessibility;
-stale callbacks and deferred speed decisions recheck cancellation authority. Cancel all is
+Its pending conflict decisions and per-task Pause/Resume, Cancel, Start now, reorder,
+discovery Skip and speed decisions are withdrawn from paint, hit testing and accessibility.
+Stale callbacks and deferred speed decisions recheck cancellation authority. Cancel all is
 unavailable when every remaining task is already stopping. Native failure-surface Cancel all
 uses the same availability and consent rules; Close still only hides the window.
 
@@ -502,7 +502,8 @@ Stopping retains actual counters, paths, result facts and throughput history whi
 completion ETA, discovery activity and startup marquees. The ordinary operation/count heading
 stays concise beside one explicit stopping chip; when the chip cannot fit, the heading provides
 the localized status fallback. A retained status region and transition notification expose that
-status without color. Read-only path inspection and history disclosure remain available. The
+status without color. Read-only source and destination path inspection and history disclosure
+remain available. The
 popup MUST NOT display Canceled until the task actually finishes with a cancellation result.
 
 Publication does not synchronously create or show the popup. Every ordinary, clipboard, Inline
