@@ -11162,6 +11162,12 @@ struct OwnedMenuSessionEscapeResult
 {
     struct Probe
     {
+        Probe()                        = default;
+        Probe(const Probe&)            = delete;
+        Probe& operator=(const Probe&) = delete;
+        Probe(Probe&&)                 = delete;
+        Probe& operator=(Probe&&)      = delete;
+
         UiaOperationLifetime lifetime;
         bool hasTerminalRoot = false;
     };
