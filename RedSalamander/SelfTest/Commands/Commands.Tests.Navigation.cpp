@@ -11158,6 +11158,29 @@ struct OwnedMenuSessionEscapeResult
     return state.failure.empty();
 }
 
+[[nodiscard]] bool WindowExposesEmbeddedTerminalUiaRoot(HWND hwnd) noexcept
+{
+    struct Probe
+    {
+        UiaOperationLifetime lifetime;
+        bool hasTerminalRoot = false;
+    };
+
+    constexpr uint32_t kTimeoutMs = 3000u;
+    auto probe = std::make_shared<Probe>();
+    std::jthread worker([probe, hwnd](const std::stop_token stopToken) noexcept
+    {
+        ExecuteBoundedUiaWorker(probe, stopToken, kTimeoutMs, [&]() noexcept
+        {
+            wil::com_ptr<IUIAutomationElement> root;
+            wil::unique_bstr automationId;
+            probe->hasTerminalRoot = TryGetUiAutomationRootElement(hwnd, root) && SUCCEEDED(root->get_CurrentAutomationId(&automationId)) &&
+                                     automationId && std::wstring_view(automationId.get()) == L"RedSalamander.EmbeddedTerminal";
+        });
+    });
+    return WaitForBoundedUiaWorker(worker, probe->lifetime, kTimeoutMs, L"UI Automation root read", L"embedded Terminal provider") && probe->hasTerminalRoot;
+}
+
 [[nodiscard]] bool TestEmbeddedTerminalPluginLifecycle(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -11216,7 +11239,8 @@ struct OwnedMenuSessionEscapeResult
     state.Require(snapshot.open, L"Embedded terminal should be open in the opposite pane.");
     state.Require(snapshot.selected, L"Embedded terminal tab should be selected.");
     state.Require(snapshot.childHwnd != nullptr && IsWindow(snapshot.childHwnd) != FALSE, L"Embedded terminal must expose a live child HWND.");
-    state.Require(WindowExposesUiaProvider(snapshot.childHwnd), L"Embedded terminal child HWND must expose its plugin-owned UI Automation provider.");
+    state.Require(WindowExposesEmbeddedTerminalUiaRoot(snapshot.childHwnd),
+                  L"The UI Automation client must resolve the embedded terminal's plugin-owned root.");
     state.Require(snapshot.parentHwnd != nullptr && IsWindow(snapshot.parentHwnd) != FALSE,
                   L"Embedded terminal child HWND must stay parented to the FolderWindow frame.");
     state.Require(snapshot.visibleTabCount == 2u && ! snapshot.previewTabVisible && snapshot.terminalTabVisible,
