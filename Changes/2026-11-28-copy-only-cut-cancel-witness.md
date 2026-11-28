@@ -1,0 +1,1 @@
+- Verify that canceling a queued Copy-only Cut preserves the Cut sequence and the task order.

@@ -1150,10 +1150,12 @@ private:
     const auto removeRoot               = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
     const auto source                   = sourceFolder / L"downloaded.bin";
     const auto zone                     = std::filesystem::path(source.native() + L":Zone.Identifier");
+    const auto alternate                = std::filesystem::path(source.native() + L":notes");
     const auto destination              = destinationFolder / source.filename();
     constexpr std::string_view body     = "The incoming selected file.";
     constexpr std::string_view occupant = "The existing destination file.";
     constexpr std::string_view mark     = "[ZoneTransfer]\r\nZoneId=3\r\n";
+    constexpr std::string_view notes    = "A separate source stream.";
     const auto localIo                  = state.fsLocal.query<IFileSystemIO>();
     if (! WriteFileTextFsIo(localIo, source, body) || ! WriteFileTextFsIo(localIo, destination, occupant))
         return reject(L"the source or existing destination could not be written");
@@ -1165,10 +1167,15 @@ private:
         AppendLog(L"Staged Move metadata Skip skipped because the owned sandbox volume does not support named streams.");
         return true;
     }
-    if (! WriteFileTextFsIo(localIo, zone, mark))
-        return reject(L"the source named stream could not be written");
+    if (! WriteFileTextFsIo(localIo, zone, mark) || ! WriteFileTextFsIo(localIo, alternate, notes))
+        return reject(L"the source named streams could not be written");
 
-    const RedSalamander::TestSupport::ScopedEnvironmentVariable failMetadataTransfer(L"REDSALAMANDER_FILEOPS_METADATA_FAIL_MASK", std::wstring_view(L"0x2"));
+    constexpr uint32_t kSensitiveFeatures = FILESYSTEM_METADATA_MOTW | FILESYSTEM_METADATA_ALTERNATE_STREAMS | FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES;
+    const std::wstring lossMask           = std::to_wstring(kSensitiveFeatures);
+    const std::wstring extendedAttributes = std::to_wstring(FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES);
+    using Env                             = RedSalamander::TestSupport::ScopedEnvironmentVariable;
+    const Env forceExtendedAttributes(L"REDSALAMANDER_FILEOPS_METADATA_FORCE_PRESENT_MASK", extendedAttributes);
+    const Env failMetadataTransfer(L"REDSALAMANDER_FILEOPS_METADATA_FAIL_MASK", lossMask);
     CrossProviderCaseScope scope(state, operations);
     EnsureFileOperationsSettingsForSelfTest().verifyAfterCopy = false;
     const auto summary                                        = RunCrossProviderTransferAnsweringConflict(state,
@@ -1203,15 +1210,17 @@ private:
                                   static_cast<unsigned int>(result.ownedStageDisposition)));
     std::string sourceBytes;
     std::string zoneBytes;
+    std::string alternateBytes;
     std::string destinationBytes;
     if (! ReadFileTextFsIo(localIo, source, sourceBytes) || sourceBytes != body || ! ReadFileTextFsIo(localIo, zone, zoneBytes) || zoneBytes != mark ||
-        ! ReadFileTextFsIo(localIo, destination, destinationBytes) || destinationBytes != occupant)
-        return reject(L"Skip changed the original, its named stream, or the occupied destination");
+        ! ReadFileTextFsIo(localIo, alternate, alternateBytes) || alternateBytes != notes || ! ReadFileTextFsIo(localIo, destination, destinationBytes) ||
+        destinationBytes != occupant)
+        return reject(L"Skip changed the original, its named streams, or the occupied destination");
     const auto entries = ListCrossProviderChildNames(state.fsLocal.get(), destinationFolder.native());
     if (entries != std::vector<std::wstring>{destination.filename().native()})
         return reject(L"the unpublished stage was left behind");
 
-    AppendLog(L"Skipping known metadata loss retired the stage and preserved both file contents and the source stream.");
+    AppendLog(L"One metadata-loss Skip retired the stage and preserved both file contents and both source streams. Extended attributes were simulated.");
     return true;
 }
 

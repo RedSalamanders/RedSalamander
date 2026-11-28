@@ -2326,7 +2326,10 @@ verification and preserve its publication result. Issues records the loss and wh
 A proved destination and retained source yield **Copied; source kept**. The worker emits
 `FileOps.Metadata.LateMoveSourceRetained` with the sensitive feature mask and presents no additional
 destructive decision. `FileOps_ReviewRemediationContracts` exercises the real Local-to-Dummy writer,
-content verification, and survival of the source's `Zone.Identifier` stream.
+content verification, and survival of the source's `Zone.Identifier` stream. Its staged Skip
+control offers one decision for loss of Mark of the Web, a named stream and simulated extended
+attributes. It verifies both physical source streams, unchanged source and destination content,
+and retirement of the unpublished stage. `FileOps.Metadata.StageSkipped` records the combined feature mask.
 
 The shared deferred-consent gate owns insufficient/unknown space, hydration, sparse inflation, EFS
 plaintext, metadata-loss Move, and Recycle escalation. It serializes the prompt through the task

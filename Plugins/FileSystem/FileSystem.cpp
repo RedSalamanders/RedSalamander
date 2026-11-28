@@ -3290,6 +3290,10 @@ constexpr uint32_t kMetadataBackupFeatures        = FILESYSTEM_METADATA_MOTW | F
         }
         if (headerBytes == 0u)
         {
+#if defined(ENABLE_TESTS)
+            // Apply synthetic stream presence after the real scan clears and replaces those feature bits.
+            presentFeatures |= ReadSelfTestMetadataMask(kMetadataForcePresentMaskEnvVar);
+#endif
             return S_OK;
         }
         if (headerBytes != kBackupStreamHeaderBytes || stream.dwStreamNameSize > kBackupMetadataMaxStreamNameBytes ||
@@ -4178,10 +4182,6 @@ public:
         {
             snapshot->presentFeatures |= FILESYSTEM_METADATA_PLACEHOLDER;
         }
-#if defined(ENABLE_TESTS)
-        snapshot->presentFeatures |= ReadSelfTestMetadataMask(kMetadataForcePresentMaskEnvVar);
-#endif
-
         FILE_STANDARD_INFO standard{};
         if (GetFileInformationByHandleEx(_file.get(), FileStandardInfo, &standard, sizeof(standard)) != FALSE && standard.EndOfFile.QuadPart >= 0)
         {
@@ -7910,9 +7910,6 @@ HRESULT STDMETHODCALLTYPE FileSystem::ReadUnidentifiedMetadataFeatures(const wch
     {
         features |= FILESYSTEM_METADATA_PLACEHOLDER;
     }
-#if defined(ENABLE_TESTS)
-    features |= ReadSelfTestMetadataMask(kMetadataForcePresentMaskEnvVar);
-#endif
     const HRESULT streamHr = InspectBackupMetadataStreams(file.get(), features);
     if (FAILED(streamHr))
     {

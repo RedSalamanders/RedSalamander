@@ -68,30 +68,63 @@ case SelfTestState::Step::FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationPro
             const HostPromptResult previous = HostGetTestPromptResultOverride();
             const auto restorePrompt        = wil::scope_exit([&]() noexcept { HostSetTestPromptResultOverride(previous); });
             HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
+            static std::atomic<uint32_t> nextCutSequence{0x41A51000u};
+            const uint32_t cutSequence  = nextCutSequence.fetch_add(1u, std::memory_order_relaxed);
+            const auto cutBarrierCalled = std::make_shared<std::atomic<bool>>(false);
+            std::vector<FolderWindow::FileOperationState::Task*> tasksBefore, tasksAfter;
+            state.fileOps->CollectTasks(tasksBefore);
             const uint64_t promptsBefore = HostGetTestPromptRequestCount();
             uint64_t canceledTaskId      = 0u;
-            const HRESULT canceled       = state.fileOps->AdmitOperation(FILESYSTEM_MOVE,
-                                                                         FolderWindow::Pane::Left,
-                                                                         FolderWindow::Pane::Right,
-                                                                         state.fsLocal,
-                                                                         {srcFile},
-                                                                         std::filesystem::path(dummyRoot),
-                                                                         flags,
-                                                                         false,
-                                                                         0,
-                                                                         FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                         false,
-                                                                         state.fsDummy,
-                                                                         &canceledTaskId);
+            const auto cancelCutMove     = [&]() noexcept
+            {
+                return state.fileOps->AdmitOperation(FILESYSTEM_MOVE,
+                                                     FolderWindow::Pane::Left,
+                                                     FolderWindow::Pane::Right,
+                                                     state.fsLocal,
+                                                     {srcFile},
+                                                     std::filesystem::path(dummyRoot),
+                                                     flags,
+                                                     true,
+                                                     0u,
+                                                     FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                     false,
+                                                     state.fsDummy,
+                                                     &canceledTaskId,
+                                                     {},
+                                                     {},
+                                                     {},
+                                                     {},
+                                                     std::nullopt,
+                                                     FileOperations::DeleteOrigin::PaneCommand,
+                                                     std::nullopt,
+                                                     cutSequence,
+                                                     [cutBarrierCalled]() noexcept
+                {
+                    cutBarrierCalled->store(true, std::memory_order_release);
+                    return S_OK;
+                });
+            };
+            const HRESULT canceled = cancelCutMove();
             HostPromptDebugSnapshot prompt{};
-            const bool validQuestion = HostGetTestPromptRequestCount() == promptsBefore + 1u && HostGetTestLastPromptDebugSnapshot(prompt) &&
-                                       prompt.presentation == HOST_PROMPT_PRESENTATION_COPY && prompt.defaultResult == HOST_PROMPT_RESULT_CANCEL &&
-                                       ! prompt.hasFileOperationOptions && prompt.message.find(dummyRoot) != std::wstring::npos;
+            const std::wstring cutWarning = LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_CLIPBOARD_MOVE_WARNING);
+            const bool validQuestion      = HostGetTestPromptRequestCount() == promptsBefore + 1u && HostGetTestLastPromptDebugSnapshot(prompt) &&
+                                            prompt.presentation == HOST_PROMPT_PRESENTATION_COPY && prompt.defaultResult == HOST_PROMPT_RESULT_CANCEL &&
+                                            ! prompt.hasFileOperationOptions && prompt.message.find(dummyRoot) != std::wstring::npos && ! cutWarning.empty() &&
+                                            prompt.message.find(cutWarning) != std::wstring::npos;
             if (canceled != S_FALSE || canceledTaskId != 0u || ! validQuestion)
             {
-                Fail(L"Routine Copy-only Move must ask one Copy/Cancel question with the destination, and cancellation must publish no task.");
+                Fail(L"Queued Copy-only Cut must ask one Copy/Cancel question with the destination and Cut warning, and cancellation must publish no task.");
                 return true;
             }
+            const HRESULT declinedAgain = cancelCutMove();
+            state.fileOps->CollectTasks(tasksAfter);
+            if (declinedAgain != S_FALSE || canceledTaskId != 0u || HostGetTestPromptRequestCount() != promptsBefore + 2u ||
+                cutBarrierCalled->load(std::memory_order_acquire) || tasksBefore != tasksAfter)
+            {
+                Fail(L"Declining a queued Copy-only Cut must preserve the admission order and let the same Cut sequence prompt again without consuming it.");
+                return true;
+            }
+            AppendLog(L"Declined Copy-only Cut twice with one question each, the same sequence, no consumption and unchanged task admission order.");
         }
         state.taskA = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_MOVE,

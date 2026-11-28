@@ -5848,7 +5848,7 @@ Specs\TestRuns\local_scratch
         $header | Should Match 'SaveSettings\(std::wstring_view appId,\s*Settings& settings\)'
         $store | Should Match 'LocalFileTransaction::Create\(path[\s\S]{0,1200}SettingsCommitLock::Acquire'
         $store | Should Match 'currentStamp\s*!=\s*\*save\.expected[\s\S]{0,160}ERROR_REVISION_MISMATCH'
-        $store | Should Match 'recordWrite\.Commit\(sizeof\(save\.record\), nullptr, &save\.file\)'
+        $store | Should Match 'recordWrite\.Commit\(sizeof\(save\.record\), nullptr, std::addressof\(save\.file\)\)'
         $store | Should Match 'RestoreBoundFileIfFree\(backup\.get\(\), target\)'
         $store | Should Match 'CommitGuarded\(acceptedVersion, retainedBackup, bytes\.size\(\), nullptr, options\)'
         $store | Should Match 'settings\.persistence\.expectedFileStamp\s*=\s*committedStamp'

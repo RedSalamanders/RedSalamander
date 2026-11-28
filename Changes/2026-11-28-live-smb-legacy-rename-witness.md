@@ -1,0 +1,1 @@
+- Verify exact SMB Rename through the legacy no-replace API and record live handle samples for one and 100 items.

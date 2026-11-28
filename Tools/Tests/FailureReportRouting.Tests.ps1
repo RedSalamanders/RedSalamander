@@ -194,14 +194,26 @@ Describe 'Failure-report routing keeps test processes off the desktop' {
         }
     }
 
-    Context 'every native test entry routes first' {
+    Context 'every native test entry routes before ordinary checks' {
         It 'finds the nine locally owned test executables and the PerformanceTests2 module' {
             @($nativeTestProjects | Where-Object { $_.Kind -eq 'Application' }).Count | Should Be 9
             @($nativeTestProjects | Where-Object { $_.Kind -eq 'DynamicLibrary' } | ForEach-Object { $_.Name }) | Should Be @('PerformanceTests2')
         }
 
         foreach ($project in $nativeTestProjects) {
-            if ($project.Kind -eq 'Application') {
+            if ($project.Name -eq 'CrashHandlingTests' -and $project.Kind -eq 'Application') {
+                It 'CrashHandlingTests dispatches only its production crash probe before routing' {
+                    @($project.Entries).Count | Should Be 1
+                    $source = Get-RSRoutingSource -RelativePath (Join-Path 'Tests\CrashHandlingTests' $project.Entries[0].File)
+                    ([regex]::Matches($source, [regex]::Escape($routingCall))).Count | Should Be 1
+                    $entry = '(?m)^int wmain\(int argc,\s*wchar_t\*\* argv\)\s*\{\s*if \(argc == 4 && std::wstring_view\(argv\[1\]\) == L"--crash-probe-fixture"\)\s*return RunCrashProbeChild\(argv\[2\], argv\[3\]\);\s*'
+                    $source | Should Match ($entry + [regex]::Escape($routingCall))
+
+                    $probe = [regex]::Match($source, '(?ms)^int RunCrashProbeChild\([^\r\n]*\)\s*\{.*?^\}').Value
+                    $probe | Should Match '(?s)if \(error \|\| directory\.empty\(\) \|\| FAILED\(CrashHandler::InstallForProbe\(directory\)\)\)\s*return 2;\s*if \(mode == L"abort"\)\s*std::abort\(\);\s*CrashHandler::TriggerCrashTest\(mode == L"workers"\);'
+                }
+            }
+            elseif ($project.Kind -eq 'Application') {
                 It "$($project.Name) calls the routing as the first statement of its only entry point" {
                     @($project.Entries).Count | Should Be 1
                     $project.Entries[0].FirstStatement | Should BeExactly $routingCall
@@ -242,7 +254,8 @@ Describe 'Failure-report routing keeps test processes off the desktop' {
             $call = Get-RSRoutingContext -Source $source -Text $routingCall
             $call | Should Not BeNullOrEmpty
             @($call.Conditions) | Should Be @('ifdef ENABLE_TESTS')
-            $call.Before | Should Match 'hasArg\(L"--selftest"\) \|\| hasArg\(L"--compare-selftest"\) \|\| hasArg\(L"--commands-selftest"\) \|\| hasArg\(L"--fileops-selftest"\)'
+            $source | Should Match '(?m)^[ \t]*const bool selfTestRequested\s*=\s*hasArg\(L"--selftest"\)\s*\|\|\s*hasArg\(L"--compare-selftest"\)\s*\|\|\s*hasArg\(L"--commands-selftest"\)\s*\|\|\s*hasArg\(L"--fileops-selftest"\);[ \t]*\r?$'
+            $call.Before | Should Match '(?m)^[ \t]*if \(selfTestRequested\)\r?\n[ \t]*\{[ \t]*\z'
         }
 
 
