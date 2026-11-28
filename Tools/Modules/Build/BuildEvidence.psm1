@@ -771,6 +771,12 @@ function Get-RSBuildIdentityBundle {
         'Tools/Modules/Build/SanitizedEnvironment.psm1'
         '.ci/project.json'
     )
+    if ($Configuration -eq 'ASan Debug') {
+        $vcpkgInputs += @(
+            "Build/vcpkg-triplets/$($Platform.ToLowerInvariant())-windows-asan.cmake"
+            'Build/vcpkg-triplets/asan-toolchain.cmake'
+        )
+    }
     if ($Platform -eq 'ARM64') {
         $vcpkgInputs += @($sourcePaths | Where-Object { $_.StartsWith('Build/vcpkg-ports/', [StringComparison]::OrdinalIgnoreCase) })
     }

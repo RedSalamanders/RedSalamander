@@ -34,7 +34,7 @@
 
     <!--
       Scripted vcpkg restore keeps each platform's canonical installed triplet
-      beneath .build\vcpkg_installed. Debug, Release and ASan share that triplet.
+      beneath .build\vcpkg_installed. ASan uses a separate instrumented triplet.
     -->
     <RSVcpkgPlatformScope Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Platform)'=='x64'">x64</RSVcpkgPlatformScope>
     <RSVcpkgPlatformScope Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Platform)'=='ARM64'">arm64</RSVcpkgPlatformScope>
@@ -48,14 +48,7 @@
     <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(RSVcpkgTriplet)'=='' and '$(VCPKG_DEFAULT_TRIPLET)'!=''">$(VCPKG_DEFAULT_TRIPLET)</RSVcpkgTriplet>
     <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(RSVcpkgTriplet)'==''">x64-windows</RSVcpkgTriplet>
 
-    <!--
-      ASan Debug links against the standard non-ASan vcpkg triplets. To prevent
-      LNK2038 from MSVC STL container annotations (annotate_vector / annotate_string),
-      the ASan Debug configuration defines _DISABLE_VECTOR_ANNOTATION and
-      _DISABLE_STRING_ANNOTATION (see ItemDefinitionGroup below). This trades the
-      ASan container-overflow detector for the ability to use a single set of vcpkg
-      packages for all configurations.
-    -->
+    <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Configuration)'=='ASan Debug'">$(RSVcpkgPlatformScope)-windows-asan</RSVcpkgTriplet>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -139,15 +132,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(Configuration)'=='ASan Debug'">
     <ClCompile>
-      <!--
-        _DISABLE_STL_ANNOTATION suppresses every MSVC STL container-overflow
-        annotation (vector, string, optional, ...) so first-party ASan-instrumented
-        code can link against vcpkg dependencies built without /fsanitize=address.
-        Without it, mismatched annotate_* tokens cause LNK2038. ASan still detects
-        heap, stack, global, and use-after-free errors in our code; we only lose
-        the STL container-overflow detector.
-      -->
-      <PreprocessorDefinitions>RS_ASAN_DEBUG_BUILD;_DISABLE_STL_ANNOTATION;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>RS_ASAN_DEBUG_BUILD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>RS_ASAN_DEBUG_BUILD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
