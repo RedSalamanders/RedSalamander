@@ -635,13 +635,22 @@ void CleanupSettingsTestArtifacts(std::wstring_view appId) noexcept
     ec.clear();
     static_cast<void>(std::filesystem::remove(std::filesystem::path(Common::Paths::ToExtendedWin32Path(lockPath.native())), ec));
 
-    const std::wstring backupPrefix = settingsPath.filename().wstring() + L".bad.";
+    auto recordPath = settingsPath;
+    recordPath += L".save-pending";
+    ec.clear();
+    static_cast<void>(std::filesystem::remove(std::filesystem::path(Common::Paths::ToExtendedWin32Path(recordPath.native())), ec));
+
+    const auto name                = settingsPath.filename().wstring();
+    const auto backupPrefix        = name + L".bad.";
+    const auto pendingBackupPrefix = name + L".save-previous-";
+    const auto stagePrefix         = name + L".save-stage-";
     ec.clear();
     const std::filesystem::path extendedParent(Common::Paths::ToExtendedWin32Path(settingsPath.parent_path().native()));
     for (std::filesystem::directory_iterator it(extendedParent, ec), end; ! ec && it != end; it.increment(ec))
     {
         const std::wstring fileName = it->path().filename().wstring();
-        if (fileName.starts_with(backupPrefix))
+        if (fileName.starts_with(backupPrefix) || fileName.starts_with(pendingBackupPrefix) ||
+            (fileName.starts_with(stagePrefix) && fileName.ends_with(L".tmp")))
         {
             std::error_code removeError;
             static_cast<void>(std::filesystem::remove(it->path(), removeError));
@@ -732,6 +741,184 @@ void CleanupSettingsTestArtifacts(std::wstring_view appId) noexcept
 }
 
 #ifdef ENABLE_TESTS
+constexpr DWORD kInterruptedSaveExitCode    = 37u;
+constexpr std::string_view kRestartPrevious = R"({"schemaVersion":16,"theme":{"currentThemeId":"builtin/light"},"accepted":"previous"})";
+constexpr std::string_view kRestartWinner   = R"({"schemaVersion":16,"theme":{"currentThemeId":"builtin/dark"},"accepted":"winner"})";
+
+[[nodiscard]] int RunSettingsStoreInterruptedSaveChild(int argc, wchar_t** argv) noexcept
+{
+    using namespace Common::Settings;
+    if (argc != 3 || ! argv[2] || GetEnvironmentVariableW(L"REDSALAMANDER_TEST_ROOT", nullptr, 0) == 0 || GetSettingsPath(argv[2]).empty())
+    {
+        return 2;
+    }
+
+    Settings settings{};
+    if (TryLoadSettingsNoRecovery(argv[2], settings) != S_OK)
+    {
+        return 3;
+    }
+    settings.theme.currentThemeId = L"builtin/highContrast";
+    DebugSetSettingsGuardedPublishHookForTest([](const std::filesystem::path&) noexcept { ExitProcess(kInterruptedSaveExitCode); });
+    static_cast<void>(SaveSettingsValuesOnly(argv[2], settings));
+    return 4; // The child must exit at the displacement boundary, before normal cleanup.
+}
+
+[[nodiscard]] std::filesystem::path FindSettingsSaveBackup(const std::filesystem::path& settingsPath) noexcept
+{
+    const auto prefix = settingsPath.filename().wstring() + L".save-previous-";
+    const std::filesystem::path parent(Common::Paths::ToExtendedWin32Path(settingsPath.parent_path().native()));
+    std::error_code ec;
+    std::filesystem::path found;
+    for (std::filesystem::directory_iterator it(parent, ec), end; ! ec && it != end; it.increment(ec))
+    {
+        if (it->path().filename().wstring().starts_with(prefix))
+        {
+            if (! found.empty())
+            {
+                return {};
+            }
+            found = it->path();
+        }
+    }
+    return ec ? std::filesystem::path{} : found;
+}
+
+void TestInterruptedSettingsSave(const std::filesystem::path& executablePath, bool& success)
+{
+    using namespace Common::Settings;
+    if (GetEnvironmentVariableW(L"REDSALAMANDER_TEST_ROOT", nullptr, 0) == 0)
+    {
+        Check(false, L"settings interrupted save: a governed test root is required", success);
+        return;
+    }
+
+    for (const auto scenario : {L"restore", L"winner", L"foreign-backup"})
+    {
+        const std::wstring appId = std::format(L"SettingsInterrupted-{}-{}-{}", GetCurrentProcessId(), GetTickCount64(), scenario);
+        const auto canonical     = GetSettingsPath(appId);
+        if (canonical.empty())
+        {
+            Check(false, L"settings interrupted save: the governed profile path is available", success);
+            return;
+        }
+        const auto cleanup = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+        auto recordPath    = canonical;
+        recordPath += L".save-pending";
+        const auto extendedCanonical = Common::Paths::ToExtendedWin32Path(canonical.native());
+        const auto extendedRecord    = Common::Paths::ToExtendedWin32Path(recordPath.native());
+        const bool seeded            = WriteTestBytes(canonical, kRestartPrevious);
+        Check(seeded, L"settings interrupted save: canonical settings fixture is written", success);
+        if (! seeded)
+        {
+            continue;
+        }
+        SettingsFileStamp previousStamp{};
+        Check(TryGetSettingsFileStamp(appId, previousStamp) == S_OK, L"settings interrupted save: capture the original file identity", success);
+
+        const auto child = RedSalamander::TestSupport::RunChildProcess({
+            .executablePath = executablePath,
+            .arguments      = {L"--settings-store-interrupted-save-child", appId},
+            .timeout        = std::chrono::seconds(15),
+        });
+        Check(child.Completed() && child.exitCode == kInterruptedSaveExitCode,
+              L"settings interrupted save: the child stops after moving the original and before publication",
+              success);
+        const auto backup      = FindSettingsSaveBackup(canonical);
+        const auto hasRecord   = [&]() noexcept { return GetFileAttributesW(extendedRecord.c_str()) != INVALID_FILE_ATTRIBUTES; };
+        const bool vacant      = GetFileAttributesW(extendedCanonical.c_str()) == INVALID_FILE_ATTRIBUTES;
+        const bool interrupted = vacant && hasRecord() && ! backup.empty() && ReadTestBytes(backup) == kRestartPrevious;
+        Check(interrupted, L"settings interrupted save: the backup has the exact accepted bytes while the canonical name is vacant", success);
+        if (! interrupted)
+        {
+            continue;
+        }
+
+        Settings loaded{};
+        Check(TryLoadSettingsNoRecovery(appId, loaded) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && hasRecord() &&
+                  ReadTestBytes(backup) == kRestartPrevious && GetFileAttributesW(extendedCanonical.c_str()) == INVALID_FILE_ATTRIBUTES,
+              L"settings interrupted save: live reads leave the journal and canonical gap untouched",
+              success);
+        Settings competingCreator{};
+        Check(SaveSettingsValuesOnly(appId, competingCreator) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) &&
+                  GetFileAttributesW(extendedCanonical.c_str()) == INVALID_FILE_ATTRIBUTES,
+              L"settings interrupted save: an in-process missing snapshot cannot publish while recovery is pending",
+              success);
+
+        const std::wstring_view mode(scenario);
+        if (mode == L"winner")
+        {
+            Check(WriteTestBytes(canonical, kRestartWinner), L"settings restart with winner: outside settings become canonical", success);
+            Check(LoadSettings(appId, loaded) == S_OK && ReadTestBytes(canonical) == kRestartWinner && ReadTestBytes(backup) == kRestartPrevious &&
+                      ! hasRecord(),
+                  L"settings restart with winner: preserve both files and retire the record",
+                  success);
+        }
+        else if (mode == L"foreign-backup")
+        {
+            auto retainedOriginal = backup;
+            retainedOriginal += L".original";
+            Check(MoveFileExW(backup.c_str(), retainedOriginal.c_str(), 0u) != FALSE && WriteTestBytes(backup, kRestartPrevious),
+                  L"settings restart with foreign backup: replace its file identity while retaining identical bytes",
+                  success);
+            Check(LoadSettings(appId, loaded) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) &&
+                      GetFileAttributesW(extendedCanonical.c_str()) == INVALID_FILE_ATTRIBUTES && hasRecord() && ReadTestBytes(backup) == kRestartPrevious &&
+                      ReadTestBytes(retainedOriginal) == kRestartPrevious,
+                  L"settings restart with foreign backup: fail closed and preserve both files",
+                  success);
+        }
+        else
+        {
+            Check(LoadSettings(appId, loaded) == S_OK && loaded.persistence.expectedFileStamp == previousStamp &&
+                      ReadTestBytes(canonical) == kRestartPrevious && ! hasRecord() && FindSettingsSaveBackup(canonical).empty(),
+                  L"settings restart restores only the recorded original to the vacant canonical name",
+                  success);
+            Check(LoadSettings(appId, loaded) == S_OK && ReadTestBytes(canonical) == kRestartPrevious,
+                  L"settings restart after restoration is idempotent",
+                  success);
+        }
+    }
+}
+
+void TestSettingsSaveDestinationRace(bool& success)
+{
+    using namespace Common::Settings;
+    if (GetEnvironmentVariableW(L"REDSALAMANDER_TEST_ROOT", nullptr, 0) == 0)
+    {
+        Check(false, L"settings guarded publish: a governed test root is required", success);
+        return;
+    }
+    const std::wstring appId = std::format(L"SettingsPublishRace-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    const auto canonical     = GetSettingsPath(appId);
+    if (canonical.empty())
+    {
+        Check(false, L"settings guarded publish: the governed profile path is available", success);
+        return;
+    }
+
+    const auto cleanup = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+    Settings settings{};
+    const bool ready = WriteTestBytes(canonical, kRestartPrevious) && TryLoadSettingsNoRecovery(appId, settings) == S_OK;
+    Check(ready, L"settings guarded publish: the accepted revision is loaded", success);
+    if (! ready)
+    {
+        return;
+    }
+    const auto accepted           = settings.persistence.expectedFileStamp;
+    settings.theme.currentThemeId = L"builtin/highContrast";
+    DebugSetSettingsGuardedPublishHookForTest([](const std::filesystem::path& path) noexcept { static_cast<void>(WriteTestBytes(path, kRestartWinner)); });
+    const auto resetHook = wil::scope_exit([]() noexcept { DebugSetSettingsGuardedPublishHookForTest(nullptr); });
+    const HRESULT saveHr = SaveSettingsValuesOnly(appId, settings);
+    const auto backup    = FindSettingsSaveBackup(canonical);
+    Check(saveHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && ! backup.empty() && ReadTestBytes(canonical) == kRestartWinner &&
+              ReadTestBytes(backup) == kRestartPrevious,
+          L"settings guarded publish preserves a creation after displacement and keeps the accepted original",
+          success);
+    Check(settings.persistence.expectedFileStamp == accepted && settings.theme.currentThemeId == L"builtin/highContrast",
+          L"settings guarded publish keeps the in-memory edit and its expected revision after a conflict",
+          success);
+}
+
 void TestSettingsProfileMigration(bool& success)
 {
     using namespace Common::Settings;
@@ -763,8 +950,8 @@ void TestSettingsProfileMigration(bool& success)
         static_cast<void>(std::filesystem::remove(std::filesystem::path(Common::Paths::ToExtendedWin32Path(versioned.native())), ec));
     });
 
-    constexpr std::string_view oldBytes    = R"json({"schemaVersion":16,"fileOperations":{"verifyAfterCopy":true}})json";
-    constexpr std::string_view winnerBytes = R"json({"schemaVersion":16,"fileOperations":{"verifyAfterCopy":false}})json";
+    constexpr std::string_view oldBytes           = R"json({"schemaVersion":16,"fileOperations":{"verifyAfterCopy":true}})json";
+    static constexpr std::string_view winnerBytes = R"json({"schemaVersion":16,"fileOperations":{"verifyAfterCopy":false}})json";
     Check(WriteTestBytes(versioned, oldBytes), L"settings profile migration: the versioned source is present", success);
 
     Settings imported{};
@@ -779,7 +966,14 @@ void TestSettingsProfileMigration(bool& success)
           L"settings profile migration: loading preserves the prior bytes and leaves the new path vacant",
           success);
 
-    Check(WriteTestBytes(target, winnerBytes), L"settings profile migration: a competing first creator published the canonical file", success);
+    DebugSetSettingsMissingNameHookForTest([](const std::filesystem::path& path) noexcept { static_cast<void>(WriteTestBytes(path, winnerBytes)); });
+    const auto resetMissingNameHook = wil::scope_exit([]() noexcept { DebugSetSettingsMissingNameHookForTest(nullptr); });
+    Settings concurrentlyPublished{};
+    Check(TryLoadSettingsNoRecovery(appId, concurrentlyPublished) == S_OK && concurrentlyPublished.persistence.expectedFileStamp.has_value() &&
+              concurrentlyPublished.fileOperations && ! concurrentlyPublished.fileOperations->verifyAfterCopy && ReadTestBytes(target) == winnerBytes &&
+              ReadTestBytes(versioned) == oldBytes,
+          L"settings profile migration: live resolution prefers a canonical file published after its first probe",
+          success);
     Check(SaveSettingsValuesOnly(appId, imported) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && ReadTestBytes(target) == winnerBytes &&
               ReadTestBytes(versioned) == oldBytes,
           L"settings profile migration: saving a migrated snapshot preserves the competing file and prior source",
@@ -1676,6 +1870,12 @@ int wmain(int argc, wchar_t** argv)
     {
         return RunSettingsStoreBackupCasChild(argc, argv);
     }
+#ifdef ENABLE_TESTS
+    if (argc >= 2 && argv[1] && std::wstring_view(argv[1]) == L"--settings-store-interrupted-save-child")
+    {
+        return RunSettingsStoreInterruptedSaveChild(argc, argv);
+    }
+#endif
 
     bool success = true;
 
@@ -1701,6 +1901,7 @@ int wmain(int argc, wchar_t** argv)
 #ifdef ENABLE_TESTS
     TestSettingsProfileMigration(success);
     TestSettingsStoreRecoveryBackupCas(success);
+    TestSettingsSaveDestinationRace(success);
 #endif
     TestConnectionProfileIdentityGuards(success);
     TestFileOperationParallelLimitSettings(success);
@@ -1716,6 +1917,9 @@ int wmain(int argc, wchar_t** argv)
         TestChildEnvironment(currentExecutable, success);
         TestSettingsStoreCrossProcessCas(currentExecutable, success);
         TestSettingsStoreCrossProcessBackupCas(currentExecutable, success);
+#ifdef ENABLE_TESTS
+        TestInterruptedSettingsSave(currentExecutable, success);
+#endif
     }
 
     // Step 2: real-schema characterization (requires the schema file).

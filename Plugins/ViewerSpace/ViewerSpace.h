@@ -41,6 +41,7 @@
 #include "EmbeddedViewerBase.h"
 #include "FileSystemPathIdentity.h"
 #include "Helpers.h"
+#include "LocalFileTransaction.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
@@ -512,7 +513,9 @@ private:
     [[nodiscard]] bool CanAdmitWorkspaceBytes(uint64_t additional) const noexcept;
     void ShowWorkspaceMessage(UINT stringId) noexcept;
     void ExportCurrentView(bool csv) noexcept;
-    [[nodiscard]] bool QueueWorkspaceExport(std::wstring_view outputPath, bool csv) noexcept;
+    [[nodiscard]] bool QueueWorkspaceExport(std::wstring_view outputPath,
+                                            bool csv,
+                                            const std::optional<Common::Files::LocalFileVersion>& acceptedVersion) noexcept;
 #ifdef ENABLE_TESTS
     LRESULT DebugQueueWorkspaceExport(const WndMsg::ViewerSpaceExportDebugRequest* request) noexcept;
 #endif

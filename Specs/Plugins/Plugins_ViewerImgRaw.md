@@ -190,7 +190,7 @@ Export:
 - File → Export... writes the currently displayed frame via WIC encoding.
 - Supported export formats: PNG, JPEG, TIFF, BMP, GIF, JPEG XR (WMP container); the encoder is selected primarily by the output file extension (and by the dialog filter when no extension is provided).
 - Encoder options are configured via the `export*` configuration keys and are applied via `IPropertyBag2` when supported by the selected encoder.
-- Atomic export reserves a collision-safe sibling staging file with `CREATE_NEW`, encodes to its long-path-aware Win32 path, releases the WIC file graph, and commits with `MoveFileExW(..., MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`. Failure deletes only the staging file; valid destinations beyond `MAX_PATH` retain the same atomicity guarantee.
+- Export encodes through an `IStream` backed by the owned, long-path-aware sibling handle. Release the WIC graph before flushing and completing [guarded local publication](../Core/Core_SharedHelpers.md#local-transaction-rollback). The picker supplies the expected destination revision. Conflicts preserve the newer destination, and a retained recovery sibling is reported in diagnostics.
 - Every reader, decode, export validation, encoder, staging, commit, success, and terminal-failure message shown to the user is loaded from the ViewerImgRaw resource owner (base plus cs-CZ/fr-FR/ja-JP/sk-SK satellites). User text does not carry the diagnostic `ViewerImgRaw:` prefix; that prefix remains valid only for debug logging.
 
 ## Rendering / Theme

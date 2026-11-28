@@ -1,5 +1,6 @@
 #include "ViewerSpace.h"
 #include "FileMetadataFormatting.h"
+#include "GuardedSaveDialog.h"
 #include "LocalFileTransaction.h"
 #include "LocalizationManager.h"
 #include "StringConversion.h"
@@ -77,6 +78,7 @@ struct ViewerSpace::WorkspaceExportBuild final
     std::string root;
     std::string viewPath;
     std::wstring outputPath;
+    std::optional<Common::Files::LocalFileVersion> acceptedVersion;
     std::vector<uint32_t> ids;
     std::vector<ViewerSpaceExport::Row> rows;
     HWND owner = nullptr;
@@ -158,21 +160,19 @@ void ViewerSpace::ExportCurrentView(bool csv) noexcept
     static_cast<void>(dialog->SetFileTypes(1u, &filter));
     static_cast<void>(dialog->SetDefaultExtension(csv ? L"csv" : L"json"));
     static_cast<void>(dialog->SetFileName(csv ? L"ViewerSpace.csv" : L"ViewerSpace.json"));
-    status = dialog->Show(_hWnd.get());
+    Common::Files::GuardedSaveSelection selection;
+    status = Common::Files::ShowGuardedSaveDialog(*dialog.get(), _hWnd.get(), selection);
     if (status == HRESULT_FROM_WIN32(ERROR_CANCELLED))
         return;
-    wil::com_ptr<IShellItem> item;
-    wil::unique_cotaskmem_string path;
-    if (FAILED(status) || FAILED(dialog->GetResult(item.put())) || ! item || FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, path.put())) || ! path || ! _hWnd ||
-        ! _workspaceLifetime)
+    if (FAILED(status) || ! _hWnd || ! _workspaceLifetime)
     {
         ShowWorkspaceMessage(IDS_VIEWERSPACE_EXPORT_IO_ERROR);
         return;
     }
-    static_cast<void>(QueueWorkspaceExport(path.get(), csv));
+    static_cast<void>(QueueWorkspaceExport(selection.path.native(), csv, selection.acceptedVersion));
 }
 
-bool ViewerSpace::QueueWorkspaceExport(std::wstring_view outputPath, bool csv) noexcept
+bool ViewerSpace::QueueWorkspaceExport(std::wstring_view outputPath, bool csv, const std::optional<Common::Files::LocalFileVersion>& acceptedVersion) noexcept
 {
     wil::com_ptr<IViewer> keepAlive = static_cast<IViewer*>(this);
     if (! _hWnd || ! _workspaceLifetime || ! _model || outputPath.empty() || outputPath.size() > 32600u || _analysisGeneration != _displayGeneration ||
@@ -219,9 +219,10 @@ bool ViewerSpace::QueueWorkspaceExport(std::wstring_view outputPath, bool csv) n
         ShowWorkspaceMessage(IDS_VIEWERSPACE_EXPORT_IO_ERROR);
         return false;
     }
-    build->viewPath   = viewPath.value();
-    build->root       = root.value();
-    build->outputPath = outputPath;
+    build->viewPath        = viewPath.value();
+    build->root            = root.value();
+    build->outputPath      = outputPath;
+    build->acceptedVersion = acceptedVersion;
     if (build->outputPath.size() > 32600u)
     {
         ShowWorkspaceMessage(IDS_VIEWERSPACE_EXPORT_IO_ERROR);
@@ -265,7 +266,8 @@ LRESULT ViewerSpace::DebugQueueWorkspaceExport(const WndMsg::ViewerSpaceExportDe
         (! DuplicateHandle(GetCurrentProcess(), request->readyEvent, GetCurrentProcess(), ready.put(), 0u, FALSE, DUPLICATE_SAME_ACCESS) ||
          ! DuplicateHandle(GetCurrentProcess(), request->releaseEvent, GetCurrentProcess(), release.put(), 0u, FALSE, DUPLICATE_SAME_ACCESS)))
         return FALSE;
-    if (! QueueWorkspaceExport(path.native(), request->csv))
+    std::optional<Common::Files::LocalFileVersion> acceptedVersion;
+    if (FAILED(Common::Files::ObserveLocalFileDestination(path, acceptedVersion)) || ! QueueWorkspaceExport(path.native(), request->csv, acceptedVersion))
         return FALSE;
     _workspaceExport->readyEvent     = std::move(ready);
     _workspaceExport->releaseEvent   = std::move(release);
@@ -397,8 +399,8 @@ void CALLBACK ViewerSpace::WorkspaceExportCallback(PTP_CALLBACK_INSTANCE instanc
     try
     {
         Common::Files::LocalFileTransaction transaction;
-        status = Common::Files::LocalFileTransaction::Create(
-            std::filesystem::path(job->outputPath), Common::Files::ExistingTargetPolicy::Replace, false, transaction);
+        const auto policy = job->acceptedVersion.has_value() ? Common::Files::ExistingTargetPolicy::Replace : Common::Files::ExistingTargetPolicy::FailIfExists;
+        status            = Common::Files::LocalFileTransaction::Create(std::filesystem::path(job->outputPath), policy, false, transaction);
         if (SUCCEEDED(status))
         {
             uint64_t written = 0u;
@@ -474,7 +476,12 @@ void CALLBACK ViewerSpace::WorkspaceExportCallback(PTP_CALLBACK_INSTANCE instanc
                 if (FAILED(job->publishFailure))
                     Common::Files::Testing::FailNextLocalFileTransactionPublish(job->publishFailure);
 #endif
-                status = transaction.Commit(written);
+                std::filesystem::path retainedBackup;
+                status = transaction.CommitGuarded(job->acceptedVersion, retainedBackup, written);
+                if (! retainedBackup.empty())
+                {
+                    Debug::Warning(L"ViewerSpace retained the previous version of '{}' at '{}'.", job->outputPath, retainedBackup.c_str());
+                }
             }
         }
     }

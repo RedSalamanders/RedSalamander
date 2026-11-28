@@ -27,6 +27,7 @@
 
 #include "EmbeddedViewerBase.h"
 #include "Helpers.h"
+#include "LocalFileTransaction.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
@@ -145,6 +146,7 @@ private:
         HRESULT hr             = E_FAIL;
         std::wstring sourcePath;
         std::wstring destinationPath;
+        std::optional<Common::Files::LocalFileVersion> acceptedVersion;
         std::wstring statusMessage;
         wil::com_ptr<IFileSystem> fileSystemSnapshot;
         wil::unique_hmodule moduleKeepAlive;
@@ -196,7 +198,10 @@ private:
     static void AsyncSaveProc(AsyncSaveWorkItem* payload) noexcept;
 
     HRESULT CommandSaveAs(HWND hwnd) noexcept;
-    HRESULT StartAsyncSave(HWND hwnd, const std::filesystem::path& destination, uint32_t testFaultMask = 0u) noexcept;
+    HRESULT StartAsyncSave(HWND hwnd,
+                           const std::filesystem::path& destination,
+                           const std::optional<Common::Files::LocalFileVersion>& acceptedVersion,
+                           uint32_t testFaultMask = 0u) noexcept;
     void CommandFind(HWND hwnd) noexcept;
     void CommandFindNext(HWND hwnd) noexcept;
     void CommandFindPrevious(HWND hwnd) noexcept;
