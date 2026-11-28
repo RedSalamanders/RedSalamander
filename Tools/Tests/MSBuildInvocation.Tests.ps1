@@ -129,7 +129,7 @@ Describe 'MSBuild invocation helper' {
             }
 
         Assert-RSEqual -Actual $plan.UseDirectConsole -Expected $false -Message 'Codex terminals should use replay streaming.'
-        Assert-RSEqual -Actual (@($plan.AdditionalArguments).Count) -Expected 0 -Message 'Codex terminal plans should not add file logger arguments.'
+        Assert-RSSequenceEqual -Actual @($plan.AdditionalArguments) -Expected @('/clp:Summary') -Message 'Codex replay should request the console summary.'
     }
 
     It 'keeps Windows Terminal on the streaming path so MSBuild progress is replayed' {
@@ -141,7 +141,7 @@ Describe 'MSBuild invocation helper' {
             }
 
         Assert-RSEqual -Actual $plan.UseDirectConsole -Expected $false -Message 'Windows Terminal should use replay streaming.'
-        Assert-RSEqual -Actual (@($plan.AdditionalArguments).Count) -Expected 0 -Message 'Streaming terminal plans should not add file logger arguments.'
+        Assert-RSSequenceEqual -Actual @($plan.AdditionalArguments) -Expected @('/clp:Summary') -Message 'Windows Terminal replay should request the console summary.'
     }
 
     It 'uses direct console execution for a plain interactive console while still capturing a log file' {
@@ -155,7 +155,7 @@ Describe 'MSBuild invocation helper' {
         Assert-RSEqual -Actual $plan.UseDirectConsole -Expected $true -Message 'Plain interactive terminals should use direct console execution.'
         Assert-RSSequenceEqual `
             -Actual @($plan.AdditionalArguments) `
-            -Expected @('/fl', "/flp:Verbosity=minimal;LogFile=$([System.IO.Path]::GetFullPath((Join-Path $TestDrive 'msbuild.log')));Encoding=UTF-8") `
+            -Expected @('/fl', "/flp:Verbosity=minimal;LogFile=$([System.IO.Path]::GetFullPath((Join-Path $TestDrive 'msbuild.log')));Encoding=UTF-8;Summary") `
             -Message 'Direct console plans should add file logger arguments.'
     }
 
@@ -163,7 +163,7 @@ Describe 'MSBuild invocation helper' {
         $plan = Get-RSMSBuildInvocationPlan -UseInteractiveTerminal $false -LogPath (Join-Path $TestDrive 'msbuild.log')
 
         Assert-RSEqual -Actual $plan.UseDirectConsole -Expected $false -Message 'Non-interactive terminals should use replay streaming.'
-        Assert-RSEqual -Actual (@($plan.AdditionalArguments).Count) -Expected 0 -Message 'Non-interactive plans should not add file logger arguments.'
+        Assert-RSSequenceEqual -Actual @($plan.AdditionalArguments) -Expected @('/clp:Summary') -Message 'Noninteractive replay should request the console summary.'
     }
 
     It 'colors replayed MSBuild errors and warnings' {

@@ -1,14 +1,13 @@
 # Third-party notices
 
 RedSalamander is copyright (c) 2026 RedSalamander, under the MIT license in [LICENSE.txt](LICENSE.txt). This file lists
-the third-party components RedSalamander ships, with their license terms. A new dependency or asset extends it, with
-its full notice, before it is distributed. The list below moved unchanged from `LICENSE.txt` on 2026-11-19; its version
-numbers are those recorded then, and `vcpkg.json` and the locks own the exact versions.
+the third-party components shipped with RedSalamander and identifies their notices. Add a new component and its full
+notice before distribution. The vcpkg entries reflect the pinned registry baseline and overrides in `vcpkg.json`.
+A `#` suffix identifies a vcpkg port revision. The dependency and terminal runtime locks identify the pinned sources.
 
 ## Third-Party Licenses
 
-RedSalamander uses the following third-party libraries. Their license terms
-are reproduced below.
+The entries below identify the components, applicable terms and available notice texts.
 
 -------------------------------------------------------------------------------
 
@@ -46,7 +45,7 @@ https://github.com/microsoft/wil
 
 ### yyjson
 
-- Version: 0.12.0
+- Version: 0.13.0
 - License: MIT
 - Copyright (c) 2020 YaoYuan <ibireme@gmail.com>
 
@@ -56,7 +55,7 @@ https://github.com/ibireme/yyjson
 
 ### pe-parse
 
-- Version: 2.1.1
+- Version: 2.1.1#1
 - License: MIT
 - Copyright (c) 2013 Andrew Ruef
 
@@ -66,7 +65,7 @@ https://github.com/trailofbits/pe-parse
 
 ### libjpeg-turbo
 
-- Version: 3.1.3
+- Version: 3.2.0#1
 - License: IJG License AND BSD-3-Clause (modified 3-clause BSD)
 - Copyright (C) 2009-2025 D. R. Commander. All Rights Reserved.
 - Copyright (C) 2015 Viktor Szathmary. All Rights Reserved.
@@ -79,8 +78,8 @@ https://github.com/libjpeg-turbo/libjpeg-turbo
 
 ### LibRaw
 
-- Version: 0.22.0
-- License: LGPL-2.1-only OR CDDL-1.0 (dual-licensed, user may choose)
+- Version: 0.22.2
+- License: (LGPL-2.1-only OR CDDL-1.0) AND BSD-3-Clause
 - Copyright (C) LibRaw LLC
 
 https://www.libraw.org/
@@ -89,7 +88,7 @@ https://www.libraw.org/
 
 ### 7-Zip
 
-- Version: 26.00
+- Version: 26.5
 - License: GNU LGPL-2.1-or-later (most files), with BSD-3-Clause and
   BSD-2-Clause for some components
 - Copyright (C) 1999-2026 Igor Pavlov
@@ -108,7 +107,7 @@ https://www.7-zip.org/
 
 ### unRAR
 
-- Version: 7.0.7
+- Source: RAR decompression code included with the pinned 7-Zip port
 - License: unRAR freeware license
 - All copyrights to RAR and the utility UnRAR are exclusively owned by
   Alexander L. Roshal.
@@ -128,8 +127,8 @@ https://www.rarlab.com/
 
 ### curl
 
-- Version: 8.18.0
-- License: curl (MIT/X-style)
+- Version: 8.23.0
+- License: curl, ISC and BSD-3-Clause terms
 - Copyright (c) 1996-2025 Daniel Stenberg <daniel@haxx.se>, and many
   contributors.
 
@@ -143,7 +142,7 @@ https://curl.se/
 
 ### FTXUI
 
-- Version: 6.1.9
+- Version: 7.0.3
 - License: MIT
 - Copyright (c) 2019 Arthur Sonzogni.
 
@@ -153,7 +152,7 @@ https://github.com/ArthurSonzogni/FTXUI
 
 ### libssh2
 
-- Version: 1.11.1
+- Version: 1.11.1#3
 - License: BSD-3-Clause
 - Copyright (C) 2004-2007 Sara Golemon <sarag@libssh2.org>
 - Copyright (C) 2005-2006 Mikhail Gusarov
@@ -170,7 +169,7 @@ https://libssh2.org/
 
 ### OpenSSL
 
-- Version: 3.6.0
+- Version: 3.6.5#2
 - License: Apache-2.0
 - Copyright (c) 1998-2025 The OpenSSL Project Authors. All Rights Reserved.
 
@@ -190,7 +189,7 @@ https://github.com/google/brotli
 
 ### zlib
 
-- Version: 1.3.1
+- Version: 1.3.2#2
 - License: zlib License
 - Copyright (C) 1995-2022 Jean-loup Gailly and Mark Adler
 
@@ -200,7 +199,7 @@ https://zlib.net/
 
 ### JasPer
 
-- Version: 4.2.8
+- Version: 4.2.9
 - License: JasPer-2.0 (MIT-like permissive)
 - Copyright (c) 2001-2016 Michael David Adams
 - Copyright (c) 1999-2000 Image Power, Inc.
@@ -212,7 +211,7 @@ https://www.ece.uvic.ca/~frodo/jasper/
 
 ### Little CMS (lcms2)
 
-- Version: 2.18
+- Version: 2.19.1#1
 - License: MIT
 - Copyright (c) 2023 Marti Maria Saguer
 
@@ -222,7 +221,7 @@ https://www.littlecms.com/
 
 ### WebView2
 
-- Version: 1.0.3719.77
+- Version: 1.0.4258.31
 - License: BSD-3-Clause
 - Copyright (C) Microsoft Corporation. All rights reserved.
 
@@ -232,23 +231,24 @@ https://developer.microsoft.com/en-us/microsoft-edge/webview2/
 
 ### AWS SDK for C++
 
-- Version: 1.11.740
-- License: Apache-2.0
+- Version: 1.11.880
+- License: Apache-2.0, MIT and Zlib terms
 - Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
-Includes the following AWS C Runtime libraries, all licensed under Apache-2.0:
-- aws-crt-cpp 0.37.0
-- aws-c-common 0.12.6
-- aws-c-s3 0.11.4
-- aws-c-auth 0.9.5
-- aws-c-cal 0.9.13
-- aws-c-io 0.26.0
-- aws-c-http 0.10.9
-- aws-c-mqtt 0.13.3
-- aws-c-compression 0.3.2
-- aws-c-event-stream 0.5.9
-- aws-c-sdkutils 0.2.4
-- aws-checksums 0.2.8
+The vcpkg manifest overrides the AWS SDK and AWS CRT C++ versions. The associated AWS C Runtime libraries are:
+
+- aws-crt-cpp 0.43.4
+- aws-c-common 1.0.3
+- aws-c-s3 1.3.1
+- aws-c-auth 1.0.1
+- aws-c-cal 1.0.0
+- aws-c-io 1.1.0
+- aws-c-http 1.1.1
+- aws-c-mqtt 1.1.2
+- aws-c-compression 1.0.0
+- aws-c-event-stream 1.0.0
+- aws-c-sdkutils 1.0.0
+- aws-checksums 1.0.1
 
 https://github.com/aws/aws-sdk-cpp
 
@@ -286,14 +286,61 @@ https://github.com/markdown-it/markdown-it
 
 -------------------------------------------------------------------------------
 
-### Also shipped, not yet listed above
+### BLAKE3
 
-The package also carries these components. Each keeps its own terms; their entries above are still to be written.
+- Version: 1.8.7
+- License: CC0-1.0 OR Apache-2.0
 
-- DxUi, at the commit in `Dependencies/DxUi.lock.json`, copyright (c) 2026 RedSalamander, MIT, with the Unicode 17.0.0
-  tables (Unicode License V3) and the WHATWG named-character table (BSD 3-Clause and CC BY 4.0) it compiles in.
-- The RedMonitor client header, at the commit in `Dependencies/RedMonitor.lock.json`, copyright (c) 2026
-  RedSalamander, MIT, shipped with its notice as `RedMonitor-LICENSE.txt`.
-- BLAKE3, SQLite and nghttp2 through vcpkg, as `vcpkg.json` lists them.
-- The Ghostty terminal runtime and its components, at the commit its runtime lock records.
-- The Microsoft Visual C++ runtime, under the Microsoft Visual Studio distributable-code terms.
+[BLAKE3 source and license files](https://github.com/BLAKE3-team/BLAKE3/tree/1.8.7)
+
+-------------------------------------------------------------------------------
+
+### SQLite
+
+- Version: 3.54.1
+- Terms: Public-domain dedication for the SQLite deliverable code
+
+[SQLite copyright and public-domain dedication](https://sqlite.org/copyright.html)
+
+-------------------------------------------------------------------------------
+
+### nghttp2
+
+- Version: 1.70.0
+- License: MIT
+
+[nghttp2 copyright and license](https://github.com/nghttp2/nghttp2/blob/v1.70.0/COPYING)
+
+-------------------------------------------------------------------------------
+
+### DxUi
+
+- Source: `Dependencies/DxUi.lock.json`
+- License: MIT
+- Copyright (c) 2026 RedSalamander
+
+DxUi compiles the Unicode 17.0.0 tables under the Unicode License V3 and WHATWG named characters under the
+BSD 3-Clause and CC BY 4.0 terms. [Pinned DxUi notices](https://github.com/RedSalamanders/DxUi/blob/7fb2ab71852087d93b3a3e5b3ba504c37f56267c/THIRD-PARTY-NOTICES.md)
+
+-------------------------------------------------------------------------------
+
+### RedMonitor client
+
+- Source: `Dependencies/RedMonitor.lock.json`
+- License: MIT
+- Copyright (c) 2026 RedSalamander
+- Packaged notice: `RedMonitor-LICENSE.txt`
+
+-------------------------------------------------------------------------------
+
+### Ghostty terminal runtime
+
+The runtime source and each bundled component notice are pinned by
+`External/TerminalEngine/GhosttyRuntimeLock.v1.json`. The runtime retains the notice texts listed under
+`share/licenses/terminal-runtime/` in that lock. [Pinned Ghostty source and license](https://github.com/ghostty-org/ghostty/tree/83fb95624b0439ee660c2679b43b38c8b63769cd)
+
+-------------------------------------------------------------------------------
+
+### Microsoft Visual C++ runtime
+
+The app-local runtime DLLs are supplied under the Microsoft Visual Studio distributable-code terms.

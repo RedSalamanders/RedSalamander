@@ -97,7 +97,7 @@ function Get-RSDxUiSourceIdentity {
 
 function Get-RSDxUiOutputKey {
     param([Parameter(Mandatory)][string]$Fingerprint)
-    # The directory is only a lookup key: DxUi.identity.<Platform>.json and module sidecars keep the full
+    # The directory is only a lookup key: the platform/profile identities and module sidecars keep the full
     # fingerprint. A 64-bit prefix stays collision-free and shortens the deep vcpkg build-tree paths.
     if ($Fingerprint -cnotmatch '^[0-9a-f]{64}$') { throw 'The DxUi build fingerprint must be a lowercase SHA-256 digest.' }
     return $Fingerprint.Substring(0,16)
@@ -240,13 +240,15 @@ function Restore-RSDxUiDependency {
                 $SdkInput.Evidence.publicHeadersGitTree -cne $sourceIdentity.PublicHeadersGitTree) {throw 'SDK reader does not match the unchanged pinned Release source/header identity.'}
             return
         }
+        $disableStlAnnotations = $Configuration -ne 'ASan Debug'
+        $profileSuffix = if ($disableStlAnnotations) { '' } else { '.asan' }
         Import-Module (Join-Path $source 'Tools/ConsumerBuild.psm1') -Scope Local
         $compilerHost = Get-RSDxUiConsumerCompilerHost -RepoRoot $RepoRoot -MSBuildPath $MSBuildPath -Platform $Platform -Configuration $Configuration
         $previousHost = $env:PreferredToolArchitecture
         try {
             # The pinned helper accepts the standard MSBuild environment property. Limit it to identity evaluation.
             $env:PreferredToolArchitecture = $compilerHost
-            $identity = Get-DxUiConsumerBuildIdentity -DxUiRoot $source -MSBuildPath $MSBuildPath -Platform $Platform -DisableStlAnnotations
+            $identity = Get-DxUiConsumerBuildIdentity -DxUiRoot $source -MSBuildPath $MSBuildPath -Platform $Platform -DisableStlAnnotations:$disableStlAnnotations
         } finally { $env:PreferredToolArchitecture = $previousHost }
         # A changed compiler policy owns a separate writable archive output, even when the API/source pin stays unchanged.
         [xml]$msvcPolicy = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot 'Directory.Build.props')
@@ -285,14 +287,14 @@ foreach($field in (Get-DxUiNativePolicyFields -RepoRoot $RepoRoot).GetEnumerator
             (Join-Path $source 'vcpkg-install.ps1'),'-Platform',$Platform,'-OutputRoot',$output)
         $values = [ordered]@{
             DxUiRoot=$source; DxUiConsumerOutputRoot=$output; DxUiConsumerLockFile=(Join-Path $RepoRoot 'Dependencies/DxUi.lock.json');
-            DxUiDisableStlAnnotations='true'; DxUiConsumerToolset=$identity.Identity.toolset;
+            DxUiDisableStlAnnotations=$disableStlAnnotations.ToString().ToLowerInvariant(); DxUiConsumerToolset=$identity.Identity.toolset;
             DxUiConsumerVCToolsVersion=$identity.Identity.vcToolsVersion; DxUiConsumerSdkVersion=$identity.Identity.windowsSdkVersion;
             DxUiConsumerPreferredToolArchitecture=$identity.Identity.preferredToolArchitecture
         }
         $properties = foreach ($name in $values.Keys) { '<' + $name + '>' + [Security.SecurityElement]::Escape($values[$name]) + '</' + $name + '>' }
         $props = '<Project><PropertyGroup>' + ($properties -join '') + '</PropertyGroup></Project>'
-        foreach ($record in @(@{path="DxUi.resolved.$Platform.props";text=$props},
-            @{path="DxUi.identity.$Platform.json";text=($identity | ConvertTo-Json -Depth 9)})) {
+        foreach ($record in @(@{path="DxUi.resolved.$Platform$profileSuffix.props";text=$props},
+            @{path="DxUi.identity.$Platform$profileSuffix.json";text=($identity | ConvertTo-Json -Depth 9)})) {
             $path = Join-Path $dependency $record.path
             if (-not (Test-Path -LiteralPath $path) -or [IO.File]::ReadAllText($path) -cne $record.text) {
                 [IO.File]::WriteAllText($path,$record.text,[Text.UTF8Encoding]::new($false))
@@ -331,11 +333,15 @@ function Write-RSDxUiModuleProvenance {
         $identity = @{Fingerprint=$SdkInput.Evidence.inputKey;Identity=$SdkInput.Evidence.identity}
         $archive = Join-Path $SdkInput.SdkRoot "lib/$Platform/Release/DxUi.lib"
     } else {
-    $identity = Get-Content -LiteralPath (Join-Path $dependency "DxUi.identity.$Platform.json") -Raw | ConvertFrom-Json
-    if ($identity.Identity.commit -cne $source.Pin.commit -or $identity.Identity.platform -cne $Platform -or
-        -not $identity.Identity.disableStlAnnotations) { throw 'The resolved DxUi build identity is stale or uses incompatible STL annotations.' }
-    Assert-RSDxUiApiRevision -Pin $source.Pin -Recorded (Get-RSDxUiRecordedApiRevision $identity.Identity) -Context 'The resolved DxUi build identity'
-    $archive = Join-Path $dependency "$(Get-RSDxUiOutputKey -Fingerprint $identity.Fingerprint)/$Platform/$Configuration/DxUi.lib"
+        $disableStlAnnotations = $Configuration -ne 'ASan Debug'
+        $profileSuffix = if ($disableStlAnnotations) { '' } else { '.asan' }
+        $identity = Get-Content -LiteralPath (Join-Path $dependency "DxUi.identity.$Platform$profileSuffix.json") -Raw | ConvertFrom-Json
+        if ($identity.Identity.commit -cne $source.Pin.commit -or $identity.Identity.platform -cne $Platform -or
+            $identity.Identity.disableStlAnnotations -isnot [bool] -or $identity.Identity.disableStlAnnotations -ne $disableStlAnnotations) {
+            throw 'The resolved DxUi build identity is stale or uses incompatible STL annotations.'
+        }
+        Assert-RSDxUiApiRevision -Pin $source.Pin -Recorded (Get-RSDxUiRecordedApiRevision $identity.Identity) -Context 'The resolved DxUi build identity'
+        $archive = Join-Path $dependency "$(Get-RSDxUiOutputKey -Fingerprint $identity.Fingerprint)/$Platform/$Configuration/DxUi.lib"
     }
     foreach ($manifest in Get-ChildItem -LiteralPath $ArtifactManifestDir -Filter '*.manifest' -File) {
         $lines = Get-Content -LiteralPath $manifest.FullName

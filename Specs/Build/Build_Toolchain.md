@@ -28,15 +28,32 @@ policy identity without truncating its nested fields. A failed explicit Clean st
 the build before compilation and receipt publication. Rebuild already cleans its
 selected graph and must not receive a second preceding Clean pass.
 
+## Diagnostic code analysis
+
+Use `build.ps1 -Analyze` to enable MSVC code analysis on first-party
+C++ sources. Configuration, platform, project selection and the MSBuild
+worker limit use the ordinary source build arguments. Prepare the same
+pinned dependencies as for an ordinary build. The command accepts an
+explicit diagnostic build number and uses 1 by default without updating
+the ordinary build's version state.
+
+Each run starts with fresh application, plugin, language and intermediate
+outputs under `.build/analysis/<run-id>/`. MSBuild verifies containment
+before build preparation and rejects Clean or Rebuild for this mode.
+The ordinary build, test and package receipts are untouched. SDK,
+packaging and production/release switches are incompatible with analysis.
+Native diagnostics use the normal zero-warning policy. Retain the
+console log and source when reporting analysis results.
+
 ## Explicit local SDK application builds
 
 `Tools/Build-LocalSdkCandidate.ps1` builds the Release application and its plugin
 closure against a frozen, independently hashed local DxUi descriptor. The native
 MSBuild executable is explicitly selected by the application caller; the shared
 broker verifies actual toolchain/ABI metadata. The canonical solution mapper owns
-the application target. `RSOutputRoot` defaults to `RSBuildRoot`; a separate output
-root requires the local SDK contract and a live shared compiler/output lease before
-any project writes. Application, plugins, language resources and intermediates all
+the application target. `RSOutputRoot` defaults to `RSBuildRoot`. A separate SDK
+output root requires the local SDK contract and a live shared compiler/output
+lease before any project writes. Application, plugins, language resources and intermediates all
 use that root. Projects without DxUi verify output ownership without importing its
 headers/archive; actual DxUi consumers keep the full ABI guard.
 
@@ -876,7 +893,7 @@ download; a missing or malformed file fails and names the file and the repair. F
 `.build\vcpkg-triplets\<platform>\<triplet>.cmake`: the selected vcpkg root's own triplet (`triplets\`, then
 `triplets\community\`) copied unchanged in its own line endings, then `set(VCPKG_VISUAL_STUDIO_PATH ...)` and
 `set(VCPKG_PLATFORM_TOOLSET_VERSION "<major.minor>")`, rewritten only when its bytes change. It passes
-`--overlay-triplets=<that directory>` to `vcpkg install`. The pinned CI engine checks the default toolset and atomically publishes the overlay and its referenced local companions. RedSalamander owns installation selection, the original overlay header, the dependency lock, and the restore inputs that bind each published file. The custom-triplet rules above are unchanged (leaf names only,
+`--overlay-triplets=<that directory>` to `vcpkg install`. The pinned CI engine checks the default toolset and atomically publishes the overlay and its referenced local companions. RedSalamander owns installation selection, the original overlay header, the dependency lock, and the restore inputs that bind each published file. The ASan variants use the checked-in triplets and their shared chainload file. Other custom triplets follow the stock rules (leaf names only,
 x64-/arm64- prefix mapping). A different triplet is a different package ABI hash, so the first install after this
 change, and after a change of installation or default major.minor, rebuilds the packages; vcpkg's binary cache then
 serves any root whose triplet text is identical. The functions live in `Tools/Modules/Build/VcpkgInstallSafety.psm1` and
@@ -921,7 +938,13 @@ and [the paired CRT declarations](https://github.com/awslabs/aws-crt-cpp/blob/v0
 First-party native projects disable vcpkg MSBuild integration through VcpkgEnabled.
 The scripted installer owns the restored tree. Build/VcpkgLinkDependencies.props
 takes headers and explicit libraries from the matching platform and configuration,
-including Debug libraries for ASan Debug. RuntimeDependencies.props owns staged
+with `ASan Debug` selecting the instrumented `<platform>-windows-asan` triplet. Run
+`restore.ps1 -Platform <platform> -Configuration 'ASan Debug'` or select
+`-Asan` when invoking the installer directly. Local and hosted builds use the same
+triplet, and its CMake companion participates in restore identity and the CI cache key.
+Normal Debug and Release keep the existing triplet and installed paths. Repairing an
+interrupted platform install refreshes any existing or staged ASan triplet before it
+clears the platform marker. RuntimeDependencies.props owns staged
 direct, transitive and dynamically loaded port DLLs. RedLauncher has no third-party
 link inputs and retains its static CRT. Historical receipts can still resolve their
 recorded app-local tlog entries through the same path validation.
@@ -1051,8 +1074,11 @@ All first-party native project definitions expose Debug, Release and ASan Debug 
 including the manual Win32HelloCred and historical Gate-0 harness/probe projects. Additional build
 lanes do not rewrite or requalify sealed historical terminal evidence. Reproducing that evidence
 still uses its recorded source and toolchain identity. The current ASan Debug configuration forces
-compiler instrumentation in every translation unit, `/MDd`, `/Od`, and compatible debug information;
-a missing app-local sanitizer runtime fails the build. The existing PluginContractTests
+compiler instrumentation in every translation unit, `/MDd`, `/Od`, and compatible debug information.
+STL container annotations are enabled in the application and the pinned DxUi ASan
+archive. Restore writes a separate resolved DxUi props file and build identity for
+ASan so ordinary Debug and Release, including qualified Release SDK use, keep their
+current identities. A missing app-local sanitizer runtime fails the build. The existing PluginContractTests
 `--asan-seed-heap-overflow` child remains the detection probe. Native ARM64 execution is required.
 
 The seeded probe's two intentional volatile accesses retain the selected ARM64 volatile model.
