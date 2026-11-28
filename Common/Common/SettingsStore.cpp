@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <format>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <new>
 #include <optional>
@@ -1074,7 +1075,7 @@ HRESULT WriteFileBytesAtomic(const std::filesystem::path& path,
             {
                 return writeHr;
             }
-            return recordWrite.Commit(sizeof(save.record), nullptr, &save.file);
+            return recordWrite.Commit(sizeof(save.record), nullptr, std::addressof(save.file));
         };
     }
 

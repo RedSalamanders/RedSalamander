@@ -1,1 +1,1 @@
-- Restore warning-clean native builds for the atomic settings publish guard and its legacy Rename fallback test.
+- Restore warning-clean native builds for guarded publication, the settings recovery handle output, and the legacy Rename fallback test.
