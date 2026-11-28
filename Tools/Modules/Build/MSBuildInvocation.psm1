@@ -88,7 +88,7 @@ function Get-RSMSBuildFileLoggerArguments {
     $resolvedLogPath = [System.IO.Path]::GetFullPath($LogPath)
     return @(
         '/fl',
-        "/flp:Verbosity=$Verbosity;LogFile=$resolvedLogPath;Encoding=UTF-8"
+        "/flp:Verbosity=$Verbosity;LogFile=$resolvedLogPath;Encoding=UTF-8;Summary"
     )
 }
 
@@ -111,7 +111,7 @@ function Get-RSMSBuildInvocationPlan {
             Get-RSMSBuildFileLoggerArguments -LogPath $LogPath -Verbosity 'minimal'
         }
         else {
-            @()
+            @('/clp:Summary')
         }
     }
 }

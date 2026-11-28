@@ -28,15 +28,32 @@ policy identity without truncating its nested fields. A failed explicit Clean st
 the build before compilation and receipt publication. Rebuild already cleans its
 selected graph and must not receive a second preceding Clean pass.
 
+## Diagnostic code analysis
+
+Use `build.ps1 -Analyze` to enable MSVC code analysis on first-party
+C++ sources. Configuration, platform, project selection and the MSBuild
+worker limit use the ordinary source build arguments. Prepare the same
+pinned dependencies as for an ordinary build. The command accepts an
+explicit diagnostic build number and uses 1 by default without updating
+the ordinary build's version state.
+
+Each run starts with fresh application, plugin, language and intermediate
+outputs under `.build/analysis/<run-id>/`. MSBuild verifies containment
+before build preparation and rejects Clean or Rebuild for this mode.
+The ordinary build, test and package receipts are untouched. SDK,
+packaging and production/release switches are incompatible with analysis.
+Native diagnostics use the normal zero-warning policy. Retain the
+console log and source when reporting analysis results.
+
 ## Explicit local SDK application builds
 
 `Tools/Build-LocalSdkCandidate.ps1` builds the Release application and its plugin
 closure against a frozen, independently hashed local DxUi descriptor. The native
 MSBuild executable is explicitly selected by the application caller; the shared
 broker verifies actual toolchain/ABI metadata. The canonical solution mapper owns
-the application target. `RSOutputRoot` defaults to `RSBuildRoot`; a separate output
-root requires the local SDK contract and a live shared compiler/output lease before
-any project writes. Application, plugins, language resources and intermediates all
+the application target. `RSOutputRoot` defaults to `RSBuildRoot`. A separate SDK
+output root requires the local SDK contract and a live shared compiler/output
+lease before any project writes. Application, plugins, language resources and intermediates all
 use that root. Projects without DxUi verify output ownership without importing its
 headers/archive; actual DxUi consumers keep the full ABI guard.
 

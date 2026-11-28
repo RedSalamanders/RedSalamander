@@ -2,6 +2,54 @@
   "schemaVersion": 3,
   "entries": [
     {
+      "path": "Tools/Assert-AnalysisOutput.ps1",
+      "kind": "command",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Verify that diagnostic MSVC output and intermediate directories belong to the exact analysis run before native build preparation.",
+      "usage": "Called by the first-party RSValidateAnalysisOutput target.",
+      "usedBy": [
+        "Directory.Build.targets",
+        "Tools/Tests/BuildAnalysis.Tests.ps1"
+      ],
+      "prerequisites": [
+        "PowerShell 7",
+        "RedSalamander worktree"
+      ],
+      "sideEffects": [],
+      "outputs": [
+        "Terminating path validation error on refusal"
+      ],
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "tests": [
+        "Tools/Tests/BuildAnalysis.Tests.ps1"
+      ],
+      "replacement": null
+    },
+    {
+      "path": "Tools/Tests/BuildAnalysis.Tests.ps1",
+      "kind": "test",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Exercise isolated MSVC output admission and configuration refusal with native builds disabled.",
+      "usage": "Current tooling profile or focused Pester invocation.",
+      "usedBy": [
+        "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1"
+      ],
+      "prerequisites": [
+        "PowerShell 7 with Pester"
+      ],
+      "sideEffects": [],
+      "outputs": [
+        "Pester results"
+      ],
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "tests": [
+        "Tools/Tests/BuildAnalysis.Tests.ps1"
+      ],
+      "replacement": null
+    },
+    {
       "path": "Tools/Modules/Testing/GitMetadataCapture.psm1",
       "kind": "module",
       "visibility": "internal",
@@ -1961,6 +2009,7 @@
       "usedBy": [
         "build.ps1",
         "Tools/Build-LocalSdkCandidate.ps1",
+        "Tools/Assert-AnalysisOutput.ps1",
         "Installer/winget/generate-manifest.ps1",
         "Installer/zip/build-zip.ps1",
         "Tools/Invoke-SanitizedMsbuild.ps1",
