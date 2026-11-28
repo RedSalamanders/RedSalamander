@@ -15874,16 +15874,15 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
 
         if (testCancellation)
         {
-            const auto elapsed = Debug::Perf::ElapsedUs(cancelStarted);
+            const auto elapsed           = Debug::Perf::ElapsedUs(cancelStarted);
             const bool destinationAbsent = GetFileAttributesW(to.c_str()) == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND;
-            const bool fixturesUnchanged =
-                leafMatches(from, true) && hasBytes(from, kSourceBytes) && hasBytes(occupied, kOccupantBytes) && destinationAbsent;
-            const auto* result = completion->itemOutcomes.size() == 1u ? &completion->itemOutcomes.front() : nullptr;
-            const bool retained = result && result->sourceIndex == 0u && result->publication == FileOperations::PublicationState::NotAttempted &&
-                                  result->sourceDisposition == FileOperations::SourceDisposition::Retained &&
-                                  result->completion == FileOperations::ItemCompletion::Canceled && result->status == kCanceled;
-            const bool canceled = canceledAtBarrier && completion->hr == kCanceled && completion->operation == FILESYSTEM_RENAME && retained &&
-                                  fixturesUnchanged;
+            const bool fixturesUnchanged = leafMatches(from, true) && hasBytes(from, kSourceBytes) && hasBytes(occupied, kOccupantBytes) && destinationAbsent;
+            const auto* result           = completion->itemOutcomes.size() == 1u ? &completion->itemOutcomes.front() : nullptr;
+            const bool retained          = result && result->sourceIndex == 0u && result->publication == FileOperations::PublicationState::NotAttempted &&
+                                           result->sourceDisposition == FileOperations::SourceDisposition::Retained &&
+                                           result->completion == FileOperations::ItemCompletion::Canceled && result->status == kCanceled;
+            const bool canceled =
+                canceledAtBarrier && completion->hr == kCanceled && completion->operation == FILESYSTEM_RENAME && retained && fixturesUnchanged;
             Debug::Perf::Emit(L"FileOps.Smb.SharedRenameCancelUs", detail, elapsed, 1u, 0u, canceled ? S_OK : E_FAIL);
             AppendLog(std::format(L"SMB Rename: Cancel result=0x{:08X}, at barrier={}, fixtures unchanged={}, retained result={}, settled in {} us.",
                                   static_cast<uint32_t>(completion->hr),
