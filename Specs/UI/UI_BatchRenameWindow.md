@@ -230,7 +230,9 @@
 - `cmd_pane_batchRename_production_rejects_source_replacement_after_admission` covers the production
   pane-to-central-engine path, ordinary Queue/card behavior, and a same-path source-object replacement
   after admission but before execution: the task fails by exact ingress identity, retains both source
-  objects, and publishes no destination.
+  objects, and publishes no destination. This case and the pane refresh case close the Batch Rename
+  window and move the pane out of their fixture directory before removing it. A later Swap Panes
+  case can then enumerate its saved pane paths during restoration.
 - `cmd_pane_batchRename_admission_worker_owned_cancellable` characterizes 1/64/1,024-row Local and
   deterministic delayed providers, enforces the 50 ms UI budget, proves provider calls run only on the
   worker, verifies immutable captured intent survives pane navigation, rejects hard-link aliases,
