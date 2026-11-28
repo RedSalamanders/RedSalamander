@@ -1,1 +1,1 @@
-- Include the Shell API declarations directly in the icon cache and host argument parser for the standard Windows header build.
+- Include Windows SDK prerequisites directly in the icon cache, host argument parser, and standalone Viewer PE test runner for the standard preprocessor build.

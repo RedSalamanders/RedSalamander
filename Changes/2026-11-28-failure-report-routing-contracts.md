@@ -1,0 +1,1 @@
+- Test infrastructure checks preserve ordinary self-test failure routing and the dedicated production crash-probe path.
