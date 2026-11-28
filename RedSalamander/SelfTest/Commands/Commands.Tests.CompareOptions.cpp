@@ -760,8 +760,7 @@ struct CompareOptionsEditDiagnosticState
                           std::format(L"Compare Directories options visible DX edit descendant should expose a stable accessible name during {}.", context));
         }
 
-        const auto buttonState = CollectVisibleDescendantNamedElementStateWithMessagePump(
-            targetCompare, UIA_ButtonControlTypeId, L"Compare Directories baseline options command-button probe");
+        const auto buttonState = CollectWindowHostRawProviderNamedElementState(targetCompare, UIA_ButtonControlTypeId, {});
         const bool namedButtonExposed =
             (buttonState.has_value() && ! buttonState->name.empty()) || (uiaPatternStats.has_value() && uiaPatternStats->namedButtonControlCount > 0u);
         if (buttonState.has_value())
@@ -1003,8 +1002,7 @@ struct CompareOptionsEditDiagnosticState
                 std::format(L"Compare Directories options visible DX edit descendant should expose a stable accessible name during cycle {}.", cycle));
         }
 
-        const auto buttonState = CollectVisibleDescendantNamedElementStateWithMessagePump(
-            compare, UIA_ButtonControlTypeId, L"Compare Directories open/close options command-button probe");
+        const auto buttonState = CollectWindowHostRawProviderNamedElementState(compare, UIA_ButtonControlTypeId, {});
         const bool namedButtonExposed =
             (buttonState.has_value() && ! buttonState->name.empty()) || (uiaPatternStats.has_value() && uiaPatternStats->namedButtonControlCount > 0u);
         if (buttonState.has_value())

@@ -715,7 +715,7 @@ The Compare Directories Options panel reads/writes the same settings; Preference
   - Shortcuts (function keys, selection, copy/move/delete) behave like the main window.
   - Compare scope behavior: OK/Rescan establishes roots; navigation outside roots cancels compare mode (with a prompt if scan/content compare is active) until the next OK/Rescan.
   - Options panel theming, scroll behavior, and forward/reverse keyboard traversal at small window sizes.
-  - The options layout and open/close checks read visible edit names and editability through the owned DxUi window host's Value provider on the UI thread. The live client interaction checks pump the UI thread while their UI Automation worker reads or writes the retained controls.
+  - The options layout and open/close checks read the visible edit's name and editability and the command button's name through the owned DxUi window host's accessibility provider on the UI thread. Live client interaction checks pump the UI thread while their UI Automation worker reads or writes the retained controls.
   - Progress appears in the compare banner and in the File Operations popup task card; it disappears when idle.
   - All three display modes (Alt+2, Alt+3, Alt+4) render correctly.
   - Directory sync Copy/Move only operates on manifest items: different files transfer, identical descendants are skipped, source-only directories are whole-subtree items, and Move preserves unlisted identical source files.

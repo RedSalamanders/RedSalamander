@@ -1,1 +1,1 @@
-- Read the visible Compare Directories edit provider through the owned options window during baseline and open/close checks.
+- Read Compare Directories edit and command-button accessibility properties through the owned options window during baseline and open/close checks.
