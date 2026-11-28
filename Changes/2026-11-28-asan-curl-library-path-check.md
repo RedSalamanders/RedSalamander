@@ -1,0 +1,1 @@
+- Verify that ASan Debug links Curl from the instrumented vcpkg triplet on x64 and ARM64.

@@ -932,7 +932,8 @@ Describe 'Explicit installer overlay MSBuild properties' -Tag RequiresBuildToolc
                     $metadata.$name | Should Be 'false'
                 }
                 $lib = if ($configuration -eq 'Release') { 'lib\libcurl.lib' } else { 'debug\lib\libcurl-d.lib' }
-                $expected = Join-Path $repoRoot ".build\vcpkg_installed\$scope\$scope-windows\$lib"
+                $triplet = if ($configuration -eq 'ASan Debug') { "$scope-windows-asan" } else { "$scope-windows" }
+                $expected = Join-Path $repoRoot ".build\vcpkg_installed\$scope\$triplet\$lib"
                 ($metadata.RSVcpkgLinkLibraries.Split(';') -contains $expected) | Should Be $true
             }
         }
