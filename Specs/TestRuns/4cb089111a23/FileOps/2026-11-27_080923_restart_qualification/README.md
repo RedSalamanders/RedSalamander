@@ -563,6 +563,13 @@ The complete seeded Commands run `20261128T072220Z-82632-512a7c7dd2dd41eb9f8887e
 
 Native results SHA-256 `a852f7192a2cb3c2e650b88464098cd3e3945d80b628b92e6274af9d067b6370`, shared trace SHA-256 `5087b8394ac8cb154c12a18ad22de99ce55e9f3509715af939dea1b574c129e7`, Commands trace SHA-256 `7facf2e8343c35e60811dd92aeba2d2262a2891a6ec3632a767a02378523b38b`. The contained launcher `20261128T072219Z-79260-e5756c04783c4a4c998ecdf70d851419` drained at 08:46:18 CET, result SHA-256 `30e9eb8b00b172758b16ae116e6b06a7e9c0dae2748056f0087963321cd82a6c`.
 
+#### Ordered failure replays
+
+- Batch Rename source replacement followed by Swap Panes reproduced the failed left-path enumeration. The replacement assertion passed and Swap Panes failed. Native run `20261128T074643Z-76260-8208e823b2cb4ab190ea124df3f1c66c`, results SHA-256 `cf68394ee60ee7fe587a55df5c33e48db456d1f68c803a39ffb4a5dc7c0df76e`, Commands trace SHA-256 `c644db39edb77778a7cebc7161a0ae9d79a5f699e10d2448a70e82b418d73eab`. Launcher `20261128T074643Z-76260-52fb9d63fb964398bd51c3d71024ee7b` drained at 08:47:37 CET.
+- The Terminal sequence with seed `3` ran the embedded lifecycle, deferred catalog settings, embedded visibility and configuration round trip in that order. The lifecycle passed. Both creation checks returned `ERROR_BUSY`, and the tab did not reopen. Native run `20261128T074737Z-76260-a414abb2baaf4eeba167c46c6fdf3189`, results SHA-256 `6f3882ce1608feaf7a599965ae6f59116958d39a045239c9f13a5fd595fe33d4`, Commands trace SHA-256 `c72b8d33b483629e4b499abdb229160e9b11ede57f6b016872ce48dce7894515`. Launcher `20261128T074737Z-76260-7557e7de08a740a091ae9760dd0ade83` drained at 08:48:44 CET.
+
+The local outer launcher initially supplied its own process ID in the native run identifier, so the canonical archive refused a different owner after both original cases had finished. The stale-run archive verified the owner exited, archived only these two runs, and preserved both original result hashes. The corrected launcher lets the native runner allocate its own identifier.
+
 ### Virtual-pane clipboard preservation
 
 Exact `594d58373708f05ccc58f2d49efd963f450cd55a` built the test-enabled x64 Release solution with zero warnings and errors, receipt `12cf77b57ea452ab32bdfce24e9472440bf82e0a4a332d496b0496b5e337c502`. The real Windows Cut fixture placed two Local paths with Move effect on its clipboard. It then selected a virtual file and invoked both Copy and Cut through the pane command dispatcher. Each displayed the Local selection warning and preserved the clipboard generation, the two paths and the Move effect. The virtual fixture was removed.
