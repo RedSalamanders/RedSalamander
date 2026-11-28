@@ -701,6 +701,11 @@ The exact guarded-output x64 Release build `b618093c4` passed all three non-acti
 
 ### Hosted guarded-settings build gate
 
-Run `46129343995` admitted exact `1e05fafbc7ee8f97083df6c6cc1d89f7f67f6903`. Its ARM64 Release job stopped at the build gate with seven warnings and zero errors. The settings publish guard triggered four warnings for implicitly deleted construction and assignment. Its legacy-fallback fixture triggered three more. The job stopped before native regression. [Hosted ARM64 build](https://github.com/RedSalamanders/RedSalamander/actions/runs/46129343995/job/140933400142)
+Run `46129343995` admitted exact `1e05fafbc7ee8f97083df6c6cc1d89f7f67f6903`. Both Release jobs stopped at the build gate with the same seven warnings and zero errors. The settings publish guard triggered four warnings for implicitly deleted construction and assignment. Its legacy-fallback fixture triggered three more. Both jobs stopped before native regression. [Hosted x64 build](https://github.com/RedSalamanders/RedSalamander/actions/runs/46129343995/job/140933400082) [Hosted ARM64 build](https://github.com/RedSalamanders/RedSalamander/actions/runs/46129343995/job/140933400142)
 
-The local build had reproduced those warnings. The subsequent guarded-output main merge replaced the old settings guard. The corrected x64 Release candidate explicitly constructs the newer save and displacement state, passes the owning WIL wrapper address and gives the test fixture its own path. That build completed with zero warnings and errors. Raw original ARM64 job log archive `20261128T100456Z-13664-0fefc9a123ef4ebd907e7fc0f2e29dd9`, SHA-256 `42bc90c807c071d556069c91c46054ed3c11a3a0fb4d496c8d842c025f29a49f`.
+The local build had reproduced those warnings. The subsequent guarded-output main merge replaced the old settings guard. The corrected x64 Release candidate explicitly constructs the newer save and displacement state, passes the owning WIL wrapper address and gives the test fixture its own path. That build completed with zero warnings and errors.
+
+| Original job log | Local archive | SHA-256 |
+|---|---|---|
+| x64 | `20261128T101715Z-64280-44a0cfdc5bbf4ed0a884f351ec82a8cf` | `4e493416a6b7571ba510cde16b5b3ae9435e73e8a8219e652c04cb5b677d038c` |
+| ARM64 | `20261128T100456Z-13664-0fefc9a123ef4ebd907e7fc0f2e29dd9` | `42bc90c807c071d556069c91c46054ed3c11a3a0fb4d496c8d842c025f29a49f` |
