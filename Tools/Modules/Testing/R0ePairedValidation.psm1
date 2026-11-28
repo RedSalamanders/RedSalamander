@@ -186,7 +186,11 @@ function Get-RSR0eAssessment {
 
 function Read-RSR0eArchive {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$TestRoot, [Parameter(Mandatory)][string]$RunId)
+    param(
+        [Parameter(Mandatory)][string]$TestRoot,
+        [Parameter(Mandatory)][string]$RunId,
+        [ValidatePattern('^FileOps\.SelfTest\.[A-Za-z0-9_.]+$')][string]$MetricName
+    )
     if ($RunId -cnotmatch '^\d{8}T\d{6}Z-\d+-[0-9a-f]{32}$') { throw 'Invalid R0e run ID.' }
     $run = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $TestRoot "evidence/completed-runs/$RunId") -RequireDescendant
     $records = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $TestRoot "evidence/run-archive-records/$RunId") -RequireDescendant
@@ -223,7 +227,8 @@ function Read-RSR0eArchive {
     return @{summary_text=$summaryText; summary_bytes=$summaryBytes;
         native=(Get-Content -LiteralPath $files['artifacts\selftest\last_run\fileops\results.json'].path -Raw | ConvertFrom-Json -AsHashtable);
         metrics=@(Get-Content -LiteralPath $files['artifacts\selftest\last_run\perf\perf_metrics.jsonl'].path | ForEach-Object { $_ | ConvertFrom-Json } |
-            Where-Object { $_.metric -clike 'FileOps.SelfTest.R0e.*' });files=$files;intent_sha256=$complete.intent_sha256}
+            Where-Object { if ($MetricName) { $_.metric -ceq $MetricName } else { $_.metric -clike 'FileOps.SelfTest.R0e.*' } });
+        files=$files;intent_sha256=$complete.intent_sha256}
 }
 
 Export-ModuleMember -Function Get-RSR0eCaseIdentity, Test-RSR0eSample, Get-RSR0eAssessment, Read-RSR0eArchive

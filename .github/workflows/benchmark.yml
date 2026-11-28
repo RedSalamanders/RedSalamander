@@ -1,0 +1,82 @@
+name: Manual paired small-file Copy benchmark
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark_baseline:
+        description: Exact baseline commit on main
+        type: string
+        required: true
+      benchmark_candidate:
+        description: Exact candidate commit on main, defaulting to the dispatched commit
+        type: string
+        default: ''
+      benchmark_calibration_aa:
+        description: Measure one revision under both labels
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  paired-benchmark:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify the frozen benchmark sources
+        id: engine
+        shell: pwsh
+        env:
+          RS_COPY_BASELINE: ${{ inputs.benchmark_baseline }}
+          RS_COPY_CANDIDATE: ${{ inputs.benchmark_candidate || github.sha }}
+        run: |
+          foreach ($source in $env:RS_COPY_BASELINE, $env:RS_COPY_CANDIDATE) {
+              if ($source -cnotmatch '^[a-f0-9]{40}$') { throw 'Supply exact baseline and candidate commits.' }
+              git merge-base --is-ancestor $source HEAD
+              if ($LASTEXITCODE) { throw 'Both sources must belong to the dispatched main history.' }
+          }
+          $pin = (Get-Content -LiteralPath .ci/project.json -Raw | ConvertFrom-Json).engine.ref
+          if ($pin -cnotmatch '^[a-f0-9]{40}$') { throw 'Expected an exact engine revision.' }
+          "ref=$pin" >> $env:GITHUB_OUTPUT
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: RedSalamanders/.github
+          ref: ${{ steps.engine.outputs.ref }}
+          path: .ci-engine
+          persist-credentials: false
+      - uses: ./.ci-engine/.github/actions/setup-msvc
+        with:
+          platform: x64
+      - name: Initialize the runner's benchmark sandbox
+        id: sandbox
+        shell: pwsh
+        run: |
+          Import-Module ./Tools/Modules/Testing/TestSandbox.psm1
+          $candidate = Join-Path ([IO.Path]::GetPathRoot($env:RUNNER_TEMP)) 'RedSalamander.Perf'
+          $root = Initialize-RSTestSandboxRoot -TestRoot $candidate -RepoRoot $env:GITHUB_WORKSPACE -AllowExternalInitialization
+          "root=$root" >> $env:GITHUB_OUTPUT
+      - name: Collect paired small-file Copy evidence
+        shell: pwsh
+        env:
+          RS_COPY_BASELINE: ${{ inputs.benchmark_baseline }}
+          RS_COPY_CANDIDATE: ${{ inputs.benchmark_candidate || github.sha }}
+          RS_COPY_AA: ${{ inputs.benchmark_calibration_aa }}
+          RS_COPY_TEST_ROOT: ${{ steps.sandbox.outputs.root }}
+        run: |
+          $arguments = @{
+              BaselineRevision = $env:RS_COPY_BASELINE
+              CandidateRevision = $env:RS_COPY_CANDIDATE
+              CalibrationAA = $env:RS_COPY_AA -ieq 'true'
+              TestRoot = $env:RS_COPY_TEST_ROOT
+          }
+          ./performance-paired.ps1 @arguments
+      - name: Retain benchmark evidence
+        if: always() && steps.sandbox.outputs.root != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: red-salamander-paired-copy-${{ github.run_attempt }}
+          path: ${{ steps.sandbox.outputs.root }}/evidence/paired-copy/**
+          if-no-files-found: warn
