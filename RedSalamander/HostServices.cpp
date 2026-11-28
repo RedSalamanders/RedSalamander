@@ -17,6 +17,8 @@
 
 #include <objbase.h>
 
+#include <shellapi.h>
+
 #pragma warning(push)
 // (C6297) Arithmetic overflow. Results might not be an expected value.
 // (C28182) Dereferencing NULL pointer.

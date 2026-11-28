@@ -1,0 +1,1 @@
+- Include the Shell API declarations directly in the icon cache and host argument parser for the standard Windows header build.

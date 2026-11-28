@@ -5,13 +5,14 @@
 
 #include <cwctype>
 
-#define WINDOWS_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 
 #include <CommCtrl.h>
 #include <CommonControls.h>
 #include <KnownFolders.h>
+#include <shellapi.h>
 #include <ShlObj.h>
 #pragma comment(lib, "Comctl32.lib")
 
