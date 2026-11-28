@@ -1,2 +1,1 @@
-- Check that a mixed Local and live SMB Recycle selection retains the skipped SMB file and recycles only the Local file.
-- Check that canceling a scheduled Windows SMB Batch Rename before mutation preserves the source and reports no publication.
+- Verify mixed Local and SMB Recycle and cancellation before dispatch for scheduled Windows SMB Batch Rename using live fixtures.
