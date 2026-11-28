@@ -1,0 +1,1 @@
+- Resolve the embedded Terminal accessibility root through the bounded UI Automation client and release it before closing the fixture.
