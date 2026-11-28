@@ -16011,7 +16011,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     DWORD singleBefore = 0u;
     if (! sampleHandles(singleBefore))
         return reject(L"could not sample process handles before the single Rename");
-    sampledPeak = singleBefore;
+    sampledPeak            = singleBefore;
     const auto singleStart = std::chrono::steady_clock::now();
     if (! verifyRename(source, destination, false))
         return reject(L"nested Rename to a new name lacked a matching identity, spelling, receipt or content");
@@ -16029,7 +16029,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     DWORD batchBefore = 0u;
     if (! sampleHandles(batchBefore))
         return reject(L"could not sample process handles before the 100-item control");
-    sampledPeak = batchBefore;
+    sampledPeak           = batchBefore;
     const auto batchStart = std::chrono::steady_clock::now();
     for (unsigned int index = 0; index < kBatchCount; ++index)
     {
@@ -16039,23 +16039,21 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     Debug::Perf::Emit(L"FileOps.Smb.ExactRenameControlUs", L"100 items", Debug::Perf::ElapsedUs(batchStart), kBatchCount, 0u, S_OK);
     Debug::Perf::Emit(L"FileOps.Smb.ExactRenameHandleSamples", L"100 items", 0u, batchBefore, sampledPeak, S_OK);
 
-    const auto verifyLegacyRename = [&](const std::filesystem::path& from,
-                                        const std::filesystem::path& to,
-                                        std::wstring_view detail,
-                                        bool occupiedTarget) noexcept
+    const auto verifyLegacyRename =
+        [&](const std::filesystem::path& from, const std::filesystem::path& to, std::wstring_view detail, bool occupiedTarget) noexcept
     {
         // These names select the existing test-only hook in the Local provider.
         constexpr wchar_t kExPath[]  = L"REDSALAMANDER_FILEOPS_RENAME_EX_FAILURE_PATH";
         constexpr wchar_t kExError[] = L"REDSALAMANDER_FILEOPS_RENAME_EX_FAILURE_ERROR";
         constexpr wchar_t kExFired[] = L"REDSALAMANDER_FILEOPS_RENAME_EX_FAILURE_FIRED";
-        using Env = RedSalamander::TestSupport::ScopedEnvironmentVariable;
+        using Env                    = RedSalamander::TestSupport::ScopedEnvironmentVariable;
         try
         {
             const std::wstring unsupported = std::to_wstring(ERROR_CALL_NOT_IMPLEMENTED);
             const Env forcePath(kExPath, to.native());
             const Env forceError(kExError, unsupported);
             const Env clearFired(kExFired, std::nullopt);
-            const auto start = std::chrono::steady_clock::now();
+            const auto start  = std::chrono::steady_clock::now();
             const bool passed = verifyRename(from, to, occupiedTarget) && GetEnvironmentVariableW(kExFired, nullptr, 0u) != 0u;
             Debug::Perf::Emit(L"FileOps.Smb.LegacyRenameControlUs", detail, Debug::Perf::ElapsedUs(start), 1u, 0u, passed ? S_OK : E_FAIL);
             return passed || reject(std::format(L"legacy no-replace control '{}' failed", detail));
@@ -16071,8 +16069,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     const auto legacyTarget = nested / L"legacy-target.txt";
     if (! SelfTest::WriteTextFile(legacySource, kSourceBytes))
         return reject(L"could not write the legacy Rename fixture");
-    if (! verifyLegacyRename(legacySource, occupied, L"occupied", true) ||
-        ! verifyLegacyRename(legacySource, legacyTarget, L"new name", false) ||
+    if (! verifyLegacyRename(legacySource, occupied, L"occupied", true) || ! verifyLegacyRename(legacySource, legacyTarget, L"new name", false) ||
         ! verifyLegacyRename(legacyTarget, nested / L"LEGACY-TARGET.TXT", L"case only", false))
         return false;
 

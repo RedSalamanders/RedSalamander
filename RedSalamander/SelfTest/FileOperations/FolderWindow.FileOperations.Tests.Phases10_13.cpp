@@ -69,13 +69,13 @@ case SelfTestState::Step::FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationPro
             const auto restorePrompt        = wil::scope_exit([&]() noexcept { HostSetTestPromptResultOverride(previous); });
             HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
             static std::atomic<uint32_t> nextCutSequence{0x41A51000u};
-            const uint32_t cutSequence     = nextCutSequence.fetch_add(1u, std::memory_order_relaxed);
-            const auto cutBarrierCalled   = std::make_shared<std::atomic<bool>>(false);
+            const uint32_t cutSequence  = nextCutSequence.fetch_add(1u, std::memory_order_relaxed);
+            const auto cutBarrierCalled = std::make_shared<std::atomic<bool>>(false);
             std::vector<Task*> tasksBefore, tasksAfter;
             state.fileOps->CollectTasks(tasksBefore);
             const uint64_t promptsBefore = HostGetTestPromptRequestCount();
             uint64_t canceledTaskId      = 0u;
-            const auto cancelCutMove = [&]() noexcept
+            const auto cancelCutMove     = [&]() noexcept
             {
                 return state.fileOps->AdmitOperation(FILESYSTEM_MOVE,
                                                      FolderWindow::Pane::Left,
@@ -109,8 +109,8 @@ case SelfTestState::Step::FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationPro
             const std::wstring cutWarning = LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_CLIPBOARD_MOVE_WARNING);
             const bool validQuestion      = HostGetTestPromptRequestCount() == promptsBefore + 1u && HostGetTestLastPromptDebugSnapshot(prompt) &&
                                             prompt.presentation == HOST_PROMPT_PRESENTATION_COPY && prompt.defaultResult == HOST_PROMPT_RESULT_CANCEL &&
-                                            ! prompt.hasFileOperationOptions && prompt.message.find(dummyRoot) != std::wstring::npos &&
-                                            ! cutWarning.empty() && prompt.message.find(cutWarning) != std::wstring::npos;
+                                            ! prompt.hasFileOperationOptions && prompt.message.find(dummyRoot) != std::wstring::npos && ! cutWarning.empty() &&
+                                            prompt.message.find(cutWarning) != std::wstring::npos;
             if (canceled != S_FALSE || canceledTaskId != 0u || ! validQuestion)
             {
                 Fail(L"Queued Copy-only Cut must ask one Copy/Cancel question with the destination and Cut warning, and cancellation must publish no task.");

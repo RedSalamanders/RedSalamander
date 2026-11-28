@@ -1173,7 +1173,7 @@ private:
     constexpr uint32_t kSensitiveFeatures = FILESYSTEM_METADATA_MOTW | FILESYSTEM_METADATA_ALTERNATE_STREAMS | FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES;
     const std::wstring lossMask           = std::to_wstring(kSensitiveFeatures);
     const std::wstring extendedAttributes = std::to_wstring(FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES);
-    using Env = RedSalamander::TestSupport::ScopedEnvironmentVariable;
+    using Env                             = RedSalamander::TestSupport::ScopedEnvironmentVariable;
     const Env forceExtendedAttributes(L"REDSALAMANDER_FILEOPS_METADATA_FORCE_PRESENT_MASK", extendedAttributes);
     const Env failMetadataTransfer(L"REDSALAMANDER_FILEOPS_METADATA_FAIL_MASK", lossMask);
     CrossProviderCaseScope scope(state, operations);
@@ -1213,8 +1213,8 @@ private:
     std::string alternateBytes;
     std::string destinationBytes;
     if (! ReadFileTextFsIo(localIo, source, sourceBytes) || sourceBytes != body || ! ReadFileTextFsIo(localIo, zone, zoneBytes) || zoneBytes != mark ||
-        ! ReadFileTextFsIo(localIo, alternate, alternateBytes) || alternateBytes != notes ||
-        ! ReadFileTextFsIo(localIo, destination, destinationBytes) || destinationBytes != occupant)
+        ! ReadFileTextFsIo(localIo, alternate, alternateBytes) || alternateBytes != notes || ! ReadFileTextFsIo(localIo, destination, destinationBytes) ||
+        destinationBytes != occupant)
         return reject(L"Skip changed the original, its named streams, or the occupied destination");
     const auto entries = ListCrossProviderChildNames(state.fsLocal.get(), destinationFolder.native());
     if (entries != std::vector<std::wstring>{destination.filename().native()})
