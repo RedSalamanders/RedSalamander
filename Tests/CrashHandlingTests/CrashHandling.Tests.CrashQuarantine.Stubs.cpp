@@ -3,8 +3,7 @@
 // CrashQuarantine.cpp is compiled directly into this test exe so the extracted pure decision
 // function can be unit-tested. That TU references several heavy app-side externals at link time
 // (even though the tests only ever call the pure function and never reach them). This file provides
-// trivial definitions for those externals so the closure stays tiny -- no SessionState, no UI/
-// HostServices, no SHGetKnownFolderPath. Modelled on Tests\PerformanceTests2\Performance.Tests.PluginManager.Stubs.cpp.
+// trivial definitions for the application state and known-folder services. The tests never present the dialog.
 
 #include <filesystem>
 #include <optional>
@@ -16,7 +15,6 @@
 #include "Helpers.h"
 
 #include "AppDataPaths.h"
-#include "HostServices.h" // declares HostShowPrompt; pulls in PlugInterfaces/Host.h for the POD types
 #include "SessionState.h"
 
 // Declared extern in Framework.h (included transitively by CrashQuarantine.cpp). Define it here.
@@ -26,8 +24,7 @@ namespace AppDataPaths
 {
 std::filesystem::path GetLocalAppDataPath() noexcept
 {
-    // Empty -> GetCrashMarkerPath() returns {} and OfferPluginDisableIfPreviousCrashDetected early-returns.
-    // The tests never call that path; this only needs to resolve the link symbol.
+    // Standalone tests have no product crash directory.
     return {};
 }
 } // namespace AppDataPaths
@@ -41,14 +38,3 @@ std::optional<State> TryRead() noexcept
     return std::nullopt;
 }
 } // namespace SessionState
-
-// Global (non-namespaced) free function. Do NOT restate the `cookie = nullptr` default arg here --
-// it lives on the declaration in HostServices.h. The tests never reach this; no UI is shown.
-HRESULT HostShowPrompt(const HostPromptRequest& /*request*/, void* /*cookie*/, HostPromptResult* result) noexcept
-{
-    if (result != nullptr)
-    {
-        *result = HOST_PROMPT_RESULT_NONE;
-    }
-    return E_NOTIMPL;
-}

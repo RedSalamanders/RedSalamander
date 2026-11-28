@@ -4,37 +4,40 @@
 #define NOMINMAX
 #include <windows.h>
 
-#ifdef ENABLE_TESTS
+#include <cstddef>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
-#endif
 
 namespace CrashHandler
 {
-// Installs a unified crash front door (best-effort):
-// - SetUnhandledExceptionFilter (SEH)
-// - std::terminate handler
-// - CRT purecall/invalid-parameter handlers
-void Install() noexcept;
+struct PendingReport
+{
+    std::filesystem::path directory;
+    std::wstring dumpPath;
+};
 
-// Writes a minidump + crash marker (best-effort).
-// Intended for use in a top-level __except filter.
+// Initialize local crash state and all fatal entry points before ordinary startup.
+[[nodiscard]] HRESULT Install() noexcept;
+// The caller acquires the directory through the governed test sandbox first.
+[[nodiscard]] HRESULT InstallForProbe(const std::filesystem::path& directory) noexcept;
+
+// Production fatal paths write once and exit. Harness-only SEH filters can continue to their own diagnostics.
 [[nodiscard]] int WriteDumpForException(EXCEPTION_POINTERS* exceptionPointers) noexcept;
 
-// If a previous crash marker exists, shows a prompt and optionally opens the crash folder.
-void ShowPreviousCrashUiIfPresent(HWND ownerWindow) noexcept;
+// Interactive startup is the only production caller. Claim the marker once and prune owned reports.
+[[nodiscard]] std::optional<PendingReport> TakePendingReport();
 
-// Deliberate crash path to validate the dump pipeline.
-void TriggerCrashTest() noexcept;
+[[noreturn]] void TriggerCrashTest(bool overlapWorkers) noexcept;
 
 #ifdef ENABLE_TESTS
-// Test-only seams. Thin forwarders to the pure path/marker helpers in CrashHandler.cpp's anonymous
-// namespace. They perform no SEH, no minidump, and no UI — they exist so the dump-naming and marker
-// write/read round-trip logic can be unit-tested without invoking the fused crash/UI paths.
-[[nodiscard]] std::filesystem::path GetCrashMarkerPathForTest() noexcept;
-[[nodiscard]] std::filesystem::path BuildDumpPathForTest(const std::filesystem::path& dir) noexcept;
+// Test-only entry points for dump naming, retention and marker I/O in the owned test folder.
+[[nodiscard]] std::filesystem::path GetCrashMarkerPathForTest();
+[[nodiscard]] std::filesystem::path BuildDumpPathForTest(const std::filesystem::path& dir);
+[[nodiscard]] size_t PruneOldReportsForTest(const std::filesystem::path& dir, std::wstring_view pendingDump = {});
 [[nodiscard]] HRESULT WriteMarkerFileForTest(const std::filesystem::path& markerPath, std::wstring_view dumpPath) noexcept;
-[[nodiscard]] std::wstring ReadMarkerDumpPathForTest(const std::filesystem::path& markerPath) noexcept;
+[[nodiscard]] std::wstring ReadMarkerDumpPathForTest(const std::filesystem::path& markerPath);
+[[nodiscard]] std::optional<PendingReport> TakePendingReportForTest(const std::filesystem::path& directory, bool interactive);
 #endif
 } // namespace CrashHandler

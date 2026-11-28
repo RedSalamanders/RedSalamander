@@ -3304,184 +3304,32 @@ SelfTest::RunCase(options,
                   L"crash_quarantine_synthetic_marker",
                   [&](SelfTest::CaseState& state) noexcept
 {
-    // Case: A synthetic crash marker should trigger crash-quarantine to disable the last-active filesystem plugin.
     constexpr std::wstring_view kPluginId = L"builtin/file-system-s3";
+    std::error_code error;
+    const auto directory = RedSalamander::TestSupport::AcquireTestDirectory(
+        {.harnessSegment = L"compare", .leafSegment = L"crash-recovery", .fallbackRunIdPrefix = L"compare", .cleanExisting = true}, error);
+    if (! state.Require(! error && ! directory.empty(), L"Acquire the governed crash recovery fixture."))
+        return false;
 
-    const std::filesystem::path sessionPath = SessionState::GetSessionStatePath();
-    state.Require(! sessionPath.empty(), L"SessionState::GetSessionStatePath returned empty path.");
-    const std::filesystem::path baseDir = sessionPath.parent_path();
-    state.Require(! baseDir.empty(), L"SessionState base directory is empty.");
-
-    const std::filesystem::path crashDir   = baseDir / L"Crashes";
-    const std::filesystem::path markerPath = crashDir / L"last_crash.txt";
-
-    struct Backup
-    {
-        bool hadFile = false;
-        std::vector<std::byte> bytes;
-    };
-
-    const auto readAllBytes = [&](const std::filesystem::path& path, Backup& backup) noexcept -> bool
-    {
-        backup.hadFile = false;
-        backup.bytes.clear();
-
-        std::error_code ec;
-        if (! std::filesystem::exists(path, ec))
-        {
-            return true;
-        }
-
-        backup.hadFile = true;
-
-        wil::unique_handle file(CreateFileW(
-            path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
-        if (! file)
-        {
-            state.Require(false, L"Failed to open backup file for read.");
-            return false;
-        }
-
-        LARGE_INTEGER size{};
-        if (GetFileSizeEx(file.get(), &size) == 0)
-        {
-            state.Require(false, L"Failed to get backup file size.");
-            return false;
-        }
-
-        if (size.QuadPart < 0 || size.QuadPart > static_cast<LONGLONG>((std::numeric_limits<DWORD>::max)()))
-        {
-            state.Require(false, L"Backup file too large.");
-            return false;
-        }
-
-        const DWORD bytesToRead = static_cast<DWORD>(size.QuadPart);
-        backup.bytes.resize(bytesToRead);
-
-        DWORD readBytes = 0;
-        if (bytesToRead > 0)
-        {
-            if (ReadFile(file.get(), backup.bytes.data(), bytesToRead, &readBytes, nullptr) == 0 || readBytes != bytesToRead)
-            {
-                state.Require(false, L"Failed to read backup file bytes.");
-                return false;
-            }
-        }
-
-        return true;
-    };
-
-    Backup sessionBackup{};
-    Backup markerBackup{};
-    if (! readAllBytes(sessionPath, sessionBackup) || ! readAllBytes(markerPath, markerBackup))
-    {
-        return state.failure.empty();
-    }
-
-    const auto restore = wil::scope_exit([&] noexcept
-    {
-        const auto restoreFile = [&](const std::filesystem::path& path, const Backup& backup) noexcept
-        {
-            std::error_code ec;
-            if (! backup.hadFile)
-            {
-                static_cast<void>(std::filesystem::remove(path, ec));
-                return;
-            }
-
-            static_cast<void>(std::filesystem::create_directories(path.parent_path(), ec));
-            wil::unique_handle file(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-            if (! file)
-            {
-                return;
-            }
-
-            if (! backup.bytes.empty())
-            {
-                DWORD written = 0;
-                static_cast<void>(WriteFile(file.get(), backup.bytes.data(), static_cast<DWORD>(backup.bytes.size()), &written, nullptr));
-            }
-
-            static_cast<void>(FlushFileBuffers(file.get()));
-        };
-
-        restoreFile(sessionPath, sessionBackup);
-        restoreFile(markerPath, markerBackup);
-    });
-
-    const auto writeUtf16File = [&](const std::filesystem::path& path, std::wstring_view content) noexcept -> bool
-    {
-        std::error_code ec;
-        std::filesystem::create_directories(path.parent_path(), ec);
-        if (ec)
-        {
-            state.Require(false, L"Failed to create directory for marker file.");
-            return false;
-        }
-
-        wil::unique_handle file(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-        if (! file)
-        {
-            state.Require(false, L"Failed to create marker file.");
-            return false;
-        }
-
-        const wchar_t bom = 0xFEFF;
-        DWORD written     = 0;
-        if (! WriteFile(file.get(), &bom, sizeof(bom), &written, nullptr))
-        {
-            state.Require(false, L"Failed to write marker BOM.");
-            return false;
-        }
-
-        const DWORD bytes = static_cast<DWORD>(content.size() * sizeof(wchar_t));
-        if (bytes > 0)
-        {
-            if (! WriteFile(file.get(), content.data(), bytes, &written, nullptr))
-            {
-                state.Require(false, L"Failed to write marker content.");
-                return false;
-            }
-        }
-
-        static_cast<void>(FlushFileBuffers(file.get()));
-        return true;
-    };
-
-    std::wstring sessionText;
-    sessionText.reserve(32 + kPluginId.size());
-    sessionText.append(L"fsPlugin=");
-    sessionText.append(kPluginId);
-    sessionText.append(L"\r\nop=browse\r\n");
-
-    if (! writeUtf16File(sessionPath, sessionText) || ! writeUtf16File(markerPath, L"synthetic"))
-    {
-        return state.failure.empty();
-    }
+    const auto dump   = CrashHandler::BuildDumpPathForTest(directory);
+    const auto marker = directory / L"last_crash.txt";
+    if (! state.Require(! dump.empty() && SUCCEEDED(CrashHandler::WriteMarkerFileForTest(dump, L"fixture dump")) &&
+                            SUCCEEDED(CrashHandler::WriteMarkerFileForTest(marker, dump.native())),
+                        L"Create the isolated dump and marker."))
+        return false;
+    state.Require(! CrashHandler::TakePendingReportForTest(directory, false) && std::filesystem::exists(marker, error),
+                  L"A headless start leaves the pending report.");
+    const auto report = CrashHandler::TakePendingReportForTest(directory, true);
+    state.Require(report && report->dumpPath == dump.native() && ! CrashHandler::TakePendingReportForTest(directory, true),
+                  L"The first interactive start claims the report once.");
 
     Common::Settings::Settings settings{};
-    settings.plugins.currentFileSystemPluginId = std::wstring(kPluginId);
-
-    const bool oldAutoAccept = HostGetAutoAcceptPrompts();
-    HostSetAutoAcceptPrompts(true);
-    const auto restoreAutoAccept = wil::scope_exit([&] noexcept { HostSetAutoAcceptPrompts(oldAutoAccept); });
-
-    CrashQuarantine::OfferPluginDisableIfPreviousCrashDetected(settings);
-
-    const auto isDisabled = [&](std::wstring_view id) noexcept -> bool
-    {
-        for (const std::wstring& disabled : settings.plugins.disabledPluginIds)
-        {
-            if (OrdinalString::EqualsNoCase(disabled, id))
-            {
-                return true;
-            }
-        }
-        return false;
-    };
-
-    state.Require(isDisabled(kPluginId), L"Crash quarantine did not disable the expected plugin id.");
-    state.Require(settings.plugins.currentFileSystemPluginId.empty(), L"Crash quarantine did not clear currentFileSystemPluginId.");
-
+    settings.plugins.currentFileSystemPluginId = kPluginId;
+    const std::vector<std::wstring> active{std::wstring(kPluginId)};
+    const auto toDisable = CrashQuarantine::SelectPluginsToDisable(report.has_value(), active, settings);
+    for (const auto& id : toDisable)
+        CrashQuarantine::DisablePluginIdInSettingsForTest(id, settings);
+    state.Require(settings.plugins.disabledPluginIds == active, L"Crash recovery can disable the implicated plugin.");
+    state.Require(settings.plugins.currentFileSystemPluginId.empty(), L"Disabling the plugin clears the selected file system.");
     return state.failure.empty();
 });

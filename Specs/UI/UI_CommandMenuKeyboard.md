@@ -746,13 +746,13 @@ Right menu is identical to Left menu, except:
 
 #### Toggle Hidden Files (`cmd/pane/viewOptions/toggleHiddenFiles`)
 
-- Invoking the command MUST toggle `folders.showHiddenFiles` (see `Specs/Core/Core_SettingsStore.md`).
+- Invoking the command MUST toggle `folders.showHiddenFiles` (see `Specs/Core/Core_Settings.md`).
 - Default is `true` (shown).
 - When `true`, hidden items (Windows `FILE_ATTRIBUTE_HIDDEN`) MUST be visible and MUST display a dimmed icon.
 
 #### Toggle System Files (`cmd/pane/viewOptions/toggleSystemFiles`)
 
-- Invoking the command MUST toggle `folders.showSystemFiles` (see `Specs/Core/Core_SettingsStore.md`).
+- Invoking the command MUST toggle `folders.showSystemFiles` (see `Specs/Core/Core_Settings.md`).
 - Default is `true` (shown).
 
 #### Toggle Status Bar (`cmd/pane/viewOptions/toggleStatusBar`)
@@ -1077,7 +1077,7 @@ Resolution order (normative):
 - When focus is inside the `FolderWindow` but not in a `FolderView`: chords in `settings.shortcuts.folderView` are evaluated only when at least one modifier (Ctrl/Alt/Shift) is down and the key is not `Tab`; if bound, the host MUST execute the bound command and MUST consume the key message.
 - Otherwise, the message continues through the normal routing pipeline (accelerators, then `FolderView`’s built-in key handling).
 
-This means any key listed as a valid `vk` in `Specs/Core/Core_SettingsStore.md` (including Arrow keys / PageUp / PageDown / Home / End / `0`-`9`) can be made configurable by adding a binding entry; unbound chords keep their built-in behavior.
+This means any key listed as a valid `vk` in `Specs/Core/Core_Settings.md` (including Arrow keys / PageUp / PageDown / Home / End / `0`-`9`) can be made configurable by adding a binding entry; unbound chords keep their built-in behavior.
 
 `⊘` means “no shortcut assigned”.
 
@@ -1144,7 +1144,7 @@ Notes:
 ### RedSalamander (main app)
 
 **Menu bar**
-- `Alt` (alone) temporarily shows the menu bar when hidden and starts menu interaction (see `Specs/Core/Core_SettingsStore.md`).
+- `Alt` (alone) temporarily shows the menu bar when hidden and starts menu interaction (see `Specs/Core/Core_Settings.md`).
 
 **Accelerators** (see `RedSalamander/RedSalamander.rc`)
 - None. (Reserved for legacy / future use.)

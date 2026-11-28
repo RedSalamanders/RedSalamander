@@ -30,6 +30,7 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "LocalFileTransaction.h"
 #include "PathUtils.h"
 #include "PluginConfiguration.h"
 #include "SettingsSchemaParser.h"
@@ -37,6 +38,7 @@
 #include "StringConversion.h"
 #include "TestSupport/TestSupport.Tests.ChildProcess.h"
 #include "TestSupport/TestSupport.Tests.FailureReports.h"
+#include "Version.h"
 
 namespace
 {
@@ -729,18 +731,160 @@ void CleanupSettingsTestArtifacts(std::wstring_view appId) noexcept
     return backupHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && backupPath.empty() ? 0 : 6;
 }
 
+#ifdef ENABLE_TESTS
+void TestSettingsProfileMigration(bool& success)
+{
+    using namespace Common::Settings;
+
+    if (GetEnvironmentVariableW(L"REDSALAMANDER_TEST_ROOT", nullptr, 0) == 0)
+    {
+        Check(false, L"settings profile migration: a governed test root is required", success);
+        return;
+    }
+
+    const std::wstring appId           = std::format(L"RedSalamanderSettingsProfile-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    const std::filesystem::path target = GetSettingsPath(appId);
+    if (target.empty())
+    {
+        Check(false, L"settings profile migration: the test root authorized the profile", success);
+        return;
+    }
+
+#ifdef _DEBUG
+    Check(target.filename() == appId + L"-debug.settings.json", L"settings profile migration: Debug keeps its own file", success);
+#else
+    Check(target.filename() == appId + L".settings.json", L"settings profile migration: Release uses an unversioned file", success);
+#endif
+    const auto versioned = target.parent_path() / std::format(L"{}-{}.{}.settings.json", appId, VERSINFO_MAJOR, VERSINFO_MINOR);
+    const auto cleanup   = wil::scope_exit([&]() noexcept
+    {
+        CleanupSettingsTestArtifacts(appId);
+        std::error_code ec;
+        static_cast<void>(std::filesystem::remove(std::filesystem::path(Common::Paths::ToExtendedWin32Path(versioned.native())), ec));
+    });
+
+    constexpr std::string_view oldBytes    = R"json({"schemaVersion":16,"fileOperations":{"verifyAfterCopy":true}})json";
+    constexpr std::string_view winnerBytes = R"json({"schemaVersion":16,"fileOperations":{"verifyAfterCopy":false}})json";
+    Check(WriteTestBytes(versioned, oldBytes), L"settings profile migration: the versioned source is present", success);
+
+    Settings imported{};
+    SettingsLoadRecoveryInfo recovery{};
+    const HRESULT importHr = LoadSettingsWithRecoveryInfo(appId, imported, &recovery);
+    Check(importHr == S_OK && recovery.settingsPath == versioned && ! imported.persistence.expectedFileStamp.has_value() && imported.fileOperations &&
+              imported.fileOperations->verifyAfterCopy,
+          L"settings profile migration: a missing canonical file reads the prior profile with create-only save authority",
+          success);
+    const std::filesystem::path extendedTarget(Common::Paths::ToExtendedWin32Path(target.native()));
+    Check(ReadTestBytes(versioned) == oldBytes && ! std::filesystem::exists(extendedTarget),
+          L"settings profile migration: loading preserves the prior bytes and leaves the new path vacant",
+          success);
+
+    Check(WriteTestBytes(target, winnerBytes), L"settings profile migration: a competing first creator published the canonical file", success);
+    Check(SaveSettingsValuesOnly(appId, imported) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && ReadTestBytes(target) == winnerBytes &&
+              ReadTestBytes(versioned) == oldBytes,
+          L"settings profile migration: saving a migrated snapshot preserves the competing file and prior source",
+          success);
+
+    Settings current{};
+    Check(LoadSettingsWithRecoveryInfo(appId, current, &recovery) == S_OK && recovery.settingsPath == target &&
+              current.persistence.expectedFileStamp.has_value() && current.fileOperations && ! current.fileOperations->verifyAfterCopy,
+          L"settings profile migration: an existing canonical file takes precedence",
+          success);
+
+    CleanupSettingsTestArtifacts(appId);
+    Check(LoadSettingsWithRecoveryInfo(appId, imported, &recovery) == S_OK && SaveSettingsValuesOnly(appId, imported) == S_OK &&
+              imported.persistence.expectedFileStamp.has_value() && std::filesystem::exists(extendedTarget) && ReadTestBytes(versioned) == oldBytes,
+          L"settings profile migration: a first save creates the canonical profile and leaves the versioned source intact",
+          success);
+
+    CleanupSettingsTestArtifacts(appId);
+    constexpr std::string_view malformed = "invalid prior profile";
+    Check(WriteTestBytes(versioned, malformed), L"settings profile migration: the malformed prior profile is present", success);
+    Check(LoadSettingsWithRecoveryInfo(appId, current, &recovery) == S_FALSE && recovery.settingsPath == versioned && ! recovery.backedUp &&
+              ! current.persistence.expectedFileStamp.has_value() && ReadTestBytes(versioned) == malformed,
+          L"settings profile migration: recovery preserves the malformed prior source in place",
+          success);
+}
+#endif
+
 void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
 {
     const std::wstring appId = std::format(L"RedSalamanderSettingsStoreGuards-{}-{}", GetCurrentProcessId(), GetTickCount64());
     CleanupSettingsTestArtifacts(appId);
     const auto cleanup                       = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
     const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+    const std::wstring extendedSettingsPath  = Common::Paths::ToExtendedWin32Path(settingsPath.native());
+
+    {
+        Common::Files::LocalFileTransaction staged;
+        constexpr std::string_view winner = "competing publication";
+        const bool ready =
+            SUCCEEDED(Common::Files::LocalFileTransaction::Create(settingsPath, Common::Files::ExistingTargetPolicy::FailIfExists, true, staged)) &&
+            SUCCEEDED(staged.Write("staged publication"));
+        const bool created   = ready && WriteTestBytes(settingsPath, winner);
+        const HRESULT result = created ? staged.Commit() : E_UNEXPECTED;
+        Check(created && FAILED(result) && ReadTestBytes(settingsPath) == winner,
+              L"settings create-only transaction: a destination created after staging is preserved",
+              success);
+    }
+    CleanupSettingsTestArtifacts(appId);
+
+#ifdef ENABLE_TESTS
+    {
+        struct RenameVisits
+        {
+            const std::filesystem::path& target;
+            bool preferred = false;
+            bool classic   = false;
+        };
+        RenameVisits visits{settingsPath};
+        const Common::Files::TargetRenameCheck check{
+            .context = &visits,
+            .verify  = [](void* context, FILE_INFO_BY_HANDLE_CLASS informationClass) noexcept -> HRESULT
+        {
+            auto& visit = *static_cast<RenameVisits*>(context);
+            if (informationClass == FileRenameInfoEx)
+            {
+                visit.preferred = true;
+                return S_OK;
+            }
+            visit.classic = WriteTestBytes(visit.target, "new revision");
+            return visit.classic ? HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) : E_FAIL;
+        },
+        };
+        Common::Files::LocalFileTransaction staged;
+        const bool ready = WriteTestBytes(settingsPath, "accepted revision") &&
+                           SUCCEEDED(Common::Files::LocalFileTransaction::Create(settingsPath, Common::Files::ExistingTargetPolicy::Replace, true, staged)) &&
+                           SUCCEEDED(staged.Write("staged publication"));
+        if (ready)
+        {
+            Common::Files::Testing::FailNextLocalFileTransactionRenameEx(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+            const HRESULT result = staged.Commit(std::nullopt, nullptr, nullptr, check);
+            Common::Files::Testing::g_nextRenameExFailure.store(S_OK, std::memory_order_relaxed);
+            Check(result == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && visits.preferred && visits.classic && ReadTestBytes(settingsPath) == "new revision",
+                  L"settings transaction: classic fallback rechecks the destination after the preferred rename is refused",
+                  success);
+        }
+        else
+        {
+            Check(false, L"settings transaction: prepare the classic fallback fixture", success);
+        }
+    }
+    CleanupSettingsTestArtifacts(appId);
+#endif
 
     Common::Settings::Settings seed{};
     seed.theme.currentThemeId = L"builtin/light";
     Check(Common::Settings::SaveSettings(appId, seed) == S_OK, L"settings CAS: baseline save succeeds", success);
 
-    const std::wstring extendedSettingsPath = Common::Paths::ToExtendedWin32Path(settingsPath.native());
+    const std::string firstSavedBytes = ReadTestBytes(settingsPath);
+    Common::Settings::Settings competingCreator{};
+    competingCreator.theme.currentThemeId = L"builtin/dark";
+    Check(Common::Settings::SaveSettings(appId, competingCreator) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && ! firstSavedBytes.empty() &&
+              ReadTestBytes(settingsPath) == firstSavedBytes,
+          L"settings create-only publication: a stale missing snapshot preserves the competing file",
+          success);
+
     wil::unique_hfile compatibleReader(
         CreateFileW(extendedSettingsPath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
     Common::Settings::Settings sharedLoad{};
@@ -755,6 +899,19 @@ void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
           L"settings CAS: independent snapshots load from the same revision",
           success);
     firstWriter.theme.currentThemeId = L"builtin/dark";
+    wil::unique_hfile outsideWriter(CreateFileW(extendedSettingsPath.c_str(),
+                                                GENERIC_WRITE,
+                                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                nullptr,
+                                                OPEN_EXISTING,
+                                                FILE_ATTRIBUTE_NORMAL,
+                                                nullptr));
+    const HRESULT heldResult = outsideWriter ? Common::Settings::SaveSettings(appId, firstWriter) : E_UNEXPECTED;
+    outsideWriter.reset();
+    Check(heldResult == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && ReadTestBytes(settingsPath) == firstSavedBytes &&
+              firstWriter.theme.currentThemeId == L"builtin/dark",
+          L"settings CAS: an outside writer prevents publication and preserves the pending change",
+          success);
     Check(Common::Settings::SaveSettings(appId, firstWriter) == S_OK, L"settings CAS: first writer publishes and advances its revision", success);
     staleWriter.theme.currentThemeId = L"builtin/highContrast";
     Check(Common::Settings::SaveSettings(appId, staleWriter) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),
@@ -1529,7 +1686,7 @@ int wmain(int argc, wchar_t** argv)
 
     // Step 3: synthetic-input tests (no external file needed).
     Check(Common::Settings::GetSettingsPath(L"RedSalamanderMonitor").filename() == L"RedSalamanderMonitor-7.0.settings.json",
-          L"Monitor Preferences address the installed Release helper in every app configuration",
+          L"the legacy monitor profile has the same path in every app configuration",
           success);
     TestSyntheticDefaults(success);
     TestSyntheticMinMax(success);
@@ -1542,6 +1699,7 @@ int wmain(int argc, wchar_t** argv)
     TestSettingsStoreConflictAndPrimitiveGuards(success);
     TestFloatingTerminalSettingsPersistence(success);
 #ifdef ENABLE_TESTS
+    TestSettingsProfileMigration(success);
     TestSettingsStoreRecoveryBackupCas(success);
 #endif
     TestConnectionProfileIdentityGuards(success);

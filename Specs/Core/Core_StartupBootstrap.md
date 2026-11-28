@@ -66,41 +66,10 @@ Implementation:
 
 ## Crash Handling (In-Process)
 
-### Unified “Front Door”
-
-RedSalamander installs a best-effort crash handler that:
-
-- Writes a minidump using `MiniDumpWriteDump`.
-- Writes a marker file so the next launch can present a crash UX.
-
-Installation sources:
-
-- `SetUnhandledExceptionFilter` (SEH)
-- `std::set_terminate`
-- CRT purecall + invalid parameter handlers
-
-### Dump Location
-
-- Folder: `%LOCALAPPDATA%\\RedSalamander\\Crashes`
-- Marker: `%LOCALAPPDATA%\\RedSalamander\\Crashes\\last_crash.txt` (UTF-16, contains dump path)
-
-### Crash-on-Next-Launch UX
-
-On a subsequent run, when the main window is ready, RedSalamander:
-
-- Detects the marker file.
-- Prompts the user and offers to open the crash folder in Explorer.
-- Removes the marker before prompting to avoid repeated prompts.
-
-### Deliberate Crash Test
-
-- Command line flag: `--crash-test`
-- Forces a non-continuable exception to validate dump + marker + next-launch UI.
-
-Implementation:
-
-- Code: `RedSalamander/CrashHandler.h`, `RedSalamander/CrashHandler.cpp`
-- Strings: `IDS_CRASH_DETECTED_*` in `RedSalamander/RedSalamander.rc`
+After command-line admission, initialize crash handling before startup services, COM and windows.
+Interactive startup claims the previous crash notice after loading settings and before initializing plugins.
+The crash contract owns fatal dispatch, local artifacts, recovery, retention and the governed probes.
+[Crash handling](Core_CrashHandling.md)
 
 ## Debug-only: Optional installed RedMonitor helper
 
