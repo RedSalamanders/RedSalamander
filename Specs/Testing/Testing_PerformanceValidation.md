@@ -2624,7 +2624,13 @@ case-only Rename through the Local provider, an occupied destination and a read-
 denies delete sharing. The watcher must produce a sharing violation. It rebinds the published object and checks the receipt, spelling and payload. Collect
 `FileOps.Smb.ExactRenameControlUs` for a single item and 100 independent operations, including
 rebind verification. The case explicitly skips a proved absence of exact binding capability.
-Full exact Rename qualification also needs host cancellation and handle peaks.
+Collect `FileOps.Smb.ExactRenameHandleSamples` with the same controls. Its values are the
+whole-process handle count before the loop and the highest sampled count while the source,
+publication and rebind handles are held. A handle created and released inside an API call can
+fall between those checkpoints. Collect `FileOps.Smb.LegacyRenameControlUs`
+for the occupied, free-name and case-only legacy no-replace controls. The destination-scoped hook
+rejects the Ex information class and the provider calls the legacy API on the live share.
+Keep the scheduled cancellation latency and typed result with the direct provider measurements.
 
 ## Live SMB corroborated Rename
 

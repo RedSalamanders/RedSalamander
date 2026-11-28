@@ -1,0 +1,1 @@
+- Verify that one pre-publication Move decision covers Mark of the Web, a named stream, and simulated extended attribute loss.

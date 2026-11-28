@@ -15967,6 +15967,15 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
             return reject(L"the watcher did not block rename authority or the source changed");
     }
 
+    const auto sampleHandles = [](DWORD& peak) noexcept
+    {
+        DWORD count = 0u;
+        if (GetProcessHandleCount(GetCurrentProcess(), &count) == FALSE)
+            return false;
+        peak = (std::max)(peak, count);
+        return true;
+    };
+    DWORD sampledPeak = 0u;
     FileSystemOptions options{};
     options.sizeBytes       = sizeof(options);
     const auto verifyRename = [&](const std::filesystem::path& from, const std::filesystem::path& to, bool occupiedTarget) noexcept
@@ -15993,15 +16002,21 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
                                   receipt.outcomeKnown != FALSE,
                                   receipt.mutationCommitted != FALSE,
                                   receipt.originalStillPresent != FALSE));
-        return confirmed;
+        // Sample while the source, publication and independent rebind still own their handles.
+        return confirmed && (sampleHandles(sampledPeak) || reject(L"could not sample process handles with the exact bindings held"));
     };
 
     if (! verifyRename(source, occupied, true))
         return reject(L"the unrelated destination was not preserved with a known non-commit");
+    DWORD singleBefore = 0u;
+    if (! sampleHandles(singleBefore))
+        return reject(L"could not sample process handles before the single Rename");
+    sampledPeak = singleBefore;
     const auto singleStart = std::chrono::steady_clock::now();
     if (! verifyRename(source, destination, false))
         return reject(L"nested Rename to a new name lacked a matching identity, spelling, receipt or content");
     Debug::Perf::Emit(L"FileOps.Smb.ExactRenameControlUs", L"single", Debug::Perf::ElapsedUs(singleStart), 1u, 0u, S_OK);
+    Debug::Perf::Emit(L"FileOps.Smb.ExactRenameHandleSamples", L"single", 0u, singleBefore, sampledPeak, S_OK);
     if (! verifyRename(destination, caseOnly, false))
         return reject(L"case-only Rename did not publish the exact requested spelling and identity");
 
@@ -16011,6 +16026,10 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         if (! SelfTest::WriteTextFile(nested / std::format(L"before-{}.txt", index), kSourceBytes))
             return reject(L"could not write the 100-item fixture");
     }
+    DWORD batchBefore = 0u;
+    if (! sampleHandles(batchBefore))
+        return reject(L"could not sample process handles before the 100-item control");
+    sampledPeak = batchBefore;
     const auto batchStart = std::chrono::steady_clock::now();
     for (unsigned int index = 0; index < kBatchCount; ++index)
     {
@@ -16018,6 +16037,44 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
             return reject(std::format(L"100-item controlled Rename failed at item {}", index));
     }
     Debug::Perf::Emit(L"FileOps.Smb.ExactRenameControlUs", L"100 items", Debug::Perf::ElapsedUs(batchStart), kBatchCount, 0u, S_OK);
+    Debug::Perf::Emit(L"FileOps.Smb.ExactRenameHandleSamples", L"100 items", 0u, batchBefore, sampledPeak, S_OK);
+
+    const auto verifyLegacyRename = [&](const std::filesystem::path& from,
+                                        const std::filesystem::path& to,
+                                        std::wstring_view detail,
+                                        bool occupiedTarget) noexcept
+    {
+        // These names select the existing test-only hook in the Local provider.
+        constexpr wchar_t kExPath[]  = L"REDSALAMANDER_FILEOPS_RENAME_EX_FAILURE_PATH";
+        constexpr wchar_t kExError[] = L"REDSALAMANDER_FILEOPS_RENAME_EX_FAILURE_ERROR";
+        constexpr wchar_t kExFired[] = L"REDSALAMANDER_FILEOPS_RENAME_EX_FAILURE_FIRED";
+        using Env = RedSalamander::TestSupport::ScopedEnvironmentVariable;
+        try
+        {
+            const std::wstring unsupported = std::to_wstring(ERROR_CALL_NOT_IMPLEMENTED);
+            const Env forcePath(kExPath, to.native());
+            const Env forceError(kExError, unsupported);
+            const Env clearFired(kExFired, std::nullopt);
+            const auto start = std::chrono::steady_clock::now();
+            const bool passed = verifyRename(from, to, occupiedTarget) && GetEnvironmentVariableW(kExFired, nullptr, 0u) != 0u;
+            Debug::Perf::Emit(L"FileOps.Smb.LegacyRenameControlUs", detail, Debug::Perf::ElapsedUs(start), 1u, 0u, passed ? S_OK : E_FAIL);
+            return passed || reject(std::format(L"legacy no-replace control '{}' failed", detail));
+        }
+        catch (const std::system_error& error)
+        {
+            // Environment setup can fail before dispatch. Fail this noexcept fixture after its scopes unwind.
+            Debug::Error(L"SMB legacy Rename environment setup failed (error={}).", error.code().value());
+            return reject(L"could not set up the legacy Rename control");
+        }
+    };
+    const auto legacySource = nested / L"legacy-source.txt";
+    const auto legacyTarget = nested / L"legacy-target.txt";
+    if (! SelfTest::WriteTextFile(legacySource, kSourceBytes))
+        return reject(L"could not write the legacy Rename fixture");
+    if (! verifyLegacyRename(legacySource, occupied, L"occupied", true) ||
+        ! verifyLegacyRename(legacySource, legacyTarget, L"new name", false) ||
+        ! verifyLegacyRename(legacyTarget, nested / L"LEGACY-TARGET.TXT", L"case only", false))
+        return false;
 
     const auto scheduled   = nested / L"scheduled-batch.txt";
     const auto changedCase = nested / L"SCHEDULED-BATCH.TXT";
