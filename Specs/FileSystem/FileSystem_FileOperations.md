@@ -3261,8 +3261,10 @@ cancel), stays `Preparing` and finalizes `NotAttempted + Retained + Canceled` wi
 retained-source actions and cannot make the summary "Outcome unknown". A root that recorded its own
 pre-dispatch status keeps it, and a setup failure before any root is dispatched, with no cancel
 requested, finalizes every root `NotAttempted + Retained + Failed` with that status. A bulk
-provider call and the rename executors can touch every selected root at once and cross the gate
-for all of them together.
+provider call crosses the gate for all selected roots together. Inline Rename crosses at its own
+provider dispatch. Scheduled Batch Rename and Change Case keep every row in `Preparing` through
+read-only preflight and cross the task-wide gate when handing off the mutation schedule. A cancel
+observed before that handoff reports `NotAttempted + Retained + Canceled` with `ERROR_CANCELLED`.
 Terminal storage is compare-and-store:
 invalid indexes and duplicate writes are diagnosed and rejected without changing the first terminal
 truth. Every worker completion path performs the same dense final reduction.
