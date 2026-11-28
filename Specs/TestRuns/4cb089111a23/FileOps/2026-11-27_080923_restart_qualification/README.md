@@ -528,3 +528,17 @@ PR #398 merged at `02755d02bde37f7e8050a366d70db45cb75adefa`. It uses the expand
 | `Phase6_PopupSmokeResizeAndPause` | 3 passed | 20,203 | `20261128T061715Z-60188-1c7eac83e6c849cdbac6c541305aba9f` | `990b1548841a9dc58a58cbaae4260582ede65a0fc845d924b3913066ba3b9b3d` |
 
 All three selections had zero failures and skips, with filtered repository verdict `NOT_EVALUATED`. The File Operations totals include setup and cleanup. The Start now control released the selected task's scheduling gate and kept the competing mutation interlock. Pause all and Resume all were invoked through the popup on an active transfer. The launcher ran from 07:15:24 to 07:18:31 CET and drained. Z archive `20261128T061524Z-71128-50d56e814b354eb9b02eb600842ac867`, launcher result SHA-256 `698aa31fa94e5d68d308fb5324f1e79ee1433fac3e503b95175d1c0ba7ec33a1`.
+
+### Virtual-pane Move folder picker
+
+The exact `15ab5b4d7771c226cd5d9d0159be42a8c98f9305` x64 Release solution built with zero warnings and errors. The first compile found one redundant lambda capture. After correction, a selected-project build passed, and the runner refused its receipt before running a case. The accepted full-solution receipt is `246fb3e053b0c5108b3b939da54205e5b3f83fead20625b0139191c859e76e1a`.
+
+Run `20261128T063212Z-82892-0030aa0230364b128307b599cad7e729` passed `FileOps_ReviewRemediationContracts` and its setup and cleanup with zero failures and skips. The private Dummy pane sent the production item-menu command and used a known Windows folder in place of the Shell picker. Cancel left the source unchanged and created no task or destination file. Accepting the one Copy-only question yielded one completion, matching Local and source bytes, and a published/retained receipt. The runner stayed non-activating, and the virtual source fixture retired. Filtered repository verdict `NOT_EVALUATED`.
+
+Native results SHA-256 `ac4baa8e6a6dca26cfaf287d2ad46888856629e7013156b1023216c49f15f05e`. Native trace SHA-256 `bd23659369b928ffb13619113ee711d7b0da7a610c277eb051a7667fc157ee87`. PR #399 merged at `2592e621ce22925270d0487235e85f12780fcba7`. The corrected Full run also passed `Commands_FileOpsFolderPickerMoveUsesHostQueue` and `folderView_drop_integrity_guards` for Local and same-folder Ctrl+drag. [Merged PR](https://github.com/RedSalamanders/RedSalamander/pull/399)
+
+### Idle Queue Start default
+
+The test-only x64 Release baseline `4c3021081326856b89a89b06a2d2404cb645ce0a` compiled with zero warnings and errors, receipt `a4d864467252afa5fa174b402877b6a44d4e92e5ae249692c8352a70a94fd100`. Focused run `20261128T063633Z-64448-9ad2f46af98e4e8a998d334426ed63ed` reported zero passes, one failure and zero skips. The actual Copy with Options dialog was opened with the Queue mode selected and no active task. Cycling Start did not produce the expected Parallel override. The case failed before reaching the second accepted Move submission. Native result SHA-256 `718a494ac54995fffb9a430596bee44a8ad21d77c378f5fdd2551ffc098c2125`.
+
+The desktop launcher `20261128T063632Z-10556-e3b21274aedc412f9aec1255118fec1b` drained at 07:37:24 CET. Its result SHA-256 is `7a2782b0af0222b1eb48fc8ffb3c0b662b4317a4bff26e5740b05ca2e7dc214b`. The pane commands initialized Start by asking whether the new task would wait. PR #401 initializes Copy and Move with Options from the current mode even when idle. Its corrected repeat is pending. [Start default PR](https://github.com/RedSalamanders/RedSalamander/pull/401)
