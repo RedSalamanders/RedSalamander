@@ -1,0 +1,1 @@
+- Wait for the expanded Completed card to paint before checking its File Operations actions.
