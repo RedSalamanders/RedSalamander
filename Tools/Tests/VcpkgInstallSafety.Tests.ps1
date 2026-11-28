@@ -802,7 +802,7 @@ Describe 'Hosted vcpkg install parity' {
         $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml')
         $keys = @($workflow | Where-Object { $_ -match '^\s*key:.*-vcpkg-' })
         $keys.Count | Should Be 1
-        foreach ($input in @('vcpkg.json','vcpkg-tool.json','vcpkg-install.ps1','Tools/Modules/Build/VcpkgInstallSafety.psm1','Tools/Modules/Build/MSBuildInvocation.psm1','Build/vcpkg-ports/**')) {
+        foreach ($input in @('vcpkg.json','vcpkg-tool.json','vcpkg-install.ps1','Tools/Modules/Build/VcpkgInstallSafety.psm1','Tools/Modules/Build/MSBuildInvocation.psm1','Build/vcpkg-ports/**','Build/vcpkg-triplets/**')) {
             $keys[0].Contains("'$input'") | Should Be $true
         }
         $terminalKeys = @($workflow | Where-Object { $_ -match '^\s*key:.*-terminal-runtime-' })

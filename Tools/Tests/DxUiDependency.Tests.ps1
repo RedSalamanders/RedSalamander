@@ -669,6 +669,7 @@ function Get-DxUiConsumerBuildIdentity {
     $tools = if (Test-Path -LiteralPath $toolsOverride) { (Get-Content -LiteralPath $toolsOverride -Raw).Trim() } else { '14.52.37025' }
     return [pscustomobject]@{Fingerprint=('a'*64);Identity=@{
         apiRevision=$revision;toolset='v145';vcToolsVersion=$tools;windowsSdkVersion='fixture';preferredToolArchitecture=$selected
+        disableStlAnnotations=[bool]$DisableStlAnnotations
     }}
 }
 Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
@@ -711,7 +712,17 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
                     foreach ($configuration in @('Debug','Release','ASan Debug')) {
                         $env:PreferredToolArchitecture = $requestedHost
                         Restore-RSDxUiDependency -RepoRoot $root -MSBuildPath $msbuild -Platform $platform -Configuration $configuration
-                        $resolved = Get-Content -LiteralPath (Join-Path $dependency "DxUi.identity.$platform.json") -Raw | ConvertFrom-Json
+                        $suffix = if ($configuration -eq 'ASan Debug') { '.asan' } else { '' }
+                        $resolved = Get-Content -LiteralPath (Join-Path $dependency "DxUi.identity.$platform$suffix.json") -Raw | ConvertFrom-Json
+                        $resolved.Identity.disableStlAnnotations | Should Be ($configuration -ne 'ASan Debug')
+                        [xml]$props = Get-Content -LiteralPath (Join-Path $dependency "DxUi.resolved.$platform$suffix.props") -Raw
+                        $expectedAnnotationProperty = if ($configuration -eq 'ASan Debug') { 'false' } else { 'true' }
+                        $props.Project.PropertyGroup.DxUiDisableStlAnnotations | Should Be $expectedAnnotationProperty
+                        if ($suffix) {
+                            $ordinary = Get-Content -LiteralPath (Join-Path $dependency "DxUi.identity.$platform.json") -Raw | ConvertFrom-Json
+                            $ordinary.Identity.disableStlAnnotations | Should Be $true
+                            $resolved.Fingerprint | Should Not Be $ordinary.Fingerprint
+                        }
                         $expected = if ($requestedHost -or $configuration -eq 'Release') { 'x86' } else { 'x64' }
                         $resolved.Identity.preferredToolArchitecture | Should Be $expected
                         $resolved.Identity.releaseOptimizationPolicy | Should Be 'Gy-REF-GL-LTCG-full-v1'
@@ -760,9 +771,17 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
             $env:PreferredToolArchitecture = $null
             foreach ($platform in @('x64','ARM64')) {
                 foreach ($configuration in @('Debug','Release','ASan Debug')) {
-                    $json = Invoke-RSDxUiTestMetadataCapture -FilePath $msbuild -Arguments @((Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj'), '/nologo', "/p:Configuration=$configuration", "/p:Platform=$platform", "/p:DxUiRoot=$dxuiFixture", '-getProperty:EnableASAN,PreferredToolArchitecture', '-getItem:ClCompile,ProjectReference')
+                    $json = Invoke-RSDxUiTestMetadataCapture -FilePath $msbuild -Arguments @((Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj'), '/nologo', "/p:Configuration=$configuration", "/p:Platform=$platform", "/p:DxUiRoot=$dxuiFixture", '-getProperty:EnableASAN,PreferredToolArchitecture,RSVcpkgTriplet,RSDxUiResolvedProps', '-getItem:ClCompile,ProjectReference')
                     if ($json.ExitCode -ne 0) { throw "Cannot evaluate consumer profile $platform/$configuration." }
                     $evaluated = ($json.StdOut -join "`n") | ConvertFrom-Json
+                    $expectedTriplet = $platform.ToLowerInvariant() + '-windows'
+                    $expectedProps = "DxUi.resolved.$platform.props"
+                    if ($configuration -eq 'ASan Debug') {
+                        $expectedTriplet += '-asan'
+                        $expectedProps = "DxUi.resolved.$platform.asan.props"
+                    }
+                    $evaluated.Properties.RSVcpkgTriplet | Should Be $expectedTriplet
+                    [IO.Path]::GetFileName($evaluated.Properties.RSDxUiResolvedProps) | Should Be $expectedProps
                     $hostArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
                     if ($hostArchitecture -eq 'X64') {
                         $evaluated.Properties.PreferredToolArchitecture | Should Be 'x64'
@@ -783,6 +802,7 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
                     foreach ($item in $evaluated.Items.ClCompile) {
                         if ($configuration -eq 'ASan Debug') {
                             $evaluated.Properties.EnableASAN | Should Be 'true'
+                            $item.PreprocessorDefinitions | Should Not Match '(^|;)_DISABLE_(STL|STRING|VECTOR)_ANNOTATION'
                             $item.ForcedIncludeFiles | Should Match 'RequireAddressSanitizer\.h'
                             $item.RuntimeLibrary | Should Be 'MultiThreadedDebugDLL'
                             $item.Optimization | Should Be 'Disabled'
