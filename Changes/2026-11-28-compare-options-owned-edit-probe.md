@@ -1,0 +1,1 @@
+- Read the visible Compare Directories edit provider through the owned options window during baseline and open/close checks.

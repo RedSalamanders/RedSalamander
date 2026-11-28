@@ -749,8 +749,9 @@ struct CompareOptionsEditDiagnosticState
                           std::format(L"Compare Directories options visible DX toggle descendant should expose a stable accessible name during {}.", context));
         }
 
-        const auto valueState =
-            CollectVisibleDescendantValuePatternStateWithMessagePump(targetCompare, UIA_EditControlTypeId, L"Compare Directories baseline options edit probe");
+        const auto valueState = CollectWindowHostRawProviderValuePatternStateByName(targetCompare, UIA_EditControlTypeId, {});
+        state.Require(valueState.has_value() || ! uiaPatternStats.has_value() || uiaPatternStats->editControlCount == 0u,
+                      std::format(L"The owned options host must expose the visible edit's Value provider during {}.", context));
         if (valueState.has_value())
         {
             state.Require(! valueState->isReadOnly,
@@ -990,8 +991,9 @@ struct CompareOptionsEditDiagnosticState
                 std::format(L"Compare Directories options visible DX toggle descendant should expose a stable accessible name during cycle {}.", cycle));
         }
 
-        const auto valueState =
-            CollectVisibleDescendantValuePatternStateWithMessagePump(compare, UIA_EditControlTypeId, L"Compare Directories open/close options edit probe");
+        const auto valueState = CollectWindowHostRawProviderValuePatternStateByName(compare, UIA_EditControlTypeId, {});
+        state.Require(valueState.has_value() || ! uiaPatternStats.has_value() || uiaPatternStats->editControlCount == 0u,
+                      std::format(L"The owned options host must expose the visible edit's Value provider during cycle {}.", cycle));
         if (valueState.has_value())
         {
             state.Require(! valueState->isReadOnly,
