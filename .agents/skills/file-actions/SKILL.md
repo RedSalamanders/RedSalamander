@@ -24,7 +24,7 @@ description: File-action ID rules for viewer/editor/user-menu settings, paramete
   - malformed-settings rejection for duplicate IDs that differ only by case
   - parameterized command dispatch with mixed-case configured IDs
 - Update the authoritative docs:
-  - `Specs/Core/Core_SettingsStore.md`
+  - `Specs/Core/Core_Settings.md`
   - `Specs/SettingsStore.schema.json`
   - `Specs/UI/UI_CommandMenuKeyboard.md`
   - `Specs/Testing/Testing_TestCoverage.md`

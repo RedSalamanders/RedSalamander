@@ -10,7 +10,7 @@ description: Theme system and color key management for RedSalamander. Use when a
 Update **ALL** of these locations:
 
 1. `Specs/SettingsStore.schema.json` - Validation + IntelliSense
-2. `Specs/Core/Core_SettingsStore.md` - Durable format and resolution contract
+2. `Specs/Core/Core_Settings.md` - Durable format and resolution contract
 3. `Common/ThemeExpression.h` / `Common/Common/ThemeExpression.cpp` - Shared source parser, resolver, and compiled dynamic evaluator
 4. `Common/ThemeDefinitionIo.h` / `Common/Common/ThemeDefinitionIo.cpp` - Shared JSON5 reader/writer
 5. `RedSalamander/AppTheme.h` / `AppTheme.cpp` - Defaults
@@ -46,7 +46,7 @@ Location: `Specs/Themes/` or `Themes/` next to exe
 
 `formatVersion: 2` is mandatory. Do not add a legacy reader, accept a missing version, or flatten expressions on export. Palette names cannot contain `.`. Expressions are non-nested and use named palette or semantic references.
 
-Use only the functions documented in `Specs/Core/Core_SettingsStore.md`. Parse and resolve with the shared Common APIs; do not add a consumer-local parser. Paint-time sources must be compiled at theme resolution and evaluated with `EvaluateDynamicThemeColor`; paint code must not parse, allocate, lock, or perform I/O.
+Use only the functions documented in `Specs/Core/Core_Settings.md`. Parse and resolve with the shared Common APIs; do not add a consumer-local parser. Paint-time sources must be compiled at theme resolution and evaluated with `EvaluateDynamicThemeColor`; paint code must not parse, allocate, lock, or perform I/O.
 
 ## Runtime Integration
 

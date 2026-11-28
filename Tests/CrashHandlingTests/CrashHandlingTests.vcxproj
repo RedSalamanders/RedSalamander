@@ -106,9 +106,10 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <!-- ShellExecuteW (CrashHandler.cpp ShowPreviousCrashUiIfPresent). Dbghelp.lib is pulled by a
+      <!-- ShellExecuteW (CrashQuarantine.cpp restart recovery). Dbghelp.lib is pulled by a
            #pragma comment in CrashHandler.cpp. -->
       <AdditionalDependencies>shell32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalManifestDependencies>type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*';%(AdditionalManifestDependencies)</AdditionalManifestDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

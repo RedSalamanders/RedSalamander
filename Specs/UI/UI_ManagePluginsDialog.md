@@ -20,7 +20,7 @@ Related specs:
 - `Specs/UI/UI_DxUiSharedGrid.md`
 - `Specs/UI/UI_PreferencesDialog.md`
 - `Specs/Plugins/Plugins_VirtualFileSystem.md`
-- `Specs/Core/Core_SettingsStore.md`
+- `Specs/Core/Core_Settings.md`
 
 ## Dialog Contract
 
