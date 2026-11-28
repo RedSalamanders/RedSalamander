@@ -36,8 +36,10 @@ dependency fingerprints; an old archive cannot reuse the changed policy's output
 
 `Build/BuildConsole.psm1` binds the result, diagnostic, and link implementation to the exact clean CI engine checkout.
 The diagnostic gate also refuses structured MSVC tool exception dumps.
-A native success summary is green only after native exit success, zero logged
-warnings/errors and the entrypoint's existing provenance/attestation checks.
+A native success summary requires native exit success, the final MSBuild footer
+with explicit zero warning and error counts, and the entrypoint's existing
+provenance and attestation checks. Direct console mode asks the file logger for
+the footer. Streamed execution asks the console logger for it.
 Failed builds remain failures. Clean/package-only operations preserve their
 existing meaning and do not pretend to be native compilation.
 

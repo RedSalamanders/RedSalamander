@@ -622,18 +622,19 @@ function Invoke-MSBuild {
         $logPath = New-ProcessLogPath -Prefix 'msbuild'
         $script:LastProcessLogPath = $logPath
         $invocationPlan = Get-RSMSBuildInvocationPlan -UseInteractiveTerminal $script:UseInteractiveTerminal -LogPath $logPath
+        $loggedArguments = @($effectiveArguments + @($invocationPlan.AdditionalArguments))
         if ($invocationPlan.UseDirectConsole) {
             # Preserve MSBuild's native color and message ordering in interactive terminals while still writing a file log.
             $exitCode = Invoke-RSProcess `
                 -FilePath $MSBuildPath `
-                -Arguments @($effectiveArguments + @($invocationPlan.AdditionalArguments)) `
+                -Arguments $loggedArguments `
                 -WorkingDirectory $WorkingDirectory `
                 -AdditionalEnvironment $script:buildVcpkgEnvironment
         }
         else {
             $exitCode = Invoke-RSStreamingProcess `
                 -FilePath $MSBuildPath `
-                -Arguments $effectiveArguments `
+                -Arguments $loggedArguments `
                 -WorkingDirectory $WorkingDirectory `
                 -LogPath $logPath `
                 -AdditionalEnvironment $script:buildVcpkgEnvironment `
@@ -648,7 +649,9 @@ function Invoke-MSBuild {
         }
         Write-Host "Captured log: $logPath" -ForegroundColor DarkGray
         Write-RSMSBuildDiagnosticSummary -LogPath $logPath
-        if($exitCode -eq 0){Assert-NativeBuildDiagnostics -LogPath $logPath}
+        if ($exitCode -eq 0) {
+            Assert-NativeBuildDiagnostics -LogPath $logPath -RequireBuildSummary
+        }
         $global:LASTEXITCODE = $exitCode
         return $exitCode
     }
@@ -1280,7 +1283,7 @@ function Assert-BuildOutputProcessNotRunning {
     $launch=if($app.Count){[string]$app[0].absolute_path_diagnostic}else{''}
     $processLog=Get-Variable -Name LastProcessLogPath -Scope Script -ErrorAction SilentlyContinue
     if($processLog -and (Test-Path -LiteralPath $processLog.Value)){
-        Write-NativeBuildResult -Project RedSalamander -Platform $Platform -Configuration $Configuration -LogPath $processLog.Value -Artifacts $visibleArtifacts -Executable $launch -Duration $nativeEntryElapsed.Elapsed
+        Write-NativeBuildResult -Project RedSalamander -Platform $Platform -Configuration $Configuration -LogPath $processLog.Value -Artifacts $visibleArtifacts -Executable $launch -Duration $nativeEntryElapsed.Elapsed -RequireBuildSummary
     }else{
         foreach($line in @(ConvertTo-RSBuildSummaryLines -Configuration $Configuration -Platform $Platform -Duration $operationDuration -Artifacts @($summaryArtifacts))){Write-Host $line -ForegroundColor Green}
     }
