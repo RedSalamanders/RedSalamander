@@ -285,7 +285,9 @@ its build to correct the witness. The corrected live Windows SMB case passed on 
     for `FileIdInfo`. Windows SMB returned an exact ID. These observations leave the host route and full namespace proof open.
   - [x] Run live exact Rename on Windows SMB with the corrected watcher. The nested, case-only, collision,
     watcher and 100-item checks passed. The [focused record](../../TestRuns/4cb089111a23/FileOps/2026-11-24_161520/README.md)
-    retains the run identity and timing. Release, legacy fallback hops and host cancellation remain open.
+    retains the run identity and timing. The live x64 Release run also passed exact scheduled Batch Rename and
+    Change Case and measured the one- and 100-item controls. Windows SMB legacy fallback hops and scheduled
+    cancellation latency still need evidence. [Release record](../../TestRuns/4cb089111a23/FileOps/2026-11-26_072635_windows_smb_scheduled_rename/README.md)
   - [x] Implement and exercise corroborated F2 Rename on the configured Samba endpoint without exact file identity.
     The non-activating x64 Debug run passed action, refusal, cancel, throughput and fixture cleanup controls.
   - [ ] Verify FTP and SCP with isolated test credentials. The dedicated profile selectors are registered and the
