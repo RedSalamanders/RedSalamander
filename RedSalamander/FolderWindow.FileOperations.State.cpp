@@ -14927,22 +14927,11 @@ void FolderWindow::FileOperationState::Task::MarkSourceItemMutationPossible(size
 
 void FolderWindow::FileOperationState::Task::EnterSourceItemsMutationGate() noexcept
 {
-    // Per-item Copy/Move/Delete reach a provider only through QualifiedItemPolicy::Process, which
-    // marks each selected root as it is dispatched. Batch Rename can touch every root at once, so
-    // it keeps the task-wide gate. Inline Rename remains Preparing through its validation and
-    // binding work, then marks its single root immediately before the provider mutation call.
-    if (_executionMode == ExecutionMode::PerItem && (_operation == FILESYSTEM_COPY || _operation == FILESYSTEM_MOVE || _operation == FILESYSTEM_DELETE))
+    // The Rename executors own their dispatch gates. The per-item Copy/Move/Delete
+    // executor marks each root separately as it is dispatched.
+    if (_operation == FILESYSTEM_RENAME ||
+        (_executionMode == ExecutionMode::PerItem && (_operation == FILESYSTEM_COPY || _operation == FILESYSTEM_MOVE || _operation == FILESYSTEM_DELETE)))
         return;
-    if (_operation == FILESYSTEM_RENAME)
-    {
-        const std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans = LoadPlans();
-        if (plans && plans->size() == 1u)
-        {
-            const auto* rename = std::get_if<FileOperations::RenamePlan>(&plans->front());
-            if (rename != nullptr && rename->origin == FileOperations::RenameOrigin::InlineRename)
-                return;
-        }
-    }
     MarkSourceItemsMutationPossible();
 }
 
@@ -16527,6 +16516,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRename() noexcept
     // batch preflight; the real bound mutation then owns and presents the conflict.
     g_fileOpsBatchRenameBeforeMutationPausePoint.Pause(5'000ull);
 #endif
+    if (CancelRequestedDurable())
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
 
     struct ExecutionContext final
     {
@@ -16565,6 +16556,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRename() noexcept
         }
     };
 
+    // Read-only source and destination preflight is finished. The scheduler may
+    // now dispatch any admitted row, so fallback receipts become conservative.
+    MarkSourceItemsMutationPossible();
     const auto executionStartedAt        = std::chrono::steady_clock::now();
     BatchRenameExecutionResult execution = RunBatchRenameExecutionEngine(_cancelled,
                                                                          rename->endpoint.pathIdentity.value(),

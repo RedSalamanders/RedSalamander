@@ -215,6 +215,8 @@ remain in the interactive suite.
 
 On a registered Windows SMB share with exact binding, `FileOps_SmbExactRenameProvider` also verifies the host File Operations admission for a Batch Rename to a new name and a Change Case of the same file. It requires the exact completion receipt and spelling, unchanged content and an untouched unrelated destination. `FileOps.Smb.SharedRenameTaskUs` records admission through completion for each origin. The case uses its existing owned fixture. When the provider opens the file and establishes that exact identity is unavailable, both scheduled origins must return a failed, not-attempted receipt and preserve the source spelling, bytes and unrelated sibling. The case records both refusal timings before reporting the exact-binding checks as skipped. The owned Windows SMB control exercises this path with test-only identity suppression. Live Samba runs use the provider's actual capabilities.
 
+On the exact route, the same case pauses a scheduled Batch Rename before provider mutation and requests cancellation. The task must report `ERROR_CANCELLED` with no publication, preserve the source and unrelated sibling, and leave the new name absent. `FileOps.Smb.SharedRenameCancelUs` measures the interval from the cancellation request to the completion event.
+
 Remote scheduled Rename witnesses use a private `FolderWindow` and engine for their completion receipts. The remaining
 Win32 audit classifies the owned parent by source path, the `Owned remote Rename test` title, the hidden `WS_POPUP`
 style and the fixed fixture geometry. The test uses the activation blocker and retires its private tasks on exit.
@@ -1259,11 +1261,12 @@ the same synchronous reporter and counter path as the pointer overload.
   commands. Direct Batch Rename and Change Case must warn before any dialog. The subsequent
   Inline Rename verifies the source and occupant bytes. Cleanup verifies each generated payload
   and removes only the named fixture entries nonrecursively.
-  `FileOps_SmbRecycleRefusal` uses one fresh child of `path.smb.primary`. It checks that the guarded Local Shell route
-  reports a known non-commit on the share, offers one item-specific permanent-delete decision on the independently
-  probed exact or by-name route and retains the same bytes
-  after Skip. Cleanup verifies the file contents and removes only that file and its empty parent. A missing or
-  unreachable registration is an environment skip.
+  `FileOps_SmbRecycleRefusal` runs the SMB-only selection and a mixed selection with a file in the marked Local
+  sandbox. Each run uses a fresh child of `path.smb.primary`. The guarded Local Shell route reports a known
+  non-commit on the share, offers one item-specific permanent-delete decision on the independently probed exact or
+  by-name route, and retains the same bytes after Skip. The mixed selection verifies the Local result independently
+  and requires exactly one recycled test item to be purged. SMB cleanup verifies the file contents and removes only
+  that file and its empty parent. A missing or unreachable registration is an environment skip.
   `FileOps_SmbMixedMove` uses one fresh child of `path.smb.primary` and the marked Local sandbox.
   When the SMB source opens without exact identity, it verifies the provider's corroborated source
   facts before admission. It uses direct task controls to check the Native Local and Managed SMB

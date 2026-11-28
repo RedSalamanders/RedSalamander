@@ -1,0 +1,1 @@
+- Report the source as retained when scheduled Rename is canceled before dispatch, with live SMB coverage for cancellation and mixed Recycle.
