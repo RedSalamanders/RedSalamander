@@ -91,3 +91,19 @@ Five x64 Release Commands selections ran in a bounded interactive window on `3db
 The non-activating x64 Release PrePush on `877f278c519d793634bd39c47b2fc25e1f8167cd` and receipt `5d053d1d27f54cfccd7251357b20f2a110691695acc7dd9269beb183686426ba` finished with 1,817 passes, three failures and 30 skips. Four desktop entries were pending. All three failures were stale source checks in Tools Pester. The first expected test failure routing before the dedicated production crash probe. The second expected the product's four switches to appear inside the immediate guard. The third expected the settings recovery record to use WIL's overloaded address-of. Settings Schema and Crash Handling passed in that run.
 
 Archive `20261128T100117Z-83640-147a5637137d4da591e14d7cc8d88708` has terminal summary SHA-256 `fb4f146c9ca835421d7bb2933e6953eefa73e3f2117a4fb510357fd72b990ed1`. The original failed verdict is preserved. The focused replay and correction checks have independent evidence.
+
+### Rechecks on the merged settings baseline
+
+Exact `82b8758f03f52998ce4a5cfc56a6a5b4b393fb53` built x64 Release with zero warnings and errors, receipt `996a5b123cb7285a830cace744b5898259e2bf8ea128aa29d518eb406c704982`. The scoped tests below ran without activation.
+
+| Selection | Pass / fail / skip | Archive | Results SHA-256 |
+|---|---:|---|---|
+| Guarded Pack and Unpack | 3/0/0 | `20261128T110519Z-84236-eb886a48970049048c0912d50ab36ee6` | `a4ea586c37cce0f2f9e4821d53935d355e0b6125b28c0b4d7404ba31c489dcf5` |
+| Queued Copy-only Cut | 9/0/0 | `20261128T110608Z-84236-222744258c0942d98d4d8958d8d48b7b` | `677977f3ef637a2e11317ed8dd9c86c822d384c8396b8ec506838dadb104a955` |
+| Combined staged metadata Skip | 3/0/0 | `20261128T110648Z-84236-255d07278747456b9e9754260e7be12d` | `d522dd54ac5f11e674ff9ebed84a65e4f2e44fefd0cc77836e14aa1de0525436` |
+| Harness source contracts | 192/0/0 | `20261128T105838Z-19512-ac9bb4c2afca41009228519aaab08ac2` | `ba0bdae59a4b6d65856c4dbd2a00ae623478c4517a4e7952f8a7f266a8a014d0` |
+| Failure-report routing | 20/0/0 | `20261128T110518Z-3768-408071160e674ce1a9f2d2cbd87c4f2b` | `e6db77895a2dd44fab0ef7dbd5da0f1c80b83f68a9270f31d71ce619eee4632b` |
+
+The Copy-only trace records three repetitions of two declines with the same Cut generation, no consumption, and unchanged task order. The staged Skip preserved both files and both source streams, removed the unpublished stage and emitted exactly one combined mask 14. The extended-attribute bit was simulated. The raw staged metadata SHA-256 is `ebaac6200082f08dffe6661a66ba8eef3e4ae32ad21ae31ce0b34c0275b8480d`.
+
+PR #411 merged the two explicit Shell imports at `7cb4b9cd628e7e42c3c91ce65609a15bde8da05f`. The final I66 candidate takes those files from main and carries the standalone Viewer PE prerequisite and File Operations changes. [Merged Shell API PR](https://github.com/RedSalamanders/RedSalamander/pull/411)

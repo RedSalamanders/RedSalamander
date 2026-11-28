@@ -1,0 +1,1 @@
+- Include the Windows and COM prerequisites directly in the standalone Viewer PE test runner for the standard preprocessor build.

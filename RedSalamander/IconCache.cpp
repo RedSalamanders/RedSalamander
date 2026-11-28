@@ -5,7 +5,7 @@
 
 #include <cwctype>
 
-#define WIN32_LEAN_AND_MEAN
+#define WINDOWS_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 

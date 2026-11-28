@@ -1,0 +1,1 @@
+- Declare the Windows Shell APIs used by the icon cache and host command-line parser explicitly.

@@ -16,7 +16,6 @@
 #include <utility>
 
 #include <objbase.h>
-
 #include <shellapi.h>
 
 #pragma warning(push)

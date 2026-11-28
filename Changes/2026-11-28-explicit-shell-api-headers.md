@@ -1,1 +1,0 @@
-- Include Windows SDK prerequisites directly in the icon cache, host argument parser, and standalone Viewer PE test runner for the standard preprocessor build.
