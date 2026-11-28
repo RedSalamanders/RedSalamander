@@ -2144,8 +2144,10 @@ stop carries the same note), and a removal records the Information note `delete.
 use this route; a Managed Move uses its file delete only for its own source, as invariant 15 states (I63 B7). Only the
 Local provider offers it for a binding provider (D-7.3); providers without binding keep C10.
 
-Pack and Unpack delete-after-success submit ordinary exact `DeletePlan` tasks after the archive
-contract succeeds. On an identity-less location they refuse cleanup and keep the sources.
+With Delete after approved, regular-file Pack submits an exact `DeletePlan` after successful archive
+publication. Unpack submits an exact `DeletePlan` after complete, successful extraction. A Pack
+selection containing a directory uses the exact tree cleanup phase in the same Pack task.
+On an identity-less location, cleanup is refused and the sources are kept.
 
 Pack offers stored ZIP and 7z. Unpack accepts ZIP input and uses the 7-Zip decoder as a fallback when the stored ZIP reader reports unsupported input.
 

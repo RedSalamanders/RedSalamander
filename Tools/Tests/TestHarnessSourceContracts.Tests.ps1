@@ -5740,10 +5740,25 @@ Specs\TestRuns\local_scratch
         $commands | Should Match 'ValidateArchiveOutputOutsideSelectedSources\(selectedPaths,\s*archivePath\.value\(\)\)'
         $commands | Should Match 'sourceIsDirectory[\s\S]{0,220}IsSameOrDescendantNormalizedWindowsPath'
         $commands | Should Match 'IDS_MSG_ARCHIVE_OUTPUT_INSIDE_SOURCE'
-        $compactCommands = $commands -replace '\s+', ' '
-        $compactCommands | Should Match 'if \(! completed\.published\) \{.{0,700}return; \} .{0,460}if \(request\.deleteAfter\)'
-        $compactCommands | Should Match 'if \(event\.hr != S_OK \|\| completed\.hr != S_OK \|\| ! exactCleanup \|\| ! publishedArchive \|\|.{0,1040}return; \} FolderView::FileOperationRequest deleteRequest'
-        $compactCommands | Should Match 'deleteRequest\.operation = FILESYSTEM_DELETE; deleteRequest\.origin = FolderView::FileOperationRequest::Origin::PackCleanup.{0,670}cleanup\.publishedArchive = std::make_shared<const wil::unique_hfile>\(std::move\(publishedArchive\)\);.{0,120}StartFileOperationFromFolderView\(pane, std::move\(deleteRequest\), &cleanup\)'
+        $packCompletion = [regex]::Match($commands, '(?ms)^    \]\(const FileOperationCompletedEvent& event\)\s*\{\s*const auto& request = pack->request;.*?(?=^    \}\);)')
+        $packCompletion.Success | Should Be $true
+        $completion = $packCompletion.Value -replace '\s+', ' '
+        $completion | Should Match 'if \(! completed\.published\) \{.{0,700}return; \} .{0,460}if \(request\.deleteAfter\)'
+        $completion | Should Match 'const bool treeCleanup = exactCleanup && exactCleanup->containsDirectory;'
+        $fileCleanupProof = 'const bool fileCleanupAvailable = exactCleanup && publishedArchive && ' +
+            'cleanupState\.fileSystem\.get\(\) == exactCleanup->fileSystem\.get\(\) && ' +
+            'cleanupState\.pluginId == exactCleanup->pluginId && cleanupState\.instanceContext == exactCleanup->instanceContext;'
+        $completion | Should Match $fileCleanupProof
+        $fileCleanupAdmission = 'if \(event\.hr != S_OK \|\| completed\.hr != S_OK \|\| \(! treeCleanup && ! fileCleanupAvailable\)\) ' +
+            '\{[^{}]*return; \} if \(! treeCleanup\) \{ FolderView::FileOperationRequest deleteRequest'
+        $completion | Should Match $fileCleanupAdmission
+        $completion | Should Match 'deleteRequest\.operation = FILESYSTEM_DELETE; deleteRequest\.origin = FolderView::FileOperationRequest::Origin::PackCleanup.{0,670}cleanup\.publishedArchive = std::make_shared<const wil::unique_hfile>\(std::move\(publishedArchive\)\);.{0,120}StartFileOperationFromFolderView\(pane, std::move\(deleteRequest\), &cleanup\)'
+
+        $packWorker = [regex]::Match($commands, '(?ms)^HRESULT FolderWindow::FileOperationState::Task::ExecutePackArchive\(.*?(?=^void FolderWindow::CommandPack\()')
+        $packWorker.Success | Should Be $true
+        $worker = $packWorker.Value -replace '\s+', ' '
+        $worker | Should Match 'if \(result\.published && treeApproved\) \{[^{}]*result\.cleanupHr = _archiveTask->publishedArchive \? BindPackTree\(inventory, \*roots, checkpoint, &approvedTree, strict\) : E_UNEXPECTED;'
+        $worker | Should Match 'if \(result\.cleanupHr == S_OK\) result\.cleanupHr = DeletePackTree\(strict, checkpoint, removed\);'
         $commands | Should Not Match 'DeletePackedSources\('
     }
 
