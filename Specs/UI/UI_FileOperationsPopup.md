@@ -366,6 +366,7 @@ The footer saves the selected mode through the deferred settings writer as the d
 submissions. A new owner loads that default, and missing settings use Queue. Starting a single task
 with an explicit mode leaves the saved default alone. The selecting owner's existing live transition
 and per-task safety interlocks continue to apply.
+Copy and Move with Options initialize Start from the current Queue/Parallel default even when idle.
 The Commands check opens consecutive Copy and Move dialogs while idle in Queue mode and chooses
 Parallel in each. Both tasks use Parallel while the current mode and saved default are preserved.
 

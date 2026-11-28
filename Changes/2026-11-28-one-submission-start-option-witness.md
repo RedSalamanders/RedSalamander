@@ -1,1 +1,1 @@
-- Verify that the Start choice in Copy and Move with Options applies to one submission and preserves the Queue/Parallel default.
+- Show the current Queue/Parallel default in Copy and Move with Options when the queue is empty. Apply a different Start choice to that task.

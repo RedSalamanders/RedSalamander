@@ -7660,9 +7660,10 @@ public:
                           TextFileEqualsForFileOpsPrompt(destDir / name, "pane-transfer-options") &&
                           waitForPathState(sourceDir / name, operation == FILESYSTEM_COPY, SelfTest::Scale(500ms)),
                       L"Accepted Copy/Move options must finish with exact destination bytes and correct source disposition.");
-        state.Require(observed->execution == HOST_FILE_OPERATION_EXECUTION_PARALLEL && fileOps->GetQueueNewTasks() &&
-                          savedQueueMode() == originalSavedQueueMode,
-                      L"Starting one Copy or Move in the opposite mode must preserve the current and saved Queue/Parallel default.");
+        state.Require(observed->execution == HOST_FILE_OPERATION_EXECUTION_PARALLEL,
+                      std::format(L"Changing Start from the idle Queue default must select Parallel. Observed mode {}.", observed->execution));
+        state.Require(fileOps->GetQueueNewTasks() && savedQueueMode() == originalSavedQueueMode,
+                      L"Starting one Copy or Move in Parallel must preserve the current and saved Queue default.");
         if (! state.failure.empty())
             return false;
         completedAcceptedTask = true;
