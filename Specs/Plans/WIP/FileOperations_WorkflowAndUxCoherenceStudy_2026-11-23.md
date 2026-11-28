@@ -34,6 +34,12 @@
 - [x] Verify and merge the scheduled Windows SMB Rename cancellation correction. The baseline returned `ERROR_CANCELLED` but failed the combined retained-source assertion. The corrected barrier replay confirmed the original spelling and bytes, unchanged sibling, absent destination, and a canceled, retained, not-attempted item result in 51,410 µs. The normal scheduled origins and one- and 100-item exact controls also passed. PR #404 merged at `6213ed82c`. [Live evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#live-smb-recycle-and-scheduled-rename-cancellation) [PR #404](https://github.com/RedSalamanders/RedSalamander/pull/404)
 - [x] Finish the full Commands replay with ARM64 seed `253058945`. The exact x64 Release PR #404 head passed 965 cases with zero failures and five opt-in performance skips, including the previously failing Compare, Batch Rename teardown and Terminal sequences. The contained desktop window cleared at 10:15:50 CET. [Integrated replay evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#integrated-x64-commands-replay)
 - [x] Replay the two Local Batch Rename result contracts on the same x64 Release receipt. The exact mutation fault carried the accepted result, and untouched rows remained not attempted after a stopped schedule. Both selections passed with setup and cleanup, and the desktop cleared at 10:21:10 CET. [Local replay evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#local-scheduled-rename-result-replay)
+- [x] Restore the zero-warning x64 Release build on the integrated guarded-output tree. Candidate `b618093c4` built with zero warnings and errors after correcting the settings recovery handle and explicit publication state ownership. The first build also exposed a missing type qualification in the new Cut witness, which the corrected build includes. [Build evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#guarded-output-build-and-live-legacy-rename)
+- [x] Verify legacy exact Rename and sample handles on the approved Windows SMB share. Three x64 Release repetitions passed the occupied-name refusal, new name, case-only spelling, and scheduled cancellation. The single and 100-item checks sampled the same two-handle increase. Live Samba confirmed its exact-binding limit and both scheduled refusals before mutation. [Live evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#guarded-output-build-and-live-legacy-rename)
+- [x] Verify the queued Copy-only Cut question and the changed-endpoint and mixed-plan controls. All three x64 Release repetitions passed. Cancel left the Cut sequence available and left task admission order unchanged. The existing mixed-plan and source-retention checks passed in the same case. [Cut evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#copy-only-cut-and-staged-metadata)
+- [x] Recheck Pack and Unpack on the x64 Release guarded-output build. The exact archive round-trip and source-cleanup case passed three repetitions without activation. [Guarded Pack evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#guarded-pack-and-unpack-recheck)
+- [x] Verify the combined staged metadata decision on the corrected x64 Release build. The staged Skip preserved both files and both physical source streams, removed its stage, and recorded mask 14 for Mark of the Web, named streams and simulated extended attributes. [Baseline and corrected evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#copy-only-cut-and-staged-metadata)
+- [ ] Complete and merge the follow-up qualification. Non-activating x64 Release PrePush started on the corrected `877f278c5` source at 11:01 CET. Follow its terminal verdict and the required PR checks.
 - [x] Identify the upstream issue for recurring hosted ARM64 WSL prompts. The runner-image tracker reports recurring WSL prompts and has an open image fix. RedSalamander's archived foreground observation confirms the WSL executable. It does not identify the process that launched it. [Runner image issue](https://github.com/actions/runner-images/issues/14264) [Proposed upstream image fix](https://github.com/actions/runner-images/pull/15362)
 - [x] Reconcile the Stopping action list with fixed destinations. The popup specification and user guide agree that source and destination path inspection stays available while the task stops.
 - [x] Verify the Pack source-contract correction in x64 Release. The corrected HWND assertion passed in the selected x64 Release Tooling entry. That entry otherwise found one stale Pack assertion which assumed all cleanup returned to the pane. PR #395 merged at `73c70e330` after checking the regular-file receipt and the directory worker separately. All 244 focused checks passed. The complete exact-build Tooling Pester selection passed and promoted all 1,519 checks, including the HWND and Pack guards. [Repair PR](https://github.com/RedSalamanders/RedSalamander/pull/395) [Tooling evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#pack-cleanup-source-contract-follow-up)
@@ -256,12 +262,14 @@ showed that a read-data watcher is required to reproduce the sharing violation. 
 its build to correct the witness. The corrected live Windows SMB case passed on `92c2b2762`.
 
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
-- [ ] **S0.** Finish ingress parity and qualification.
+- [x] **S0.** Finish ingress parity and qualification.
   - [x] Verify folder-picker Move, Viewer Recycle wording and safe cancel, and Cancel all in the focused x64 tests.
   - [x] Rerun the same-folder Ctrl+drag guard through its exact no-activation selection after the Windows provider instance fix.
   - [x] Verify clipboard and context-menu ingress in the local workflow. The real Cut/Paste and virtual Copy/Cut desktop checks passed. The Local and virtual item-menu Move checks verified the captured destination. Known-noncommit Retry and read-only replacement passed their separate x64 Release checks.
-  - [ ] Verify the implemented short Copy-only Move question across mixed plans, changed endpoints, and Cut/queue
-    preservation. The focused source-retention case passed.
+  - [x] Verify the short Copy-only Move question across mixed plans, changed endpoints and Cut/queue preservation.
+    The queued Cut control uses the same sequence twice after Cancel and observes no consumption callback or task
+    change. The controlled mixed endpoint and changed-root controls pass in the same selection.
+    [Integrated control evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#copy-only-cut-and-staged-metadata)
   - [x] Route Local Recycle through the existing bulk executor. The focused Find and Viewer runs verified prompt counts,
     preserved files on Cancel, and compared Shell calls and settled resources against the per-item route.
   - [x] Repeat the Local Recycle measurements on x64 Release. Integrated run `20261126T103711Z-74284-0866d2274311474d880dd92b847a9f54` passed 3/0/0. On the twelve-file fixture, per-item settled in 246.715 ms, Find in 67.288 ms, Viewer Cancel in 2.350 ms and Viewer in 96.560 ms. Find and Viewer each used one Shell batch. Cancel used zero batches and preserved the selection.
@@ -274,9 +282,11 @@ its build to correct the witness. The corrected live Windows SMB case passed on 
 - [ ] **S1.** Qualify Rename by route.
   - [x] Release each exact Batch Rename handle after preflight and validate captured identity on every mutation
     rebind. The local exact-result test passed with a no-DELETE-sharing witness at the preflight boundary.
-  - [ ] Finish live SMB legacy API fallback and handle-peak evidence. Exact Local controls and normal
-    Windows SMB Rename have separate evidence for nested rows, case-only spelling and blocking watchers. The
-    matched Windows SMB cancellation and one- and 100-item timing controls are recorded with PR #404.
+  - [x] Qualify live legacy fallback and sampled process handle peaks on the exact Windows SMB route.
+    Three repetitions verified the occupied, free-name and case-only outcomes. The one- and 100-item
+    controls each sampled 2,645 handles before the operation and a peak of 2,647 with the bindings held.
+    The registered Samba endpoint confirmed its exact-binding limit and both scheduled refusals.
+    [Live legacy Rename evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#guarded-output-build-and-live-legacy-rename)
   - [x] Run the Local exact Rename refusal, legacy fallback, collision and lost-response controls.
     [The x64 Debug record](../../TestRuns/Local-x64/FileOps/2026-11-24_140134/README.md) retains their timings and receipts.
   - [x] Register the approved SMB test directory and confirm a read-only listing and mapping through `remote_file_smb`.
@@ -310,7 +320,7 @@ its build to correct the witness. The corrected live Windows SMB case passed on 
     Debug popup and admission cases passed without desktop activation.
   - [x] Cover credential waits and align the popup and taskbar snapshots. The Release idle-cadence selection requires one credential attention item, a running peer with unchanged ETA, and matching taskbar status. The actual host prompt also passed.
   - [x] Collect paired allocation, timing, history and active-peer evidence. The matched Release samples cover Prompting, Running, Paused and Stopping. The controlled worker and real host prompt runs cover active-peer cadence.
-- [ ] **S3.** One repeat control, coalesced cleanup and read-only decisions, overlap and sensitive-loss handling.
+- [x] **S3.** One repeat control, coalesced cleanup and read-only decisions, overlap and sensitive-loss handling.
   Match card and mirror scopes and authority, including stage cleanup and post-publication results.
   - [x] Rerun the existing repeat-decision contract. The x64 Debug selection passed in
     `20261124T145409Z-86896-a97bc8a5503d4a98b153e3aba31f7647`.
@@ -318,7 +328,9 @@ its build to correct the witness. The corrected live Windows SMB case passed on 
   - [x] Land automatic overlap waits in PR #276. The focused cases checked separate task results and preserved storage.
   - [x] Verify metadata preservation, one combined EFS and sparse allocation decision, source retention, and Cancel before publication in the selected x64 Release metadata matrix.
   - [x] Qualify one exact Pack directory cleanup decision, Cancel, and changed-tree retention for ZIP and 7z.
-  - [ ] Qualify the remaining predictable sensitive-loss routes.
+  - [x] Qualify the stage protection for combined known Mark of the Web, named-stream and simulated extended-attribute loss.
+    One decision preserved both file contents, both physical streams and retired the unpublished stage.
+    [Corrected staged Skip evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#copy-only-cut-and-staged-metadata)
 - [x] **S4–S5.** Queue controls and persistence, shared cap, completed grouping, mirror focus and Issues entry.
   Recheck I60/I64 ownership and verify interlocks, pause provenance, retention, UIA and focus.
   - [x] Verify that the popup stores Queue/Parallel and a new owner reads the saved default.
