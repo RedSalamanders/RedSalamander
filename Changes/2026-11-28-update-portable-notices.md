@@ -1,0 +1,1 @@
+- Update the portable third-party notice inventory to match the pinned dependencies and runtimes.

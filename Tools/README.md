@@ -14,6 +14,11 @@ MSBuild takes its include and link inputs from the repository properties. SDK ad
 checks raw overrides before child binding clears ambient compiler and linker flags.
 Parent environment and existing lock order remain unchanged.
 
+Use `build.ps1 -Analyze` for MSVC analysis of the selected source profiles.
+Each run keeps its binaries and intermediates in a fresh `.build/analysis`
+directory. See the [diagnostic analysis contract](../Specs/Build/Build_Toolchain.md#diagnostic-code-analysis)
+for prerequisites and receipt boundaries.
+
 Residual-build checks exempt a linked RedSalamander worktree only for a strict,
 side-effect-free MSBuild property query with matching root policy. The check requires
 MSBuild vcpkg integration disabled for scripted restore (`VcpkgEnabled=false`,

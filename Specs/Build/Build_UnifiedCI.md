@@ -65,6 +65,12 @@ qualify production. A focused pass is not Full repository or release qualificati
 
 ## Manual and extended qualification
 
+The trusted-main `benchmark.yml` workflow dispatch collects the
+[paired small-file Copy study](../Testing/Testing_PerformanceValidation.md#paired-small-file-copy-command)
+on native x64 with the pinned Release toolchain and an owned sandbox. The product
+performance review uses the retained study and its calibration. The standard
+Release regression and production admission keep their own receipts.
+
 Debug, ASan, paired benchmarks, repeated stress, and other extended obligations run through explicit manual
 qualification. Their canonical warnings, native-host rules, budgets, evidence preservation and desktop leases remain
 unchanged. There are no scheduled native builds.

@@ -57,6 +57,10 @@
     Reuses a triplet installed by this script when its restore inputs match.
     An explicit Clean still installs from staging.
 
+.PARAMETER Asan
+    Install the instrumented x64-windows-asan or arm64-windows-asan triplet for ASan Debug.
+    This switch selects the triplet for each requested platform and cannot be combined with -Triplet.
+
 .PARAMETER RepairInterrupted
     Repairs an interrupted installation for one canonical platform under its
     dependency lock. Requires Clean and an explicit x64 or ARM64 Platform. Clears the marker after a successful install.
@@ -137,7 +141,9 @@ param(
 
     [Parameter(HelpMessage = "Show help and exit")]
     [Alias("h")]
-    [switch]$Help
+    [switch]$Help,
+
+    [switch]$Asan
 )
 
 $ErrorActionPreference = "Stop"
@@ -145,6 +151,10 @@ $ErrorActionPreference = "Stop"
 if ($Help) {
     Get-Help $PSCommandPath -Full
     return
+}
+
+if ($Asan -and $Triplet) {
+    throw 'Use -Asan or -Triplet to select a vcpkg triplet.'
 }
 
 if ($RepairInterrupted -and (-not $Clean -or -not $PSBoundParameters.ContainsKey('Platform') -or $Platform -notin @('x64', 'ARM64') -or $Triplet)) {
@@ -186,15 +196,13 @@ if (-not [string]::IsNullOrWhiteSpace($VcpkgRoot)) {
     }
 }
 
-$tripletsToInstall = @()
-
-if ($Triplet) {
-    $tripletsToInstall = @($Triplet)
-} elseif ($Platform -eq "All") {
-    $tripletsToInstall = @("x64-windows", "arm64-windows")
+$tripletsToInstall = if ($Triplet) {
+    @($Triplet)
 } else {
-    $arch = if ($Platform -eq "ARM64") { "arm64" } else { "x64" }
-    $tripletsToInstall = @("$arch-windows")
+    $platforms = if ($Platform -eq 'All') { @('x64', 'ARM64') } else { @($Platform) }
+    foreach ($targetPlatform in $platforms) {
+        Get-RSVcpkgTargetTriplet -Platform $targetPlatform -Asan:$Asan
+    }
 }
 
 $tripletsToInstall = @($tripletsToInstall | ForEach-Object { Assert-RSVcpkgTripletLeafName -Triplet $_ })
@@ -379,6 +387,19 @@ try {
             -Scope $sharedDependencyScope
     }
 
+    if ($RepairInterrupted) {
+        # The platform marker covers both triplets. Repair any ASan tree that a writer could
+        # have partially published, even when the caller uses the ordinary repair command.
+        $normalTriplet = Get-RSVcpkgTargetTriplet -Platform $Platform
+        $asanTriplet = Get-RSVcpkgTargetTriplet -Platform $Platform -Asan
+        $asanInstall = Join-Path $installBaseRoot "$($Platform.ToLowerInvariant())/$asanTriplet"
+        $asanStage = Join-Path $stagingRoot $asanTriplet
+        $tripletsToInstall = @($normalTriplet)
+        if ($Asan -or (Test-Path -LiteralPath $asanInstall) -or (Test-Path -LiteralPath $asanStage)) {
+            $tripletsToInstall += $asanTriplet
+        }
+    }
+
     New-Item -ItemType Directory -Path $installBaseRoot -Force | Out-Null
     New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
 
@@ -393,9 +414,14 @@ foreach ($triplet in $tripletsToInstall) {
 
     # Resolve the same compiler-pinned overlay for both the reuse check and vcpkg.
     $tripletOverlayDirectory = Resolve-RSVcpkgSafeChildPath -Root $tripletOverlayRoot -Child $platformScopeName -Description "triplet overlay directory"
+    $tripletSource = if ($triplet -in @('x64-windows-asan', 'arm64-windows-asan')) {
+        Join-Path $repoRoot "Build/vcpkg-triplets/$triplet.cmake"
+    } else {
+        Resolve-RSVcpkgStockTripletPath -RegistryRoot $vcpkgRegistryRoot -Triplet $triplet
+    }
     $tripletOverlay = Update-RSVcpkgOverlayTriplet `
         -ProjectRoot $repoRoot `
-        -StockTripletPath (Resolve-RSVcpkgStockTripletPath -RegistryRoot $vcpkgRegistryRoot -Triplet $triplet) `
+        -StockTripletPath $tripletSource `
         -Toolset $msvcToolset `
         -OutputDirectory $tripletOverlayDirectory
     Write-Host "Overlay triplet $($tripletOverlay.Path) $(if ($tripletOverlay.Changed) { 'written' } else { 'unchanged' })" -ForegroundColor Cyan

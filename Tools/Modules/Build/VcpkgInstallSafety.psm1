@@ -782,6 +782,16 @@ function Initialize-RSVcpkgToolContext {
     }
 }
 
+function Get-RSVcpkgTargetTriplet {
+    param(
+        [Parameter(Mandatory)][ValidateSet('x64','ARM64')][string]$Platform,
+        [switch]$Asan
+    )
+    $triplet = $Platform.ToLowerInvariant() + '-windows'
+    if ($Asan) { $triplet += '-asan' }
+    return $triplet
+}
+
 function Get-RSVcpkgBuildEnvironment {
     <#
     .SYNOPSIS
@@ -797,14 +807,16 @@ function Get-RSVcpkgBuildEnvironment {
         [Parameter(Mandatory)][ValidateSet('x64','ARM64')][string]$Platform,
         [Parameter(Mandatory)][ValidateSet('Debug','ASan Debug','Release')][string]$Configuration,
         [switch]$RuntimeOnly)
-    $triplet = if ($Platform -eq 'ARM64') { 'arm64-windows' } else { 'x64-windows' }
+    $asan = $Configuration -eq 'ASan Debug'
+    $triplet = Get-RSVcpkgTargetTriplet -Platform $Platform -Asan:$asan
     $installed = Resolve-RSVcpkgSafeChildPath -Root $RepoRoot -Child ('.build/vcpkg_installed/' + $Platform.ToLowerInvariant())
     $tripletRoot = Join-Path $installed $triplet
     $debug = $Configuration -like '*Debug*'
     $include = Join-Path $tripletRoot 'include'
     $lib = Join-Path $tripletRoot $(if ($debug) { 'debug/lib' } else { 'lib' })
     $bin = Join-Path $tripletRoot $(if ($debug) { 'debug/bin' } else { 'bin' })
-    $prepareMessage = "Prepare the selected platform first: import Tools/Modules/Build/VcpkgInstallSafety.psm1, call Initialize-RSVcpkgToolContext -RepoRoot '$RepoRoot', then run ./vcpkg-install.ps1 -Platform $Platform -VcpkgExe <context.Executable> -VcpkgRoot <context.RegistryRoot>."
+    $asanArgument = if ($asan) { ' -Asan' } else { '' }
+    $prepareMessage = "Prepare the selected platform first: import Tools/Modules/Build/VcpkgInstallSafety.psm1, call Initialize-RSVcpkgToolContext -RepoRoot '$RepoRoot', then run ./vcpkg-install.ps1 -Platform $Platform$asanArgument -VcpkgExe <context.Executable> -VcpkgRoot <context.RegistryRoot>."
     if ($RuntimeOnly) {
         foreach ($path in @($include,$lib,$bin)) {
             if (-not (Test-Path -LiteralPath $path -PathType Container)) {
@@ -847,6 +859,7 @@ function Get-RSVcpkgBuildEnvironment {
 
 Export-ModuleMember -Function @(
     'Get-RSVcpkgBuildEnvironment',
+    'Get-RSVcpkgTargetTriplet',
     'Initialize-RSVcpkgToolContext',
     'Assert-RSVcpkgTripletLeafName',
     'Assert-RSVcpkgManifestVersionConstraintsAvailable',

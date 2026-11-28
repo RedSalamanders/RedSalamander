@@ -1923,6 +1923,27 @@ Avoid relying only on:
 - file-backed selftest trace writes inside the measured render, draw-item, icon-apply, or present hot path. Use `Debug::Perf` counters/scopes for measured paths, and keep `SelfTest::AppendSelfTestTrace(...)` outside the timed gesture or behind a diagnostic mode that is disabled for perf-budget runs. A 2026-06-29 FolderView closeout pass found that trace writes around `Present1` and per-batch icon apply distorted the huge quick-search and relayout matrices even though the product work was below budget.
 - self-test-local perf sinks configured through `Debug::Perf::ConfigureJsonlOutput(...)` must immediately update the process-local sink cache. A previous "no sink configured" fast path must not suppress metrics after a later self-test configures `perf/perf_metrics.jsonl`; `ClearJsonlOutput()` must likewise clear the cache so following tests do not append to a stale sink.
 
+## Paired small-file Copy command
+
+Run `performance-paired.ps1 -BaselineRevision <sha> -CandidateRevision <sha> -TestRoot <marked-root>`
+on a quiet native x64 Windows host. Both clean revisions use the same reviewed
+engine, dependency locks, case source and selection rules. The command restores and
+builds both as test-enabled Release in separate worktrees. `-CalibrationAA` builds
+and measures the same revision under both labels. `-WhatIf` checks the sources and
+authorized root before creating either worktree.
+
+A seeded ABBA or BAAB block launches four fresh noninteractive File Operations
+processes. Each copies 2,000 one-KiB files through the existing native Local and
+Dummy bridge routes. The benchmark accepts the filtered runner's selected-pass
+exit when the exact selection, case results, invocation and both metric rows
+agree. It verifies unchanged build receipts across observations.
+
+The report retains the input identities, build receipts, per-route wall time,
+bridge admissions, invocation logs and byte-verified native artifacts under the
+marked root's `evidence/paired-copy` directory. Compare the two route ratios per
+block and check A/A variation before deciding performance acceptance. Run
+`benchmark.yml` by explicit dispatch for the hosted version of this study.
+
 ## Test and Archive Requirements
 
 ### Selftests
