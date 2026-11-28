@@ -1009,22 +1009,23 @@ HRESULT WriteFileBytesAtomic(const std::filesystem::path& path,
     std::filesystem::path backupPath;
     struct PendingSave
     {
-        PendingSave(const std::filesystem::path& journalPath, const std::optional<Common::Settings::SettingsFileStamp>& acceptedStamp) noexcept
-            : recordPath(journalPath),
+        PendingSave(const std::filesystem::path& pendingPath, const std::optional<Common::Settings::SettingsFileStamp>& acceptedStamp) noexcept
+            : recordPath(pendingPath),
               expected(acceptedStamp)
         {
         }
+
         PendingSave(const PendingSave&)            = delete;
-        PendingSave& operator=(const PendingSave&) = delete;
         PendingSave(PendingSave&&)                 = delete;
+        PendingSave& operator=(const PendingSave&) = delete;
         PendingSave& operator=(PendingSave&&)      = delete;
 
         const std::filesystem::path& recordPath;
         const std::optional<Common::Settings::SettingsFileStamp>& expected;
-        SettingsSaveRecord record{};
+        SettingsSaveRecord record;
         wil::unique_hfile file;
     };
-    PendingSave pending{recordPath, *expectedStamp};
+    PendingSave pending(recordPath, *expectedStamp);
     BY_HANDLE_FILE_INFORMATION committedInformation{};
     Common::Files::GuardedReplacementOptions options{.committedInformation = writtenStamp ? &committedInformation : nullptr};
     if (! createOnly)
