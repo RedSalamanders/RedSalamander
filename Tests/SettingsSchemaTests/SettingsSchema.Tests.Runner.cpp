@@ -950,8 +950,8 @@ void TestSettingsProfileMigration(bool& success)
         static_cast<void>(std::filesystem::remove(std::filesystem::path(Common::Paths::ToExtendedWin32Path(versioned.native())), ec));
     });
 
-    constexpr std::string_view oldBytes    = R"json({"schemaVersion":16,"fileOperations":{"verifyAfterCopy":true}})json";
-    constexpr std::string_view winnerBytes = R"json({"schemaVersion":16,"fileOperations":{"verifyAfterCopy":false}})json";
+    constexpr std::string_view oldBytes           = R"json({"schemaVersion":16,"fileOperations":{"verifyAfterCopy":true}})json";
+    static constexpr std::string_view winnerBytes = R"json({"schemaVersion":16,"fileOperations":{"verifyAfterCopy":false}})json";
     Check(WriteTestBytes(versioned, oldBytes), L"settings profile migration: the versioned source is present", success);
 
     Settings imported{};
@@ -966,7 +966,14 @@ void TestSettingsProfileMigration(bool& success)
           L"settings profile migration: loading preserves the prior bytes and leaves the new path vacant",
           success);
 
-    Check(WriteTestBytes(target, winnerBytes), L"settings profile migration: a competing first creator published the canonical file", success);
+    DebugSetSettingsMissingNameHookForTest([](const std::filesystem::path& path) noexcept { static_cast<void>(WriteTestBytes(path, winnerBytes)); });
+    const auto resetMissingNameHook = wil::scope_exit([]() noexcept { DebugSetSettingsMissingNameHookForTest(nullptr); });
+    Settings concurrentlyPublished{};
+    Check(TryLoadSettingsNoRecovery(appId, concurrentlyPublished) == S_OK && concurrentlyPublished.persistence.expectedFileStamp.has_value() &&
+              concurrentlyPublished.fileOperations && ! concurrentlyPublished.fileOperations->verifyAfterCopy && ReadTestBytes(target) == winnerBytes &&
+              ReadTestBytes(versioned) == oldBytes,
+          L"settings profile migration: live resolution prefers a canonical file published after its first probe",
+          success);
     Check(SaveSettingsValuesOnly(appId, imported) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && ReadTestBytes(target) == winnerBytes &&
               ReadTestBytes(versioned) == oldBytes,
           L"settings profile migration: saving a migrated snapshot preserves the competing file and prior source",

@@ -165,7 +165,10 @@ only the verified previous file.
 
 An unresolved record blocks new saves, including an attempt from a stale snapshot that expects a missing
 file. An ordinary live reload never repairs the journal or moves its sibling. It returns
-`ERROR_REVISION_MISMATCH` during the vacant-name interval, so the running settings remain available.
+`ERROR_REVISION_MISMATCH` when it observes a vacant name with a pending record, so the running settings
+remain available. After observing a vacant name and an absent record, it checks the canonical name
+again before selecting a compatibility profile. This gives a publication that completes between
+the probes precedence over the older file.
 
 ### Recovery behavior
 

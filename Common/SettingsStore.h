@@ -972,6 +972,8 @@ COMMON_API void DebugSetSettingsRecoveryBackupStallForTest(HANDLE enteredEvent, 
 COMMON_API void DebugUseFixedSettingsBackupTimestampForTest(bool enabled) noexcept;
 // Test-only hook after the recovery record and displacement, before the create-only publish.
 COMMON_API void DebugSetSettingsGuardedPublishHookForTest(void (*hook)(const std::filesystem::path&) noexcept) noexcept;
+// Test-only hook after observing a vacant profile name, before checking its recovery record.
+COMMON_API void DebugSetSettingsMissingNameHookForTest(void (*hook)(const std::filesystem::path&) noexcept) noexcept;
 #endif
 
 // Returns:

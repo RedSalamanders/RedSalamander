@@ -72,6 +72,7 @@ constexpr wchar_t kRunsDirName[]                 = L"runs";
 constexpr wchar_t kScratchDirName[]              = L"scratch";
 constexpr wchar_t kSettingsStoreScratchDirName[] = L"settings-store";
 std::atomic_bool g_useFixedSettingsBackupTimestampForTest{false};
+thread_local void (*g_afterMissingSettingsNameForTest)(const std::filesystem::path&) noexcept = nullptr;
 
 [[nodiscard]] std::wstring GetEnvironmentString(std::wstring_view name) noexcept
 {
@@ -5988,11 +5989,24 @@ namespace
         return S_OK;
     }
 
+#ifdef ENABLE_TESTS
+    if (const auto afterMissingName = std::exchange(g_afterMissingSettingsNameForTest, nullptr))
+    {
+        afterMissingName(outPath);
+    }
+#endif
+
     // A two-move save leaves the canonical name vacant only while its record exists.
     // Live readers preserve the loaded profile instead of adopting a legacy fallback here.
     if (! IsSettingsFileMissing(SettingsSaveRecordPath(outPath)))
     {
         return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
+    // Publication may have filled the name and retired the record since the first probe.
+    // Give that canonical file precedence over any compatibility profile.
+    if (! IsSettingsFileMissing(outPath))
+    {
+        return S_OK;
     }
 
     const std::filesystem::path directory   = outPath.parent_path();
@@ -6489,6 +6503,11 @@ void DebugUseFixedSettingsBackupTimestampForTest(bool enabled) noexcept
 void DebugSetSettingsGuardedPublishHookForTest(void (*hook)(const std::filesystem::path&) noexcept) noexcept
 {
     Common::Files::Testing::g_beforeGuardedFilePublish = hook;
+}
+
+void DebugSetSettingsMissingNameHookForTest(void (*hook)(const std::filesystem::path&) noexcept) noexcept
+{
+    g_afterMissingSettingsNameForTest = hook;
 }
 #endif
 
