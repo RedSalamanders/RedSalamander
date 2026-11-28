@@ -1259,11 +1259,12 @@ the same synchronous reporter and counter path as the pointer overload.
   commands. Direct Batch Rename and Change Case must warn before any dialog. The subsequent
   Inline Rename verifies the source and occupant bytes. Cleanup verifies each generated payload
   and removes only the named fixture entries nonrecursively.
-  `FileOps_SmbRecycleRefusal` uses one fresh child of `path.smb.primary`. It checks that the guarded Local Shell route
-  reports a known non-commit on the share, offers one item-specific permanent-delete decision on the independently
-  probed exact or by-name route and retains the same bytes
-  after Skip. Cleanup verifies the file contents and removes only that file and its empty parent. A missing or
-  unreachable registration is an environment skip.
+  `FileOps_SmbRecycleRefusal` runs the SMB-only selection and a mixed selection with a file in the marked Local
+  sandbox. Each run uses a fresh child of `path.smb.primary`. The guarded Local Shell route reports a known
+  non-commit on the share, offers one item-specific permanent-delete decision on the independently probed exact or
+  by-name route, and retains the same bytes after Skip. The mixed selection verifies the Local result independently
+  and requires exactly one recycled test item to be purged. SMB cleanup verifies the file contents and removes only
+  that file and its empty parent. A missing or unreachable registration is an environment skip.
   `FileOps_SmbMixedMove` uses one fresh child of `path.smb.primary` and the marked Local sandbox.
   When the SMB source opens without exact identity, it verifies the provider's corroborated source
   facts before admission. It uses direct task controls to check the Native Local and Managed SMB

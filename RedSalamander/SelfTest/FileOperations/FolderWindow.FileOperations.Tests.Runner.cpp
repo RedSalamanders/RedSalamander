@@ -14114,7 +14114,7 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
     return smbRootText;
 }
 
-[[nodiscard]] bool RunFileOpsSmbRecycleRefusalChecks(SelfTestState& state, std::wstring& unavailableReason) noexcept
+[[nodiscard]] bool RunFileOpsSmbRecycleRefusalChecks(SelfTestState& state, std::wstring& unavailableReason, bool includeLocal = false) noexcept
 {
     using Task        = FolderWindow::FileOperationState::Task;
     const auto reject = [](std::wstring_view reason) noexcept
@@ -14186,12 +14186,22 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
                ReadFileTextFsIo(io, source, bytes) && bytes == kSourceBytes;
     };
 
+    const auto localSource = state.tempRoot / std::format(L"{}-local.txt", fixture.filename().native());
+    std::vector<std::filesystem::path> selection;
+    if (includeLocal)
+    {
+        if (! SelfTest::WriteTextFile(localSource, "I66 Local Recycle witness"))
+            return reject(L"could not write the marked Local fixture");
+        selection.push_back(localSource);
+    }
+    selection.push_back(source);
+    const size_t remoteIndex = selection.size() - 1u;
     const auto started      = std::chrono::steady_clock::now();
     const HRESULT admission = operations->AdmitOperation(FILESYSTEM_DELETE,
                                                          FolderWindow::Pane::Left,
                                                          std::nullopt,
                                                          state.fsLocal,
-                                                         {source},
+                                                         selection,
                                                          {},
                                                          FILESYSTEM_FLAG_USE_RECYCLE_BIN,
                                                          false,
@@ -14211,10 +14221,19 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
         return (prompt.has_value() && prompt.value().buttonsPublishable) || state.completedTasks.contains(taskId);
     },
         {.timeout = SelfTest::Scale(std::chrono::seconds(20)), .operationName = L"SMB Recycle refusal"});
-    auto* const task     = operations->FindTask(taskId);
-    const auto plans     = task ? task->LoadPlans() : nullptr;
-    const auto* deletion = plans && plans->size() == 1u ? std::get_if<FileOperations::DeletePlan>(&plans->front()) : nullptr;
-    if (! waiting.conditionMet || ! task || ! deletion || deletion->mode != FileOperations::DeleteMode::Recycle || ! prompt.has_value())
+    auto* const task = operations->FindTask(taskId);
+    const auto plans = task ? task->LoadPlans() : nullptr;
+    const bool recycleRoutes = plans && plans->size() == selection.size() &&
+                               std::ranges::all_of(selection, [&](const auto& path) noexcept
+    {
+        return std::ranges::any_of(*plans, [&](const auto& plan) noexcept
+        {
+            const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
+            return deletion && deletion->mode == FileOperations::DeleteMode::Recycle && deletion->selectedItems.size() == 1u &&
+                   deletion->selectedItems.front().providerPath == path.native();
+        });
+    });
+    if (! waiting.conditionMet || ! task || ! recycleRoutes || ! prompt.has_value())
     {
         const auto completed = state.completedTasks.find(taskId);
         const HRESULT result = completed == state.completedTasks.end() ? E_PENDING : completed->second.hr;
@@ -14222,7 +14241,7 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
     }
     const auto& question = prompt.value();
     if (! question.buttonsPublishable || ! question.deferredConsent || question.bucket != consentBucket ||
-        question.status != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || question.sourceItemIndex != 0u || question.sourcePath != source.native() ||
+        question.status != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || question.sourceItemIndex != remoteIndex || question.sourcePath != source.native() ||
         ! PromptHasAction(question, Task::ConflictAction::PermanentDelete) || ! PromptHasAction(question, Task::ConflictAction::Skip) || ! sourceRetained())
         return reject(std::format(L"expected one exact-item consent with bytes retained (bucket={}, expected={}, status=0x{:08X}, index={})",
                                   static_cast<unsigned int>(question.bucket),
@@ -14240,13 +14259,25 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
         return reject(L"the Recycle task did not settle after Skip");
     const auto& completed = state.completedTasks.at(taskId);
     const auto& items     = completed.sourceItemResults;
-    if (completed.hr != S_FALSE || completed.consentPromptCount != 1u || completed.conflictPromptCount != 0u || items.size() != 1u ||
-        ! items.front().has_value() || items.front().value().completion != FileOperations::ItemCompletion::Skipped ||
-        items.front().value().sourceDisposition != FileOperations::SourceDisposition::Retained || ! sourceRetained())
+    if (completed.hr != S_FALSE || completed.consentPromptCount != 1u || completed.conflictPromptCount != 0u || items.size() != selection.size() ||
+        ! items.back().has_value() || items.back().value().completion != FileOperations::ItemCompletion::Skipped ||
+        items.back().value().sourceDisposition != FileOperations::SourceDisposition::Retained || ! sourceRetained())
         return reject(std::format(L"Skip must preserve the file and report one skipped item (hr=0x{:08X}, consents={}, conflicts={})",
                                   static_cast<uint32_t>(completed.hr),
                                   completed.consentPromptCount,
                                   completed.conflictPromptCount));
+
+    if (includeLocal)
+    {
+        const bool localRecycled = items.front().has_value() && items.front().value().completion == FileOperations::ItemCompletion::Completed &&
+                                   items.front().value().sourceDisposition == FileOperations::SourceDisposition::Removed &&
+                                   GetFileAttributesW(localSource.c_str()) == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND;
+        const auto purgeFailure = PurgeExpectedRecycledTestItems(1u);
+        if (! purgeFailure.empty())
+            return reject(purgeFailure);
+        if (! localRecycled)
+            return reject(L"the Local item must complete through Recycle independently of the skipped SMB item");
+    }
 
     // Only retire this fresh file and its now-empty parent, after rechecking the
     // parent types and the file's contents. Failed observations keep the fixture.
@@ -14263,10 +14294,11 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
                       exact ? L"exact-identity consent and Skip" : L"by-name consent and Skip",
                       decisionUs,
                       completed.consentPromptCount,
-                      1u,
+                      selection.size(),
                       question.status);
-    AppendLog(std::format(L"SMB Recycle: known non-commit, one exact-item question, original bytes retained on Skip, fixture removed ({} us to consent).",
-                          decisionUs));
+    AppendLog(std::format(L"SMB Recycle: known non-commit, one exact-item question, original bytes retained on Skip, fixture removed ({} us to consent).{}",
+                          decisionUs,
+                          includeLocal ? L" The Local item was independently recycled and purged." : L""));
     return true;
 }
 
@@ -19324,7 +19356,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             active            = true;
             const auto finish = wil::scope_exit([]() noexcept { active = false; });
             std::wstring unavailableReason;
-            if (! RunFileOpsSmbRecycleRefusalChecks(state, unavailableReason))
+            if (! RunFileOpsSmbRecycleRefusalChecks(state, unavailableReason) ||
+                (unavailableReason.empty() && ! RunFileOpsSmbRecycleRefusalChecks(state, unavailableReason, true)))
             {
                 Fail(L"The registered SMB Recycle refusal failed. See the File Operations trace.");
                 return true;
