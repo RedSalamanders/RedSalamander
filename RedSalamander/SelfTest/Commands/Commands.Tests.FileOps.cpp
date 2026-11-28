@@ -13475,16 +13475,16 @@ template <size_t TaskCount>
     successLayout        = {};
     successLayout.taskId = successTaskId;
     RedSalamander::TestSupport::MessagePumpWaitOptions paintWait{};
-    paintWait.timeout            = SelfTest::Scale(3000ms);
-    paintWait.maxMessagesPerPump = 16u;
+    paintWait.timeout              = SelfTest::Scale(3000ms);
+    paintWait.maxMessagesPerPump   = 16u;
     const bool paintedExpandedCard = RedSalamander::TestSupport::PumpMessagesUntil(
-                                          [&]() noexcept
+                                         [&]() noexcept
     {
         return DebugGetFileOperationsPopupLayoutSnapshot(popup, successLayout) && successLayout.completedGroupExpanded &&
                ! successLayout.taskHiddenByCompletedGroup && ! successLayout.taskCompactRow && successLayout.taskPaintedBodyBoundsValid;
     },
-                                          paintWait)
-                                          .conditionMet;
+                                         paintWait)
+                                         .conditionMet;
     state.Require(paintedExpandedCard, L"The expanded completed success card did not publish its painted body.");
     state.Require(successLayout.completedVisibleActionCount <= 2u,
                   std::format(L"Completed success task should expose at most 2 actions; saw {}.", successLayout.completedVisibleActionCount));
