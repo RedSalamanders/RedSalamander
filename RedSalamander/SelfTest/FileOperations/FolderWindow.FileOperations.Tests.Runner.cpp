@@ -14114,7 +14114,7 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
     return smbRootText;
 }
 
-[[nodiscard]] bool RunFileOpsSmbRecycleRefusalChecks(SelfTestState& state, std::wstring& unavailableReason) noexcept
+[[nodiscard]] bool RunFileOpsSmbRecycleRefusalChecks(SelfTestState& state, std::wstring& unavailableReason, bool includeLocal = false) noexcept
 {
     using Task        = FolderWindow::FileOperationState::Task;
     const auto reject = [](std::wstring_view reason) noexcept
@@ -14186,20 +14186,30 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
                ReadFileTextFsIo(io, source, bytes) && bytes == kSourceBytes;
     };
 
-    const auto started      = std::chrono::steady_clock::now();
-    const HRESULT admission = operations->AdmitOperation(FILESYSTEM_DELETE,
-                                                         FolderWindow::Pane::Left,
-                                                         std::nullopt,
-                                                         state.fsLocal,
-                                                         {source},
-                                                         {},
-                                                         FILESYSTEM_FLAG_USE_RECYCLE_BIN,
-                                                         false,
-                                                         0u,
-                                                         FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                         false,
-                                                         nullptr,
-                                                         &taskId);
+    const auto localSource = state.tempRoot / std::format(L"{}-local.txt", fixture.filename().native());
+    std::vector<std::filesystem::path> selection;
+    if (includeLocal)
+    {
+        if (! SelfTest::WriteTextFile(localSource, "I66 Local Recycle witness"))
+            return reject(L"could not write the marked Local fixture");
+        selection.push_back(localSource);
+    }
+    selection.push_back(source);
+    const size_t remoteIndex = selection.size() - 1u;
+    const auto started       = std::chrono::steady_clock::now();
+    const HRESULT admission  = operations->AdmitOperation(FILESYSTEM_DELETE,
+                                                          FolderWindow::Pane::Left,
+                                                          std::nullopt,
+                                                          state.fsLocal,
+                                                          selection,
+                                                          {},
+                                                          FILESYSTEM_FLAG_USE_RECYCLE_BIN,
+                                                          false,
+                                                          0u,
+                                                          FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                          false,
+                                                          nullptr,
+                                                          &taskId);
     if (admission != S_OK || taskId == 0u)
         return reject(std::format(L"Delete admission returned 0x{:08X}", static_cast<uint32_t>(admission)));
 
@@ -14211,10 +14221,21 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
         return (prompt.has_value() && prompt.value().buttonsPublishable) || state.completedTasks.contains(taskId);
     },
         {.timeout = SelfTest::Scale(std::chrono::seconds(20)), .operationName = L"SMB Recycle refusal"});
-    auto* const task     = operations->FindTask(taskId);
-    const auto plans     = task ? task->LoadPlans() : nullptr;
-    const auto* deletion = plans && plans->size() == 1u ? std::get_if<FileOperations::DeletePlan>(&plans->front()) : nullptr;
-    if (! waiting.conditionMet || ! task || ! deletion || deletion->mode != FileOperations::DeleteMode::Recycle || ! prompt.has_value())
+    auto* const task         = operations->FindTask(taskId);
+    const auto plans         = task ? task->LoadPlans() : nullptr;
+    const bool recycleRoutes = plans && plans->size() == selection.size() &&
+                               std::ranges::all_of(selection,
+                                                   [&](const auto& path) noexcept
+    {
+        return std::ranges::any_of(*plans,
+                                   [&](const auto& plan) noexcept
+        {
+            const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
+            return deletion && deletion->mode == FileOperations::DeleteMode::Recycle && deletion->selectedItems.size() == 1u &&
+                   deletion->selectedItems.front().providerPath == path.native();
+        });
+    });
+    if (! waiting.conditionMet || ! task || ! recycleRoutes || ! prompt.has_value())
     {
         const auto completed = state.completedTasks.find(taskId);
         const HRESULT result = completed == state.completedTasks.end() ? E_PENDING : completed->second.hr;
@@ -14222,7 +14243,7 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
     }
     const auto& question = prompt.value();
     if (! question.buttonsPublishable || ! question.deferredConsent || question.bucket != consentBucket ||
-        question.status != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || question.sourceItemIndex != 0u || question.sourcePath != source.native() ||
+        question.status != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || question.sourceItemIndex != remoteIndex || question.sourcePath != source.native() ||
         ! PromptHasAction(question, Task::ConflictAction::PermanentDelete) || ! PromptHasAction(question, Task::ConflictAction::Skip) || ! sourceRetained())
         return reject(std::format(L"expected one exact-item consent with bytes retained (bucket={}, expected={}, status=0x{:08X}, index={})",
                                   static_cast<unsigned int>(question.bucket),
@@ -14240,13 +14261,25 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
         return reject(L"the Recycle task did not settle after Skip");
     const auto& completed = state.completedTasks.at(taskId);
     const auto& items     = completed.sourceItemResults;
-    if (completed.hr != S_FALSE || completed.consentPromptCount != 1u || completed.conflictPromptCount != 0u || items.size() != 1u ||
-        ! items.front().has_value() || items.front().value().completion != FileOperations::ItemCompletion::Skipped ||
-        items.front().value().sourceDisposition != FileOperations::SourceDisposition::Retained || ! sourceRetained())
+    if (completed.hr != S_FALSE || completed.consentPromptCount != 1u || completed.conflictPromptCount != 0u || items.size() != selection.size() ||
+        ! items.back().has_value() || items.back().value().completion != FileOperations::ItemCompletion::Skipped ||
+        items.back().value().sourceDisposition != FileOperations::SourceDisposition::Retained || ! sourceRetained())
         return reject(std::format(L"Skip must preserve the file and report one skipped item (hr=0x{:08X}, consents={}, conflicts={})",
                                   static_cast<uint32_t>(completed.hr),
                                   completed.consentPromptCount,
                                   completed.conflictPromptCount));
+
+    if (includeLocal)
+    {
+        const bool localRecycled = items.front().has_value() && items.front().value().completion == FileOperations::ItemCompletion::Completed &&
+                                   items.front().value().sourceDisposition == FileOperations::SourceDisposition::Removed &&
+                                   GetFileAttributesW(localSource.c_str()) == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND;
+        const auto purgeFailure  = PurgeExpectedRecycledTestItems(1u);
+        if (! purgeFailure.empty())
+            return reject(purgeFailure);
+        if (! localRecycled)
+            return reject(L"the Local item must complete through Recycle independently of the skipped SMB item");
+    }
 
     // Only retire this fresh file and its now-empty parent, after rechecking the
     // parent types and the file's contents. Failed observations keep the fixture.
@@ -14263,10 +14296,11 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
                       exact ? L"exact-identity consent and Skip" : L"by-name consent and Skip",
                       decisionUs,
                       completed.consentPromptCount,
-                      1u,
+                      selection.size(),
                       question.status);
-    AppendLog(std::format(L"SMB Recycle: known non-commit, one exact-item question, original bytes retained on Skip, fixture removed ({} us to consent).",
-                          decisionUs));
+    AppendLog(std::format(L"SMB Recycle: known non-commit, one exact-item question, original bytes retained on Skip, fixture removed ({} us to consent).{}",
+                          decisionUs,
+                          includeLocal ? L" The Local item was independently recycled and purged." : L""));
     return true;
 }
 
@@ -15793,10 +15827,36 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
                 completion = event;
         });
         const auto unsubscribe      = wil::scope_exit([&]() noexcept { folder->RemoveFileOperationCompletedCallback(subscription); });
-        const auto started          = std::chrono::steady_clock::now();
-        const HRESULT admitted      = operations->AdmitScheduledRename(pane, paneFileSystem, origin, {std::move(row)}, {}, {}, &taskId);
+        constexpr HRESULT kCanceled = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        const bool testCancellation = expectedStatus == kCanceled;
+        if (testCancellation)
+            SetFileOpsBatchRenameBeforeExecutionPauseForSelfTest(true);
+        const auto releasePause = wil::scope_exit([&]() noexcept
+        {
+            if (testCancellation)
+            {
+                ReleaseFileOpsBatchRenameBeforeExecutionPauseForSelfTest();
+                SetFileOpsBatchRenameBeforeExecutionPauseForSelfTest(false);
+            }
+        });
+        const auto started      = std::chrono::steady_clock::now();
+        const HRESULT admitted  = operations->AdmitScheduledRename(pane, paneFileSystem, origin, {std::move(row)}, {}, {}, &taskId);
         if (admitted != S_OK || taskId == 0u)
             return reject(std::format(L"scheduled Rename admission failed (0x{:08X})", static_cast<unsigned long>(admitted)));
+        auto cancelStarted     = started;
+        bool canceledAtBarrier = false;
+        if (testCancellation)
+        {
+            const auto paused = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+                return HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest() || completion.has_value();
+            }, {.timeout = SelfTest::Scale(std::chrono::seconds(4)), .operationName = L"SMB Rename before dispatch"});
+            auto* const task  = operations->FindTask(taskId);
+            canceledAtBarrier = paused.conditionMet && ! completion.has_value() && task && HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest();
+            cancelStarted     = std::chrono::steady_clock::now();
+            if (task)
+                task->RequestCancel();
+            ReleaseFileOpsBatchRenameBeforeExecutionPauseForSelfTest();
+        }
         const auto finished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
             return completion.has_value();
         }, {.timeout = SelfTest::Scale(std::chrono::seconds(20)), .operationName = L"SMB scheduled Rename"});
@@ -15810,6 +15870,27 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
             if (! stopped.conditionMet)
                 cleanup.release();
             return reject(L"scheduled Rename did not deliver an owned completion");
+        }
+
+        if (testCancellation)
+        {
+            const auto elapsed           = Debug::Perf::ElapsedUs(cancelStarted);
+            const bool destinationAbsent = GetFileAttributesW(to.c_str()) == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND;
+            const bool fixturesUnchanged = leafMatches(from, true) && hasBytes(from, kSourceBytes) && hasBytes(occupied, kOccupantBytes) && destinationAbsent;
+            const auto* result           = completion->itemOutcomes.size() == 1u ? &completion->itemOutcomes.front() : nullptr;
+            const bool retained          = result && result->sourceIndex == 0u && result->publication == FileOperations::PublicationState::NotAttempted &&
+                                           result->sourceDisposition == FileOperations::SourceDisposition::Retained &&
+                                           result->completion == FileOperations::ItemCompletion::Canceled && result->status == kCanceled;
+            const bool canceled =
+                canceledAtBarrier && completion->hr == kCanceled && completion->operation == FILESYSTEM_RENAME && retained && fixturesUnchanged;
+            Debug::Perf::Emit(L"FileOps.Smb.SharedRenameCancelUs", detail, elapsed, 1u, 0u, canceled ? S_OK : E_FAIL);
+            AppendLog(std::format(L"SMB Rename: Cancel result=0x{:08X}, at barrier={}, fixtures unchanged={}, retained result={}, settled in {} us.",
+                                  static_cast<uint32_t>(completion->hr),
+                                  canceledAtBarrier,
+                                  fixturesUnchanged,
+                                  retained,
+                                  elapsed));
+            return canceled || reject(L"scheduled Rename cancellation did not report a retained fixture before dispatch");
         }
 
         if (FAILED(expectedStatus))
@@ -15940,8 +16021,10 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
 
     const auto scheduled   = nested / L"scheduled-batch.txt";
     const auto changedCase = nested / L"SCHEDULED-BATCH.TXT";
+    const auto canceled    = nested / L"canceled-batch.txt";
     if (! verifyScheduledRename(FileOperations::RenameOrigin::BatchRename, L"Batch Rename", caseOnly, scheduled, S_OK) ||
-        ! verifyScheduledRename(FileOperations::RenameOrigin::ChangeCase, L"Change Case", scheduled, changedCase, S_OK))
+        ! verifyScheduledRename(FileOperations::RenameOrigin::ChangeCase, L"Change Case", scheduled, changedCase, S_OK) ||
+        ! verifyScheduledRename(FileOperations::RenameOrigin::BatchRename, L"Batch Rename", changedCase, canceled, HRESULT_FROM_WIN32(ERROR_CANCELLED)))
         return false;
     return removeFixture();
 }
@@ -18223,6 +18306,11 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 Fail(L"Interrupted Move writer, selection, notice ownership or history-retention contracts failed.");
                 return true;
             }
+            if (! RunFileOpsVirtualPaneMoveFolderPickerChecks(state))
+            {
+                Fail(L"The context-menu Move picker did not preserve the virtual-to-Local direction and Copy-only consent.");
+                return true;
+            }
             std::wstring recycleIngressFailure;
             if (! RunFileOpsRecycleIngressChecks(state, recycleIngressFailure))
             {
@@ -19319,7 +19407,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             active            = true;
             const auto finish = wil::scope_exit([]() noexcept { active = false; });
             std::wstring unavailableReason;
-            if (! RunFileOpsSmbRecycleRefusalChecks(state, unavailableReason))
+            if (! RunFileOpsSmbRecycleRefusalChecks(state, unavailableReason) ||
+                (unavailableReason.empty() && ! RunFileOpsSmbRecycleRefusalChecks(state, unavailableReason, true)))
             {
                 Fail(L"The registered SMB Recycle refusal failed. See the File Operations trace.");
                 return true;

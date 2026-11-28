@@ -3261,8 +3261,10 @@ cancel), stays `Preparing` and finalizes `NotAttempted + Retained + Canceled` wi
 retained-source actions and cannot make the summary "Outcome unknown". A root that recorded its own
 pre-dispatch status keeps it, and a setup failure before any root is dispatched, with no cancel
 requested, finalizes every root `NotAttempted + Retained + Failed` with that status. A bulk
-provider call and the rename executors can touch every selected root at once and cross the gate
-for all of them together.
+provider call crosses the gate for all selected roots together. Inline Rename crosses at its own
+provider dispatch. Scheduled Batch Rename and Change Case keep every row in `Preparing` through
+read-only preflight and cross the task-wide gate when handing off the mutation schedule. A cancel
+observed before that handoff reports `NotAttempted + Retained + Canceled` with `ERROR_CANCELLED`.
 Terminal storage is compare-and-store:
 invalid indexes and duplicate writes are diagnosed and rejected without changing the first terminal
 truth. Every worker completion path performs the same dense final reduction.
@@ -4052,7 +4054,9 @@ The File Operations selftest and provider-contract matrix cover:
   (`R0fSmb_LoopbackRecycleNeverDestroys`; the per-item verdict is also a FileSystem debug self-test).
   The exact `FileOps_SmbRecycleRefusal` witness uses a fresh file on the registered SMB endpoint and
   checks the Local provider's guarded Recycle admission, the exact-item refusal question, and byte
-  retention after Skip. The Samba and Windows SMB evidence covers by-name and exact-identity consent respectively.
+  retention after Skip. Its mixed selection also verifies that the Local item completes through Recycle
+  and the SMB item keeps its own skipped result. The Samba and Windows SMB evidence covers by-name and
+  exact-identity consent respectively.
   [Live x64 Release evidence](../TestRuns/4cb089111a23/FileOps/2026-11-26_182743_smb_recycle_refusal/README.md)
 - a Recycle the provider reports as destroyed (`COPYENGINE_E_RECYCLE_FORCE_NUKE`, committed removal)
   fails with `delete.recycle.destroyed` in both the per-item and BulkItems executors, without a

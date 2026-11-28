@@ -366,6 +366,9 @@ The footer saves the selected mode through the deferred settings writer as the d
 submissions. A new owner loads that default, and missing settings use Queue. Starting a single task
 with an explicit mode leaves the saved default alone. The selecting owner's existing live transition
 and per-task safety interlocks continue to apply.
+Copy and Move with Options initialize Start from the current Queue/Parallel default even when idle.
+The Commands check opens consecutive Copy and Move dialogs while idle in Queue mode and chooses
+Parallel in each. Both tasks use Parallel while the current mode and saved default are preserved.
 
 A flyout opened from a popup button MUST use the invoking button's width as its minimum root-surface
 width. Longer localized labels, shortcut columns, and other flyout content may expand the surface
@@ -1931,6 +1934,8 @@ button measures its actual ellipsis plus dropdown chrome and exposes the full lo
 direct command button measures its own caption with the ordinary padding and exposes that caption
 as its name. Its automation ID keeps the `FileOperations.Action.<kind>.<taskId>.<data>` shape with
 its own kind and the command as data.
+The Commands Completed-group check observes the expanded card's painted body before sampling
+its actions. The paint check uses card geometry independently of the action labels or count.
 Current correctness and interaction qualification is recorded in I26, including its explicit limits.
 The completed-card command set includes `Open destination`, `Reveal item`, `Show log`,
 and `Export issues`, as well as applicable retained-source recovery commands.

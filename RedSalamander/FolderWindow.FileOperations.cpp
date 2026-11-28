@@ -5453,7 +5453,7 @@ void FolderWindow::CommandCopyToOtherPane(Pane sourcePane, bool withOptions)
 
     const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
 
-    const bool waitForOthers                        = _fileOperations->ShouldQueueNewTask();
+    const bool waitForOthers                        = withOptions ? _fileOperations->GetQueueNewTasks() : _fileOperations->ShouldQueueNewTask();
     const bool contextSame                          = CompareStringOrdinal(src.pluginId.c_str(), -1, dest.pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
                                                       NavigationLocation::EqualsNoCase(src.instanceContext, dest.instanceContext);
     wil::com_ptr<IFileSystem> destinationFileSystem = contextSame ? nullptr : dest.fileSystem;
@@ -5496,7 +5496,7 @@ void FolderWindow::CommandMoveToOtherPane(Pane sourcePane, bool withOptions)
 
     const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
 
-    const bool waitForOthers                        = _fileOperations->ShouldQueueNewTask();
+    const bool waitForOthers                        = withOptions ? _fileOperations->GetQueueNewTasks() : _fileOperations->ShouldQueueNewTask();
     const bool contextSame                          = CompareStringOrdinal(src.pluginId.c_str(), -1, dest.pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
                                                       NavigationLocation::EqualsNoCase(src.instanceContext, dest.instanceContext);
     wil::com_ptr<IFileSystem> destinationFileSystem = contextSame ? nullptr : dest.fileSystem;
