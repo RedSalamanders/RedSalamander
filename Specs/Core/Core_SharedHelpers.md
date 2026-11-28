@@ -272,6 +272,31 @@ PluginContract's owned-output fixture covers both policies and both handle-renam
 installed after admission, failed publication retaining the namespace pin, exact rollback and a later
 writer reusing the temporary spelling. Candidate publish timings are observational, not a speedup claim.
 
+**Settings publication and recovery.** The settings store supplies a profile-specific backup path and persists
+a bounded, versioned recovery record before displacement. The common transaction still verifies and moves the
+held original and publishes into a vacant name on both rename paths. Cold recovery reopens the recorded
+sibling without following a reparse point, verifies its recorded identity and data stamp and calls
+`RestoreBoundFileIfFree` on that exact handle. The settings store owns the commit lock, journal lifecycle
+and restart policy. [Settings contract](Core_Settings.md#interrupted-save-recovery)
+
+**Guarded user output.** The caller captures a destination revision before approving an overwrite
+and keeps that value through staging. A missing destination grants create-only publication.
+`GuardedSaveDialog.h` captures the existing target from the shell overwrite callback before the
+default prompt and returns authority for the selected path. The direct test entry points capture
+the version at submission.
+
+`LocalFileTransaction::CommitGuarded` flushes and verifies the private stage before any change to
+the destination name. It opens the accepted regular file without write or delete sharing and
+verifies the volume, file identity, timestamps and size. It moves only that held file to a unique
+recovery sibling and publishes the held stage with a non-replacing rename. Readers can briefly
+observe a vacant destination between the two renames. The older file returns to the destination
+only when the name is still vacant after a failure. A competing creation survives, and the caller
+reports the exact retained backup path. A filesystem that cannot identify or rename the
+held file refuses before losing the prior data. Existing-file recovery uses an exact held handle
+on both the Ex and classic paths. The focused `PluginContractTests --temporary-file-contract`
+covers a pre-publication replacement, classic rename, rollback and a creation between the
+two renames.
+
 ## Warned foreground hotkey dispatch
 
 The registered Alt+F24 fallback dispatches `WM_HOTKEY` to a temporary subclass on the

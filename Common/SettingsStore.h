@@ -970,6 +970,10 @@ COMMON_API HRESULT LoadSettingsWithRecoveryInfo(std::wstring_view appId, Setting
 COMMON_API void DebugSetSettingsRecoveryBackupStallForTest(HANDLE enteredEvent, HANDLE releaseEvent) noexcept;
 // Test-only fixed timestamp used to force a deterministic backup-name collision.
 COMMON_API void DebugUseFixedSettingsBackupTimestampForTest(bool enabled) noexcept;
+// Test-only hook after the recovery record and displacement, before the create-only publish.
+COMMON_API void DebugSetSettingsGuardedPublishHookForTest(void (*hook)(const std::filesystem::path&) noexcept) noexcept;
+// Test-only hook after observing a vacant profile name, before checking its recovery record.
+COMMON_API void DebugSetSettingsMissingNameHookForTest(void (*hook)(const std::filesystem::path&) noexcept) noexcept;
 #endif
 
 // Returns:

@@ -1,4 +1,5 @@
 #include "ViewerWeb.h"
+#include "GuardedSaveDialog.h"
 #include "HandleIo.h"
 #include "PathUtils.h"
 #include "ViewerDxUiTheme.h"
@@ -533,7 +534,7 @@ std::wstring LeafNameFromPath(std::wstring_view path)
 }
 
 // Forward declarations for file-scope helpers defined later in this file.
-std::optional<std::filesystem::path> ShowSaveAsDialog(HWND hwnd, std::wstring_view suggestedFileName) noexcept;
+std::optional<Common::Files::GuardedSaveSelection> ShowSaveAsDialog(HWND hwnd, std::wstring_view suggestedFileName) noexcept;
 
 struct ViewerWebClassBackgroundBrushState
 {
@@ -2927,7 +2928,10 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 {
                     return FALSE;
                 }
-                request->submissionHr = StartAsyncSave(hwnd, std::filesystem::path(request->destinationPath), request->faultMask);
+                const std::filesystem::path destination(request->destinationPath);
+                std::optional<Common::Files::LocalFileVersion> acceptedVersion;
+                const HRESULT observation = Common::Files::ObserveLocalFileDestination(destination, acceptedVersion);
+                request->submissionHr     = FAILED(observation) ? observation : StartAsyncSave(hwnd, destination, acceptedVersion, request->faultMask);
                 return TRUE;
             }
             default: return FALSE;
@@ -5304,13 +5308,10 @@ void ViewerWeb::AsyncSaveProc(AsyncSaveWorkItem* payload) noexcept
     wil::com_ptr<IFileSystem> fileSystem;
     wil::com_ptr<IFileSystemIO> fileIo;
     wil::com_ptr<IFileReader> reader;
-    wil::unique_hfile tempFile;
-    std::wstring tempPath;
-    bool committed = false;
+    Common::Files::LocalFileTransaction transaction;
 
     const auto closeOpenResources = [&]() noexcept
     {
-        tempFile.reset();
         reader.reset();
         fileIo.reset();
         fileSystem.reset();
@@ -5318,23 +5319,7 @@ void ViewerWeb::AsyncSaveProc(AsyncSaveWorkItem* payload) noexcept
     const auto cleanupUncommitted = [&]() noexcept
     {
         closeOpenResources();
-        if (committed || tempPath.empty())
-        {
-            return;
-        }
-        if (DeleteFileW(tempPath.c_str()) != FALSE)
-        {
-            tempPath.clear();
-            return;
-        }
-
-        const DWORD error = GetLastError();
-        if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
-        {
-            tempPath.clear();
-            return;
-        }
-        Debug::Warning(L"ViewerWeb: failed to remove an uncommitted Save As temp (error={}).", error);
+        transaction.Abort();
     };
     auto cleanupAtExit = wil::scope_exit([&]() noexcept { cleanupUncommitted(); });
 
@@ -5432,12 +5417,11 @@ void ViewerWeb::AsyncSaveProc(AsyncSaveWorkItem* payload) noexcept
         return;
     }
 
-    const std::wstring destination = Common::Paths::ToExtendedWin32Path(work->destinationPath);
-    const Common::Paths::UniqueSiblingFileOptions options{.prefix = L".rsw-save-", .suffix = L".tmp"};
-    const HRESULT tempHr = Common::Paths::CreateUniqueSiblingFile(destination, options, tempPath, tempFile);
-    if (FAILED(tempHr) || ! tempFile)
+    const auto policy    = work->acceptedVersion.has_value() ? Common::Files::ExistingTargetPolicy::Replace : Common::Files::ExistingTargetPolicy::FailIfExists;
+    const HRESULT tempHr = Common::Files::LocalFileTransaction::Create(std::filesystem::path(work->destinationPath), policy, false, transaction, L".rsw-save-");
+    if (FAILED(tempHr))
     {
-        fail(FAILED(tempHr) ? tempHr : E_FAIL, IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED);
+        fail(tempHr, IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED);
         return;
     }
 
@@ -5456,7 +5440,7 @@ void ViewerWeb::AsyncSaveProc(AsyncSaveWorkItem* payload) noexcept
             writeFailed = true;
             return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
         }
-        const HRESULT writeHr = Common::HandleIo::WriteAll(tempFile.get(), std::as_bytes(std::span<const uint8_t>(chunk.data(), chunk.size())));
+        const HRESULT writeHr = Common::HandleIo::WriteAll(transaction.GetHandle(), std::as_bytes(std::span<const uint8_t>(chunk.data(), chunk.size())));
         writeFailed           = FAILED(writeHr);
         return writeHr;
     },
@@ -5476,10 +5460,9 @@ void ViewerWeb::AsyncSaveProc(AsyncSaveWorkItem* payload) noexcept
     {
         return;
     }
-    if ((work->testFaultMask & ViewerWebSecurity::DebugSaveFaultFlush) != 0u || FlushFileBuffers(tempFile.get()) == FALSE)
+    if ((work->testFaultMask & ViewerWebSecurity::DebugSaveFaultFlush) != 0u)
     {
-        const DWORD error = (work->testFaultMask & ViewerWebSecurity::DebugSaveFaultFlush) != 0u ? ERROR_WRITE_FAULT : GetLastError();
-        fail(HRESULT_FROM_WIN32(error), IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED);
+        fail(HRESULT_FROM_WIN32(ERROR_WRITE_FAULT), IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED);
         return;
     }
 
@@ -5490,16 +5473,25 @@ void ViewerWeb::AsyncSaveProc(AsyncSaveWorkItem* payload) noexcept
         return;
     }
 
-    if ((work->testFaultMask & ViewerWebSecurity::DebugSaveFaultCommit) != 0u ||
-        MoveFileExW(tempPath.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == FALSE)
+    if ((work->testFaultMask & ViewerWebSecurity::DebugSaveFaultCommit) != 0u)
     {
-        const DWORD error = (work->testFaultMask & ViewerWebSecurity::DebugSaveFaultCommit) != 0u ? ERROR_ACCESS_DENIED : GetLastError();
-        fail(HRESULT_FROM_WIN32(error), IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED);
+        fail(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED), IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED);
         return;
     }
 
-    committed = true;
-    work->hr  = S_OK;
+    std::filesystem::path retainedBackup;
+    const HRESULT publish = transaction.CommitGuarded(work->acceptedVersion, retainedBackup, expectedBytes);
+    if (! retainedBackup.empty())
+    {
+        Debug::Warning(L"ViewerWeb retained the previous version of '{}' at '{}'.", work->destinationPath, retainedBackup.c_str());
+    }
+    if (FAILED(publish))
+    {
+        fail(publish, IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED);
+        return;
+    }
+
+    work->hr = S_OK;
     Debug::Perf::Emit(L"viewer.web.save_as_bytes", L"committed", 0u, copiedBytes, work->maxBytes, S_OK);
     postResult();
 }
@@ -5518,10 +5510,13 @@ HRESULT ViewerWeb::CommandSaveAs(HWND hwnd) noexcept
         return S_FALSE;
     }
 
-    return StartAsyncSave(hwnd, dest.value());
+    return StartAsyncSave(hwnd, dest.value().path, dest.value().acceptedVersion);
 }
 
-HRESULT ViewerWeb::StartAsyncSave(HWND hwnd, const std::filesystem::path& destination, uint32_t testFaultMask) noexcept
+HRESULT ViewerWeb::StartAsyncSave(HWND hwnd,
+                                  const std::filesystem::path& destination,
+                                  const std::optional<Common::Files::LocalFileVersion>& acceptedVersion,
+                                  uint32_t testFaultMask) noexcept
 {
     constexpr uint32_t kSupportedTestFaults =
         ViewerWebSecurity::DebugSaveFaultWrite | ViewerWebSecurity::DebugSaveFaultFlush | ViewerWebSecurity::DebugSaveFaultCommit;
@@ -5562,6 +5557,7 @@ HRESULT ViewerWeb::StartAsyncSave(HWND hwnd, const std::filesystem::path& destin
     work->testFaultMask      = testFaultMask;
     work->sourcePath         = _currentPath;
     work->destinationPath    = destination.wstring();
+    work->acceptedVersion    = acceptedVersion;
     work->fileSystemSnapshot = _fileSystem;
     work->moduleKeepAlive    = AcquireModuleReferenceFromAddress(&kViewerWebModuleAnchor);
     if (! work->moduleKeepAlive)
@@ -5850,7 +5846,7 @@ void ViewerWeb::CommandMarkdownToggleSource() noexcept
 
 namespace
 {
-std::optional<std::filesystem::path> ShowSaveAsDialog(HWND hwnd, std::wstring_view suggestedFileName) noexcept
+std::optional<Common::Files::GuardedSaveSelection> ShowSaveAsDialog(HWND hwnd, std::wstring_view suggestedFileName) noexcept
 {
     wil::com_ptr<IFileSaveDialog> dialog;
     const HRESULT hr = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
@@ -5869,31 +5865,12 @@ std::optional<std::filesystem::path> ShowSaveAsDialog(HWND hwnd, std::wstring_vi
         static_cast<void>(dialog->SetFileName(std::wstring(suggestedFileName).c_str()));
     }
 
-    const HRESULT showHr = dialog->Show(hwnd);
-    if (showHr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+    Common::Files::GuardedSaveSelection selection;
+    if (FAILED(Common::Files::ShowGuardedSaveDialog(*dialog.get(), hwnd, selection)))
     {
         return std::nullopt;
     }
-    if (FAILED(showHr))
-    {
-        return std::nullopt;
-    }
-
-    wil::com_ptr<IShellItem> item;
-    const HRESULT itemHr = dialog->GetResult(item.put());
-    if (FAILED(itemHr) || ! item)
-    {
-        return std::nullopt;
-    }
-
-    wil::unique_cotaskmem_string path;
-    const HRESULT nameHr = item->GetDisplayName(SIGDN_FILESYSPATH, path.put());
-    if (FAILED(nameHr) || ! path)
-    {
-        return std::nullopt;
-    }
-
-    return std::filesystem::path(path.get());
+    return selection;
 }
 } // namespace
 

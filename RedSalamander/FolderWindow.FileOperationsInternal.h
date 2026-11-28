@@ -8,6 +8,7 @@
 #include "FileOperationMoveBreadcrumb.h"
 #include "FileOperationsPowerRequest.h"
 #include "FolderWindowInternal.h"
+#include "LocalFileTransaction.h"
 
 #include <algorithm>
 #include <array>
@@ -452,8 +453,9 @@ struct ArchiveTaskRequest final
     std::wstring format;
     std::wstring mask;
     GUID classId{};
-    bool storedZip         = false;
-    bool overwrite         = false;
+    bool storedZip = false;
+    bool overwrite = false;
+    std::optional<Common::Files::LocalFileVersion> acceptedVersion;
     bool deleteAfter       = false;
     HRESULT cleanupCapture = S_OK;
     std::shared_ptr<const ArchiveCleanupReceipt> cleanup;

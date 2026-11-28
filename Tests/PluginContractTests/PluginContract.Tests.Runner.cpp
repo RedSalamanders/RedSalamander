@@ -713,6 +713,74 @@ void TestLocalFileTransactionOwnedPublicationContracts(bool& success) noexcept
     Check((collisionHr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || collisionHr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS)) && matches(target, sentinel),
           L"exclusive handle publication preserves a destination installed after admission",
           success);
+
+#ifdef ENABLE_TESTS
+    const auto replacement =
+        [&](const std::filesystem::path& name, LocalFileTransaction& transaction, std::optional<Common::Files::LocalFileVersion>& version) noexcept
+    {
+        return writeNew(name, sentinel) && SUCCEEDED(Common::Files::ObserveLocalFileDestination(name, version)) && version.has_value() &&
+               SUCCEEDED(LocalFileTransaction::Create(name, ExistingTargetPolicy::Replace, false, transaction)) && SUCCEEDED(transaction.Write(payload));
+    };
+    const auto resetFaults = wil::scope_exit([]() noexcept
+    {
+        Common::Files::Testing::FailNextLocalFileTransactionRenameEx(S_OK);
+        Common::Files::Testing::FailNextLocalFileTransactionLegacyRename(S_OK);
+        Common::Files::Testing::g_beforeGuardedFilePublish = nullptr;
+    });
+
+    const auto changedTarget = root / L"guarded-changed.txt";
+    LocalFileTransaction changedStage;
+    std::optional<Common::Files::LocalFileVersion> changedVersion;
+    const auto competing = root / L"guarded-competitor.txt";
+    if (! Check(replacement(changedTarget, changedStage, changedVersion) && writeNew(competing, "newer contents") &&
+                    MoveFileExW(competing.c_str(), changedTarget.c_str(), MOVEFILE_REPLACE_EXISTING) != FALSE,
+                L"guarded output stages a report before an outside replacement",
+                success))
+        return;
+    std::filesystem::path retainedBackup;
+    Check(changedStage.CommitGuarded(changedVersion, retainedBackup, payload.size()) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && retainedBackup.empty() &&
+              matches(changedTarget, "newer contents"),
+          L"guarded output refuses an outside replacement before displacement",
+          success);
+
+    const auto legacyTarget = root / L"guarded-legacy.txt";
+    LocalFileTransaction legacyStage;
+    std::optional<Common::Files::LocalFileVersion> legacyVersion;
+    if (! Check(replacement(legacyTarget, legacyStage, legacyVersion), L"guarded classic rename is staged", success))
+        return;
+    Common::Files::Testing::FailNextLocalFileTransactionRenameEx(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+    Check(legacyStage.CommitGuarded(legacyVersion, retainedBackup, payload.size()) == S_OK && retainedBackup.empty() && matches(legacyTarget, payload),
+          L"guarded classic rename publishes with the same accepted version and removes its backup",
+          success);
+
+    const auto rollbackTarget = root / L"guarded-rollback.txt";
+    LocalFileTransaction rollbackStage;
+    std::optional<Common::Files::LocalFileVersion> rollbackVersion;
+    if (! Check(replacement(rollbackTarget, rollbackStage, rollbackVersion), L"guarded rollback is staged", success))
+        return;
+    Common::Files::Testing::FailNextLocalFileTransactionRenameEx(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+    Common::Files::Testing::FailNextLocalFileTransactionLegacyRename(HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION));
+    Check(rollbackStage.CommitGuarded(rollbackVersion, retainedBackup, payload.size()) == HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION) &&
+              retainedBackup.empty() && matches(rollbackTarget, sentinel),
+          L"failed guarded publication restores the accepted bytes to a vacant name",
+          success);
+
+    const auto occupiedTarget = root / L"guarded-late-creation.txt";
+    LocalFileTransaction occupiedStage;
+    std::optional<Common::Files::LocalFileVersion> occupiedVersion;
+    if (! Check(replacement(occupiedTarget, occupiedStage, occupiedVersion), L"late-creation fixture stages guarded output", success))
+        return;
+    Common::Files::Testing::g_beforeGuardedFilePublish = [](const std::filesystem::path& path) noexcept
+    {
+        wil::unique_hfile winner(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
+        if (winner)
+            static_cast<void>(Common::HandleIo::WriteAll(winner.get(), "late winner", 11u));
+    };
+    Check(occupiedStage.CommitGuarded(occupiedVersion, retainedBackup, payload.size()) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) &&
+              matches(occupiedTarget, "late winner") && ! retainedBackup.empty() && matches(retainedBackup, sentinel),
+          L"late creation keeps the winning file at the chosen path and the accepted prior file in its backup",
+          success);
+#endif
 }
 
 void TestDeleteOnCloseTemporaryFileContracts(bool& success) noexcept

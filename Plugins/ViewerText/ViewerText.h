@@ -23,6 +23,7 @@
 
 #include "EmbeddedViewerBase.h"
 #include "Helpers.h"
+#include "LocalFileTransaction.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
@@ -120,6 +121,7 @@ private:
     struct SaveAsResult
     {
         std::filesystem::path path;
+        std::optional<Common::Files::LocalFileVersion> acceptedVersion;
         UINT encodingSelection = 0;
     };
 
@@ -486,6 +488,7 @@ private:
     void CommandSaveAs(HWND hwnd);
     [[nodiscard]] HRESULT SaveAsToPath(const std::filesystem::path& destinationPath,
                                        UINT encodingSelection,
+                                       const std::optional<Common::Files::LocalFileVersion>& acceptedVersion,
                                        SaveAsFault injectedFault = SaveAsFault::None) noexcept;
     void CommandRefresh(HWND hwnd);
     void CommandExit(HWND hwnd) noexcept;

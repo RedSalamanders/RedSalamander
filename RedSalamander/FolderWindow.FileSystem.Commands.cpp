@@ -10,6 +10,7 @@
 #include "FolderWindow.FileOperations.State.Private.h"
 #include "FolderWindow.FileSystem.Private.h"
 #include "FolderWindowInternal.h"
+#include "GuardedSaveDialog.h"
 #include "Helpers.h"
 #include "HostServices.h"
 #include "LocalFileTransaction.h"
@@ -2959,7 +2960,24 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
     return (! outClipboardText.empty() && outUtf8.empty()) ? HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION) : S_OK;
 }
 
-[[nodiscard]] HRESULT WriteMakeFileListUtf8File(const std::filesystem::path& path, std::string_view bytes, const std::stop_token& stopToken) noexcept
+[[nodiscard]] HRESULT CommitGuardedUserFile(Common::Files::LocalFileTransaction& transaction,
+                                            const std::optional<Common::Files::LocalFileVersion>& acceptedVersion,
+                                            std::optional<uint64_t> expectedSize   = std::nullopt,
+                                            wil::unique_hfile* retainedPublication = nullptr) noexcept
+{
+    std::filesystem::path retainedBackup;
+    const HRESULT result = transaction.CommitGuarded(acceptedVersion, retainedBackup, expectedSize, retainedPublication);
+    if (! retainedBackup.empty())
+    {
+        Debug::Warning(L"Retained the previous version of '{}' at '{}'.", transaction.TargetPath().c_str(), retainedBackup.c_str());
+    }
+    return result;
+}
+
+[[nodiscard]] HRESULT WriteMakeFileListUtf8File(const std::filesystem::path& path,
+                                                const std::optional<Common::Files::LocalFileVersion>& acceptedVersion,
+                                                std::string_view bytes,
+                                                const std::stop_token& stopToken) noexcept
 {
     if (stopToken.stop_requested())
     {
@@ -2967,7 +2985,8 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
     }
 
     Common::Files::LocalFileTransaction transaction;
-    HRESULT hr = Common::Files::LocalFileTransaction::Create(path, Common::Files::ExistingTargetPolicy::Replace, true, transaction);
+    const auto policy = acceptedVersion.has_value() ? Common::Files::ExistingTargetPolicy::Replace : Common::Files::ExistingTargetPolicy::FailIfExists;
+    HRESULT hr        = Common::Files::LocalFileTransaction::Create(path, policy, true, transaction);
     if (FAILED(hr))
     {
         return hr;
@@ -2982,7 +3001,7 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
     {
         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
     }
-    return transaction.Commit(static_cast<uint64_t>(bytes.size()));
+    return CommitGuardedUserFile(transaction, acceptedVersion, static_cast<uint64_t>(bytes.size()));
 }
 
 [[nodiscard]] const wchar_t* MakeFileListFormatDetail(Common::Settings::MakeFileListFormat format) noexcept
@@ -3018,13 +3037,10 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
     return 1u;
 }
 
-[[nodiscard]] std::optional<std::filesystem::path> PromptForMakeFileListOutputFile(HWND owner,
-                                                                                   const std::filesystem::path& currentFolder,
-                                                                                   const MakeFileListSettings& options) noexcept
+[[nodiscard]] std::optional<Common::Files::GuardedSaveSelection> PromptForMakeFileListOutputFile(HWND owner,
+                                                                                                 const std::filesystem::path& currentFolder,
+                                                                                                 const MakeFileListSettings& options) noexcept
 {
-    constexpr size_t kFileBufferChars = 32768u;
-    std::vector<wchar_t> fileBuffer(kFileBufferChars, L'\0');
-
     std::filesystem::path suggested = options.outputFile;
     if (suggested.empty())
     {
@@ -3035,34 +3051,50 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
         suggested = currentFolder / suggested;
     }
 
-    const std::wstring suggestedText = suggested.wstring();
-    if (suggestedText.size() >= fileBuffer.size())
+    const std::wstring filter = LoadStringResource(nullptr, IDS_MAKE_FILE_LIST_FILE_FILTER);
+    std::array<COMDLG_FILTERSPEC, 4u> filters{};
+    size_t offset = 0u;
+    for (auto& entry : filters)
+    {
+        const size_t nameEnd = filter.find(L'\0', offset);
+        if (nameEnd == std::wstring::npos || nameEnd == offset)
+        {
+            return std::nullopt;
+        }
+        const size_t patternStart = nameEnd + 1u;
+        const size_t patternEnd   = filter.find(L'\0', patternStart);
+        if (patternEnd == std::wstring::npos || patternEnd == patternStart)
+        {
+            return std::nullopt;
+        }
+        entry  = {filter.c_str() + offset, filter.c_str() + patternStart};
+        offset = patternEnd + 1u;
+    }
+
+    wil::com_ptr_nothrow<IFileSaveDialog> dialog;
+    if (FAILED(CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()))) || ! dialog)
     {
         return std::nullopt;
     }
-    std::copy(suggestedText.begin(), suggestedText.end(), fileBuffer.begin());
-
-    const std::wstring filter     = LoadStringResource(nullptr, IDS_MAKE_FILE_LIST_FILE_FILTER);
-    const std::wstring initialDir = currentFolder.wstring();
-
-    OPENFILENAMEW ofn{};
-    ofn.lStructSize     = sizeof(ofn);
-    ofn.hwndOwner       = owner;
-    ofn.lpstrFilter     = filter.c_str();
-    ofn.nFilterIndex    = MakeFileListFilterIndex(options.format);
-    ofn.lpstrFile       = fileBuffer.data();
-    ofn.nMaxFile        = static_cast<DWORD>(fileBuffer.size());
-    ofn.lpstrInitialDir = initialDir.empty() ? nullptr : initialDir.c_str();
-    ofn.lpstrDefExt     = MakeFileListDefaultExtension(options.format);
-    ofn.Flags           = OFN_NOCHANGEDIR | OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
-
-    if (GetSaveFileNameW(&ofn) == FALSE)
+    if (FAILED(dialog->SetOptions(FOS_NOCHANGEDIR | FOS_FORCEFILESYSTEM | FOS_OVERWRITEPROMPT | FOS_PATHMUSTEXIST)) ||
+        FAILED(dialog->SetFileTypes(static_cast<UINT>(filters.size()), filters.data())) ||
+        FAILED(dialog->SetFileTypeIndex(MakeFileListFilterIndex(options.format))) ||
+        FAILED(dialog->SetDefaultExtension(MakeFileListDefaultExtension(options.format))) || FAILED(dialog->SetFileName(suggested.filename().c_str())))
     {
         return std::nullopt;
     }
 
-    std::filesystem::path selected(fileBuffer.data());
-    return selected.empty() ? std::nullopt : std::optional<std::filesystem::path>{std::move(selected)};
+    wil::com_ptr_nothrow<IShellItem> folder;
+    if (SUCCEEDED(SHCreateItemFromParsingName(suggested.parent_path().c_str(), nullptr, IID_PPV_ARGS(folder.put()))) && folder)
+    {
+        static_cast<void>(dialog->SetFolder(folder.get()));
+    }
+    Common::Files::GuardedSaveSelection result;
+    if (FAILED(Common::Files::ShowGuardedSaveDialog(*dialog.get(), owner, result)))
+    {
+        return std::nullopt;
+    }
+    return result;
 }
 
 void ShowMakeFileListOverlay(
@@ -6247,9 +6279,18 @@ enum class ArchiveTargetDecision : uint8_t
     Skip,
 };
 
-[[nodiscard]] Common::Files::ExistingTargetPolicy LocalFilePolicyForArchive(ArchiveExistingTargetPolicy policy) noexcept
+[[nodiscard]] HRESULT CreateLocalArchiveOutput(const std::filesystem::path& target,
+                                               ArchiveExistingTargetPolicy conflictPolicy,
+                                               Common::Files::LocalFileTransaction& transaction,
+                                               std::optional<Common::Files::LocalFileVersion>& acceptedVersion) noexcept
 {
-    return policy == ArchiveExistingTargetPolicy::Replace ? Common::Files::ExistingTargetPolicy::Replace : Common::Files::ExistingTargetPolicy::FailIfExists;
+    acceptedVersion.reset();
+    if (conflictPolicy == ArchiveExistingTargetPolicy::Replace)
+    {
+        RETURN_IF_FAILED(Common::Files::ObserveLocalFileDestination(target, acceptedVersion));
+    }
+    const auto policy = acceptedVersion.has_value() ? Common::Files::ExistingTargetPolicy::Replace : Common::Files::ExistingTargetPolicy::FailIfExists;
+    return Common::Files::LocalFileTransaction::Create(target, policy, true, transaction);
 }
 
 [[nodiscard]] bool IsArchiveTargetExistsFailure(HRESULT hr) noexcept
@@ -7305,19 +7346,20 @@ struct PackTreeBindings final
 }
 
 [[nodiscard]] HRESULT CommitPackedArchive(Common::Files::LocalFileTransaction& transaction,
+                                          const std::optional<Common::Files::LocalFileVersion>& acceptedVersion,
                                           std::wstring_view format,
                                           wil::unique_hfile* retainedPublication) noexcept
 {
     Debug::Perf::Scope publish(L"archive.pack.publish_us");
     publish.SetDetail(format);
-    const HRESULT status = transaction.Commit(std::nullopt, nullptr, retainedPublication);
+    const HRESULT status = CommitGuardedUserFile(transaction, acceptedVersion, std::nullopt, retainedPublication);
     publish.SetHr(status);
     return status;
 }
 
 [[nodiscard]] ArchiveOperationResult CreateStoredZipArchive(const std::vector<ArchiveEntrySource>& sources,
                                                             const std::filesystem::path& archivePath,
-                                                            bool overwrite,
+                                                            const std::optional<Common::Files::LocalFileVersion>& acceptedVersion,
                                                             const FileOperations::ArchiveCleanupReceipt* cleanup,
                                                             const ArchiveCheckpoint& checkpoint,
                                                             wil::unique_hfile* retainedPublication)
@@ -7331,7 +7373,7 @@ struct PackTreeBindings final
     }
 
     Common::Files::LocalFileTransaction transaction;
-    const auto targetPolicy = overwrite ? Common::Files::ExistingTargetPolicy::Replace : Common::Files::ExistingTargetPolicy::FailIfExists;
+    const auto targetPolicy = acceptedVersion.has_value() ? Common::Files::ExistingTargetPolicy::Replace : Common::Files::ExistingTargetPolicy::FailIfExists;
     result.hr               = Common::Files::LocalFileTransaction::Create(archivePath, targetPolicy, true, transaction);
     if (FAILED(result.hr))
     {
@@ -7459,7 +7501,7 @@ struct PackTreeBindings final
     if (SUCCEEDED(result.hr))
         result.hr = checkpoint(ArchiveWorkCheckpoint::BeforePublish);
     if (SUCCEEDED(result.hr))
-        result.hr = CommitPackedArchive(transaction, L"zip", retainedPublication);
+        result.hr = CommitPackedArchive(transaction, acceptedVersion, L"zip", retainedPublication);
     return result;
 }
 
@@ -7634,11 +7676,14 @@ private:
 class SevenZipPackFileOutStream final : public IOutStream
 {
 public:
-    static HRESULT Create(const std::filesystem::path& path, bool overwrite, wil::com_ptr<SevenZipPackFileOutStream>& out) noexcept
+    static HRESULT Create(const std::filesystem::path& path,
+                          const std::optional<Common::Files::LocalFileVersion>& acceptedVersion,
+                          wil::com_ptr<SevenZipPackFileOutStream>& out) noexcept
     {
         out.reset();
         Common::Files::LocalFileTransaction transaction;
-        const auto targetPolicy = overwrite ? Common::Files::ExistingTargetPolicy::Replace : Common::Files::ExistingTargetPolicy::FailIfExists;
+        const auto targetPolicy =
+            acceptedVersion.has_value() ? Common::Files::ExistingTargetPolicy::Replace : Common::Files::ExistingTargetPolicy::FailIfExists;
         RETURN_IF_FAILED(Common::Files::LocalFileTransaction::Create(path, targetPolicy, true, transaction));
 
         auto* impl = new (std::nothrow) SevenZipPackFileOutStream(std::move(transaction));
@@ -7651,9 +7696,11 @@ public:
         return S_OK;
     }
 
-    [[nodiscard]] HRESULT Commit(std::wstring_view format, wil::unique_hfile* retainedPublication) noexcept
+    [[nodiscard]] HRESULT Commit(const std::optional<Common::Files::LocalFileVersion>& acceptedVersion,
+                                 std::wstring_view format,
+                                 wil::unique_hfile* retainedPublication) noexcept
     {
-        return CommitPackedArchive(_transaction, format, retainedPublication);
+        return CommitPackedArchive(_transaction, acceptedVersion, format, retainedPublication);
     }
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** outObject) noexcept override
@@ -7982,7 +8029,7 @@ private:
 
 [[nodiscard]] ArchiveOperationResult CreateSevenZipArchive(const std::vector<ArchiveEntrySource>& sources,
                                                            const std::filesystem::path& archivePath,
-                                                           bool overwrite,
+                                                           const std::optional<Common::Files::LocalFileVersion>& acceptedVersion,
                                                            const ArchivePackerDefinition& packer,
                                                            const FileOperations::ArchiveCleanupReceipt* cleanup,
                                                            const ArchiveCheckpoint& checkpoint,
@@ -8020,7 +8067,7 @@ private:
     }
 
     wil::com_ptr<SevenZipPackFileOutStream> outputStream;
-    result.hr = SevenZipPackFileOutStream::Create(archivePath, overwrite, outputStream);
+    result.hr = SevenZipPackFileOutStream::Create(archivePath, acceptedVersion, outputStream);
     if (FAILED(result.hr))
     {
         return result;
@@ -8050,7 +8097,7 @@ private:
 
     result.hr = checkpoint(ArchiveWorkCheckpoint::BeforePublish);
     if (SUCCEEDED(result.hr))
-        result.hr = outputStream->Commit(packer.extensionNoDot, retainedPublication);
+        result.hr = outputStream->Commit(acceptedVersion, packer.extensionNoDot, retainedPublication);
     if (FAILED(result.hr))
         return result;
 
@@ -8309,7 +8356,8 @@ private:
 {
     outCrc32 = 0u;
     Common::Files::LocalFileTransaction transaction;
-    HRESULT transactionHr = Common::Files::LocalFileTransaction::Create(targetPath, LocalFilePolicyForArchive(conflictPolicy), true, transaction);
+    std::optional<Common::Files::LocalFileVersion> acceptedVersion;
+    HRESULT transactionHr = CreateLocalArchiveOutput(targetPath, conflictPolicy, transaction, acceptedVersion);
     if (FAILED(transactionHr))
     {
         return conflictPolicy == ArchiveExistingTargetPolicy::Skip && IsArchiveTargetExistsFailure(transactionHr) ? S_FALSE : transactionHr;
@@ -8343,7 +8391,8 @@ private:
     }
 
     RETURN_IF_FAILED(checkpoint(ArchiveWorkCheckpoint::BeforePublish));
-    transactionHr = transaction.Commit(entry.uncompressedSize);
+    transactionHr = conflictPolicy == ArchiveExistingTargetPolicy::Replace ? CommitGuardedUserFile(transaction, acceptedVersion, entry.uncompressedSize)
+                                                                           : transaction.Commit(entry.uncompressedSize);
     if (FAILED(transactionHr))
     {
         return conflictPolicy == ArchiveExistingTargetPolicy::Skip && IsArchiveTargetExistsFailure(transactionHr) ? S_FALSE : transactionHr;
@@ -8554,13 +8603,14 @@ public:
         }
 
         Common::Files::LocalFileTransaction transaction;
-        const HRESULT createHr = Common::Files::LocalFileTransaction::Create(targetPath, LocalFilePolicyForArchive(conflictPolicy), true, transaction);
+        std::optional<Common::Files::LocalFileVersion> acceptedVersion;
+        const HRESULT createHr = CreateLocalArchiveOutput(targetPath, conflictPolicy, transaction, acceptedVersion);
         if (FAILED(createHr))
         {
             return createHr;
         }
 
-        auto* impl = new (std::nothrow) SevenZipExtractFileOutStream(std::move(transaction), checkpoint);
+        auto* impl = new (std::nothrow) SevenZipExtractFileOutStream(std::move(transaction), conflictPolicy, acceptedVersion, checkpoint);
         if (! impl)
         {
             return E_OUTOFMEMORY;
@@ -8573,7 +8623,8 @@ public:
     HRESULT Commit() noexcept
     {
         RETURN_IF_FAILED(_checkpoint(ArchiveWorkCheckpoint::BeforePublish));
-        return _transaction.Commit(_bytesWritten);
+        return _conflictPolicy == ArchiveExistingTargetPolicy::Replace ? CommitGuardedUserFile(_transaction, _acceptedVersion, _bytesWritten)
+                                                                       : _transaction.Commit(_bytesWritten);
     }
 
     [[nodiscard]] uint64_t BytesWritten() const noexcept
@@ -8650,8 +8701,13 @@ public:
     }
 
 private:
-    SevenZipExtractFileOutStream(Common::Files::LocalFileTransaction transaction, const ArchiveCheckpoint& checkpoint) noexcept
+    SevenZipExtractFileOutStream(Common::Files::LocalFileTransaction transaction,
+                                 ArchiveExistingTargetPolicy conflictPolicy,
+                                 const std::optional<Common::Files::LocalFileVersion>& acceptedVersion,
+                                 const ArchiveCheckpoint& checkpoint) noexcept
         : _transaction(std::move(transaction)),
+          _conflictPolicy(conflictPolicy),
+          _acceptedVersion(acceptedVersion),
           _checkpoint(checkpoint)
     {
     }
@@ -8660,6 +8716,8 @@ private:
 
     std::atomic_ulong _refCount{1u};
     Common::Files::LocalFileTransaction _transaction;
+    const ArchiveExistingTargetPolicy _conflictPolicy;
+    const std::optional<Common::Files::LocalFileVersion> _acceptedVersion;
     const ArchiveCheckpoint& _checkpoint;
     uint64_t _bytesWritten = 0u;
 };
@@ -12442,6 +12500,8 @@ void FolderWindow::CommandMakeFileList(Pane pane)
         }
     }
 
+    std::optional<Common::Files::LocalFileVersion> acceptedVersion;
+    bool destinationObserved = false;
     if (options.outputTarget == Common::Settings::MakeFileListOutputTarget::File && ! automated)
     {
 #ifdef ENABLE_TESTS
@@ -12452,13 +12512,15 @@ void FolderWindow::CommandMakeFileList(Pane pane)
         else
 #endif
         {
-            const std::optional<std::filesystem::path> outputFile = PromptForMakeFileListOutputFile(ownerWindow, currentFolder.value(), options);
+            const auto outputFile = PromptForMakeFileListOutputFile(ownerWindow, currentFolder.value(), options);
             if (! outputFile.has_value())
             {
                 Debug::Perf::Emit(L"makeFileList.total_us", L"save-cancelled", Debug::Perf::ElapsedUs(totalStartedAt), 0u, 0u, S_FALSE);
                 return;
             }
-            options.outputFile = outputFile.value();
+            options.outputFile  = outputFile->path;
+            acceptedVersion     = outputFile->acceptedVersion;
+            destinationObserved = true;
         }
     }
 
@@ -12474,6 +12536,17 @@ void FolderWindow::CommandMakeFileList(Pane pane)
         return;
     }
 
+    if (options.outputTarget == Common::Settings::MakeFileListOutputTarget::File && ! destinationObserved)
+    {
+        const HRESULT observation = Common::Files::ObserveLocalFileDestination(options.outputFile, acceptedVersion);
+        if (FAILED(observation))
+        {
+            ShowMakeFileListOverlay(
+                *this, pane, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_MSG_MAKE_FILE_LIST_OUTPUT_FILE_REQUIRED), observation);
+            return;
+        }
+    }
+
     InformationalTaskUpdate task{};
     task.kind                        = InformationalTaskUpdate::Kind::MakeFileList;
     task.title                       = LoadStringResource(nullptr, IDS_CMD_MAKE_FILE_LIST);
@@ -12487,8 +12560,9 @@ void FolderWindow::CommandMakeFileList(Pane pane)
 #ifdef ENABLE_TESTS
     g_makeFileListWorkerActive.store(true, std::memory_order_release);
 #endif
-    state.makeFileListThread = std::jthread(
-        [ownerHwnd, pane, root, selectedPaths = std::move(selectedPaths), options, title, taskId, totalStartedAt](std::stop_token stopToken) noexcept
+    state.makeFileListThread =
+        std::jthread([ownerHwnd, pane, root, selectedPaths = std::move(selectedPaths), options, acceptedVersion, title, taskId, totalStartedAt](
+                         std::stop_token stopToken) noexcept
     {
 #ifdef ENABLE_TESTS
         const auto clearWorkerActive = wil::scope_exit([] { g_makeFileListWorkerActive.store(false, std::memory_order_release); });
@@ -12563,7 +12637,7 @@ void FolderWindow::CommandMakeFileList(Pane pane)
             else if (options.outputTarget == Common::Settings::MakeFileListOutputTarget::File)
             {
                 const auto outputStartedAt = std::chrono::steady_clock::now();
-                operationHr                = WriteMakeFileListUtf8File(options.outputFile, outputUtf8, stopToken);
+                operationHr                = WriteMakeFileListUtf8File(options.outputFile, acceptedVersion, outputUtf8, stopToken);
                 if (operationHr == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && stopToken.stop_requested())
                 {
                     operationHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -12695,7 +12769,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecutePackArchive(const FileOpe
         auto* const retainedPublication = fileCleanup || treeApproved ? std::addressof(_archiveTask->publishedArchive) : nullptr;
         if (request.storedZip)
         {
-            result = CreateStoredZipArchive(inventory.entries, plan.targetPath, request.overwrite, fileCleanup, checkpoint, retainedPublication);
+            result = CreateStoredZipArchive(inventory.entries, plan.targetPath, request.acceptedVersion, fileCleanup, checkpoint, retainedPublication);
         }
         else
         {
@@ -12704,7 +12778,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecutePackArchive(const FileOpe
                 .classId        = request.classId,
                 .hasClassId     = true,
             };
-            result = CreateSevenZipArchive(inventory.entries, plan.targetPath, request.overwrite, packer, fileCleanup, checkpoint, retainedPublication);
+            result = CreateSevenZipArchive(inventory.entries, plan.targetPath, request.acceptedVersion, packer, fileCleanup, checkpoint, retainedPublication);
         }
         result.published = SUCCEEDED(result.hr);
 #ifdef ENABLE_TESTS
@@ -12989,14 +13063,36 @@ void FolderWindow::CommandPack(Pane pane)
     if (! _fileOperations)
         return;
 
+    std::optional<Common::Files::LocalFileVersion> acceptedVersion;
+    if (overwrite)
+    {
+        const HRESULT observation = Common::Files::ObserveLocalFileDestination(archivePath.value(), acceptedVersion);
+        if (FAILED(observation))
+        {
+            result.archivePath = archivePath.value();
+            result.hr          = observation;
+#ifdef ENABLE_TESTS
+            recordDebugResult(result);
+#endif
+            ShowArchiveOverlay(*this,
+                               pane,
+                               IDS_CMD_PACK,
+                               FolderView::OverlaySeverity::Warning,
+                               ArchiveFailureMessage(IDS_FMT_ARCHIVE_PACK_FAILED, result.archivePath, observation),
+                               observation);
+            return;
+        }
+    }
+
     auto pack     = std::make_shared<FileOperations::ArchiveTaskState>();
     pack->request = FileOperations::ArchiveTaskRequest{
-        .targetPath  = archivePath.value(),
-        .format      = selectedPacker.extensionNoDot,
-        .classId     = selectedPacker.classId,
-        .storedZip   = selectedPacker.storedZip,
-        .overwrite   = overwrite,
-        .deleteAfter = deleteSourcesAfterPack,
+        .targetPath      = archivePath.value(),
+        .format          = selectedPacker.extensionNoDot,
+        .classId         = selectedPacker.classId,
+        .storedZip       = selectedPacker.storedZip,
+        .overwrite       = overwrite,
+        .acceptedVersion = acceptedVersion,
+        .deleteAfter     = deleteSourcesAfterPack,
     };
     if (deleteSourcesAfterPack && SUCCEEDED(cleanupCapture))
         pack->request.cleanup = std::make_shared<const FileOperations::ArchiveCleanupReceipt>(cleanupReceipt);

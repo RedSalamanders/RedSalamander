@@ -1,6 +1,7 @@
 #include "ViewerText.h"
 #include "ViewerDxUiTheme.h"
 
+#include "GuardedSaveDialog.h"
 #include "HandleIo.h"
 #include "PathUtils.h"
 #include "ViewerText.SafetyHelpers.h"
@@ -3531,25 +3532,6 @@ HRESULT WriteAllHandle(HANDLE file, const void* data, size_t size) noexcept
     return Common::HandleIo::WriteAll(file, data, size);
 }
 
-HRESULT CreateSiblingSaveTemp(const std::filesystem::path& destinationPath, std::filesystem::path& tempPath, wil::unique_handle& tempFile) noexcept
-{
-    if (destinationPath.empty() || destinationPath.filename().empty() || destinationPath.parent_path().empty())
-    {
-        return E_INVALIDARG;
-    }
-
-    std::wstring tempPathText;
-    const Common::Paths::UniqueSiblingFileOptions options{.prefix             = L".redsalamander-viewertext-save-",
-                                                          .suffix             = L".tmp",
-                                                          .flagsAndAttributes = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
-                                                          .maximumAttempts    = 128u};
-    const HRESULT hr = Common::Paths::CreateUniqueSiblingFile(destinationPath.native(), options, tempPathText, tempFile);
-    if (SUCCEEDED(hr))
-    {
-        tempPath = std::filesystem::path(std::move(tempPathText));
-    }
-    return hr;
-}
 } // namespace
 
 const char* GetViewerTextStaticConfigurationSchema() noexcept
@@ -4674,7 +4656,10 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 _isLoading = true;
             }
 
-            request->result = SaveAsToPath(request->destinationPath, request->encodingSelection, injectedFault);
+            const std::filesystem::path destination(request->destinationPath);
+            std::optional<Common::Files::LocalFileVersion> acceptedVersion;
+            const HRESULT observation = Common::Files::ObserveLocalFileDestination(destination, acceptedVersion);
+            request->result = FAILED(observation) ? observation : SaveAsToPath(destination, request->encodingSelection, acceptedVersion, injectedFault);
             return TRUE;
         }
         case WndMsg::kViewerTextDebugReloadWithOpenFault:
@@ -8359,22 +8344,8 @@ std::optional<ViewerText::SaveAsResult> ViewerText::ShowSaveAsDialog(HWND hwnd) 
         static_cast<void>(customize->SetSelectedControlItem(kEncodingComboId, initialEncodingSelection));
     }
 
-    const HRESULT showHr = dialog->Show(hwnd);
-    if (FAILED(showHr))
-    {
-        return std::nullopt;
-    }
-
-    wil::com_ptr<IShellItem> item;
-    const HRESULT itemHr = dialog->GetResult(item.put());
-    if (FAILED(itemHr) || ! item)
-    {
-        return std::nullopt;
-    }
-
-    wil::unique_cotaskmem_string path;
-    const HRESULT nameHr = item->GetDisplayName(SIGDN_FILESYSPATH, path.put());
-    if (FAILED(nameHr) || ! path)
+    Common::Files::GuardedSaveSelection selection;
+    if (FAILED(Common::Files::ShowGuardedSaveDialog(*dialog.get(), hwnd, selection)))
     {
         return std::nullopt;
     }
@@ -8386,7 +8357,8 @@ std::optional<ViewerText::SaveAsResult> ViewerText::ShowSaveAsDialog(HWND hwnd) 
     }
 
     SaveAsResult result{};
-    result.path              = std::filesystem::path(path.get());
+    result.path              = std::move(selection.path);
+    result.acceptedVersion   = selection.acceptedVersion;
     result.encodingSelection = static_cast<UINT>(selectedEncoding);
     return result;
 }
@@ -8402,7 +8374,10 @@ void ViewerText::CommandOpen(HWND hwnd)
     static_cast<void>(OpenPath(hwnd, path.value(), true));
 }
 
-HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath, UINT encodingSelection, SaveAsFault injectedFault) noexcept
+HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath,
+                                 UINT encodingSelection,
+                                 const std::optional<Common::Files::LocalFileVersion>& acceptedVersion,
+                                 SaveAsFault injectedFault) noexcept
 {
     if (_currentPath.empty() || destinationPath.empty())
     {
@@ -8538,22 +8513,14 @@ HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath, U
         }
     }
 
-    std::filesystem::path tempPath;
-    wil::unique_handle tempFile;
-    const HRESULT createTempHr = CreateSiblingSaveTemp(normalizedDestination, tempPath, tempFile);
+    Common::Files::LocalFileTransaction transaction;
+    const auto policy = acceptedVersion.has_value() ? Common::Files::ExistingTargetPolicy::Replace : Common::Files::ExistingTargetPolicy::FailIfExists;
+    const HRESULT createTempHr =
+        Common::Files::LocalFileTransaction::Create(normalizedDestination, policy, false, transaction, L".redsalamander-viewertext-save-");
     if (FAILED(createTempHr))
     {
         return createTempHr;
     }
-
-    auto deleteTempOnFailure = wil::scope_exit([&]() noexcept
-    {
-        tempFile.reset();
-        if (! tempPath.empty())
-        {
-            static_cast<void>(DeleteFileW(tempPath.c_str()));
-        }
-    });
 
     HRESULT writeHr = S_OK;
     if (keepOriginal)
@@ -8591,7 +8558,7 @@ HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath, U
                 return E_FAIL;
             }
 
-            writeHr = WriteAllHandle(tempFile.get(), buffer.data(), static_cast<size_t>(read));
+            writeHr = WriteAllHandle(transaction.GetHandle(), buffer.data(), static_cast<size_t>(read));
             if (FAILED(writeHr))
             {
                 return writeHr;
@@ -8615,7 +8582,7 @@ HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath, U
             return E_FAIL;
         }
 
-        const auto writeBytes = [&](const void* data, size_t size) noexcept { return WriteAllHandle(tempFile.get(), data, size); };
+        const auto writeBytes = [&](const void* data, size_t size) noexcept { return WriteAllHandle(transaction.GetHandle(), data, size); };
 
         if (saveEncoding.kind == SaveEncoding::Kind::CodePage && saveEncoding.writeBom && saveEncoding.codePage == CP_UTF8)
         {
@@ -8761,7 +8728,7 @@ HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath, U
             }
         };
 
-        SaveCookie cookie{.file = tempFile.get(), .encoding = saveEncoding};
+        SaveCookie cookie{.file = transaction.GetHandle(), .encoding = saveEncoding};
         if (saveEncoding.kind == SaveEncoding::Kind::CodePage)
         {
             // Stateful Windows code pages must be converted in one call so escape/shift state is not reset at arbitrary chunk boundaries.
@@ -8797,13 +8764,6 @@ HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath, U
     {
         return E_FAIL;
     }
-    if (FlushFileBuffers(tempFile.get()) == FALSE)
-    {
-        const DWORD error = GetLastError();
-        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_WRITE_FAULT);
-    }
-
-    tempFile.reset();
     sourceReader.reset();
 
     if (injectedFault == SaveAsFault::Commit)
@@ -8835,14 +8795,13 @@ HRESULT ViewerText::SaveAsToPath(const std::filesystem::path& destinationPath, U
             _fileReader = std::move(reopenedReader);
         }
     });
-    if (MoveFileExW(tempPath.c_str(), normalizedDestination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == FALSE)
+    std::filesystem::path retainedBackup;
+    const HRESULT result = transaction.CommitGuarded(acceptedVersion, retainedBackup);
+    if (! retainedBackup.empty())
     {
-        const DWORD error = GetLastError();
-        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_WRITE_FAULT);
+        Debug::Warning(L"ViewerText retained the previous version of '{}' at '{}'.", normalizedDestination.c_str(), retainedBackup.c_str());
     }
-
-    deleteTempOnFailure.release();
-    return S_OK;
+    return result;
 }
 
 void ViewerText::CommandSaveAs(HWND hwnd)
@@ -8870,7 +8829,7 @@ void ViewerText::CommandSaveAs(HWND hwnd)
         return;
     }
 
-    const HRESULT saveHr = SaveAsToPath(destination.value().path, encodingSelection);
+    const HRESULT saveHr = SaveAsToPath(destination.value().path, encodingSelection, destination.value().acceptedVersion);
     if (saveHr == HRESULT_FROM_WIN32(ERROR_BUSY))
     {
         ShowInlineAlert(InlineAlertSeverity::Error, IDS_VIEWERTEXT_CAPTION_ERROR, IDS_VIEWERTEXT_ERR_SAVE_LOADING);

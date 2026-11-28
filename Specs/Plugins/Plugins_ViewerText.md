@@ -104,8 +104,8 @@ Behavior:
 - A streamed text document may be saved only with `Keep Original Encoding`. Re-encoding a partially loaded stream is refused with a localized actionable error before any destination artifact is created.
 - `Keep Original Encoding` acquires, sizes, and seeks a fresh `IFileReader` for the current source before creating output. It copies the complete source through bounded chunks rather than exporting only the visible text buffer, and refuses to commit when the yielded byte count differs from the acquired source size.
 - Re-encoding uses the complete in-memory document and writes conversion output in bounded chunks. It validates the target code page before creating output.
-- Both modes create a unique sibling temp in the destination directory, write only that temp, call `FlushFileBuffers`, close it, and then commit with same-volume `MoveFileExW(..., MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`.
-- Every pre-commit failure closes and deletes only the sibling temp. Source bytes and any pre-existing destination bytes remain unchanged.
+- Both modes write and flush an owned sibling through [guarded local publication](../Core/Core_SharedHelpers.md#local-transaction-rollback). The shell overwrite prompt binds the accepted destination revision. A new destination can only be created.
+- On failure the owned stage is retired. A changed destination is preserved. If a competing file prevents rollback, the retained backup path is reported in diagnostics.
 - Same-path keep-original saves are supported. At the commit quiet point, the viewer releases its long-lived reader for the current path and reopens that reader after the rename attempt so Windows sharing rules do not turn a safe same-path save into `ERROR_ACCESS_DENIED`.
 - The production dialog path and the Debug non-dialog test seam call the same save primitive.
 

@@ -243,7 +243,7 @@ Pane view option commands target the focused pane, or the active pane when focus
 - The recursive option descends into folders. `includeDirectories` controls whether directory rows appear in the generated list.
 - Output formats are JSON, CSV, and text. JSON and CSV use the selected field flags (`includeName`, `includeFullPath`, `includeSize`, `includeModified`, and `includeAttributes`). Text uses `textMacro`.
 - Text macros are case-insensitive and include `{filename}`, `{name}`, `{fullPath}`, `{path}`, `{size}`, `{modified}`, `{attributes}`, and `{isDirectory}`. `{{` and `}}` emit literal braces.
-- Output targets are the clipboard or a UTF-8 file. File output requires a non-empty output path.
+- Output targets are the clipboard or a UTF-8 file. File output requires a non-empty output path. The overwrite prompt records the accepted revision for [guarded local publication](../Core/Core_SharedHelpers.md#local-transaction-rollback).
 - Generated entries are deterministic and sorted by full path. CSV quotes commas, quotes, and newlines. JSON includes `format`, `count`, and `entries`.
 - The last selected options are persisted in `settings.makeFileList`.
 - Command selftests MUST keep correctness and responsiveness visible with `makeFileList.collect_us`, `makeFileList.generate_us`, `makeFileList.output_us`, `makeFileList.total_us`, and an archived JSON/CSV/text output artifact set.
@@ -311,7 +311,7 @@ Possible artifact shapes).
 - The Unpack file mask uses the same wildcard syntax as Select/Unselect and pane Filter. `*.*`, `*`, or an empty mask extracts all safe entries. Other masks match either the archive entry path or the entry filename; unmatched files and empty directory entries are skipped.
 - With Delete after unpacking enabled, the command can remove the selected archives only after successful extraction, permanent-delete consent and [exact archive-version checks](../FileSystem/FileSystem_FileOperations.md). The Pack and Unpack confirmations include any possible-leftover disclosure for exact regular-file selections.
 - Test/debug automation may supply the destination and overwrite policy directly.
-- Existing archive outputs or extracted files are preserved when overwrite is disabled. Failures report the relevant HRESULT and do not fall through to the generic "not implemented" message.
+- Existing archive outputs or extracted files are preserved when overwrite is disabled. Pack automation that requests overwrite binds the selected archive revision at admission. Unpack with Replace binds each existing file before decoding it. Both stored ZIP and 7-Zip outputs use [guarded local publication](../Core/Core_SharedHelpers.md#local-transaction-rollback) and preserve changes made after that observation. Failures report the relevant HRESULT and do not fall through to the generic "not implemented" message.
 - Command selftests MUST keep correctness and responsiveness visible with Pack prompt coverage, Unpack prompt/mask/delete-after coverage, 7z creation coverage, stored-ZIP round-trip coverage, compressed-ZIP extraction coverage, CP437 non-ASCII filename coverage, decompressed-size rejection coverage, overwrite validation, invalid destination/path validation, unsupported-provider feedback, `archive.pack_us`, `archive.unpack_us`, `archive.feedback_us`, and an archived `archive_commands_metrics.json` artifact.
 
 ### Canonical Command IDs

@@ -1107,14 +1107,14 @@ Describe 'Test harness source contracts' {
         $body | Should Not Match 'CREATE_ALWAYS'
         $body | Should Match '_isLoading[\s\S]{0,120}ERROR_BUSY'
         $body | Should Match '_textStreamActive[\s\S]{0,160}ERROR_NOT_SUPPORTED'
-        $body | Should Match 'CreateSiblingSaveTemp'
+        $body | Should Match 'LocalFileTransaction::Create\(normalizedDestination'
         $body | Should Match 'sourceReader->GetSize\(&expectedSourceBytes\)'
         $body | Should Match 'copiedSourceBytes\s*!=\s*expectedSourceBytes[\s\S]{0,120}ERROR_HANDLE_EOF'
-        $body | Should Match 'FlushFileBuffers\(tempFile\.get\(\)\)'
-        $body | Should Match 'MoveFileExW\(tempPath\.c_str\(\),\s*normalizedDestination\.c_str\(\),\s*MOVEFILE_REPLACE_EXISTING\s*\|\s*MOVEFILE_WRITE_THROUGH\)'
+        $body | Should Match 'transaction\.CommitGuarded\(acceptedVersion,\s*retainedBackup\)'
+        $body | Should Not Match 'MOVEFILE_REPLACE_EXISTING'
         $readerOpenIndex = $body.IndexOf('CreateFileReader(_currentPath.c_str(), sourceReader.put())')
         $readerSeekIndex = $body.IndexOf('ViewerTextSafety::SeekExact(sourceReader.get(), 0u)')
-        $tempCreateIndex = $body.IndexOf('CreateSiblingSaveTemp')
+        $tempCreateIndex = $body.IndexOf('LocalFileTransaction::Create(normalizedDestination')
         $readerOpenIndex | Should BeGreaterThan -1
         $readerSeekIndex | Should BeGreaterThan -1
         $tempCreateIndex | Should BeGreaterThan -1
@@ -5757,6 +5757,8 @@ Specs\TestRuns\local_scratch
         $packWorker = [regex]::Match($commands, '(?ms)^HRESULT FolderWindow::FileOperationState::Task::ExecutePackArchive\(.*?(?=^void FolderWindow::CommandPack\()')
         $packWorker.Success | Should Be $true
         $worker = $packWorker.Value -replace '\s+', ' '
+        $worker | Should Match 'CreateStoredZipArchive\(inventory\.entries, plan\.targetPath, request\.acceptedVersion, fileCleanup, checkpoint, retainedPublication\)'
+        $worker | Should Match 'CreateSevenZipArchive\(inventory\.entries, plan\.targetPath, request\.acceptedVersion, packer, fileCleanup, checkpoint, retainedPublication\)'
         $worker | Should Match 'if \(result\.published && treeApproved\) \{[^{}]*result\.cleanupHr = _archiveTask->publishedArchive \? BindPackTree\(inventory, \*roots, checkpoint, &approvedTree, strict\) : E_UNEXPECTED;'
         $worker | Should Match 'if \(result\.cleanupHr == S_OK\) result\.cleanupHr = DeletePackTree\(strict, checkpoint, removed\);'
         $commands | Should Not Match 'DeletePackedSources\('
@@ -5781,8 +5783,9 @@ Specs\TestRuns\local_scratch
         $transaction | Should Match 'FailNextLocalFileTransactionFlush'
         $transaction | Should Match 'FailNextLocalFileTransactionPublish'
 
-        $commands | Should Match 'WriteMakeFileListUtf8File[\s\S]{0,500}LocalFileTransaction::Create'
-        $commands | Should Match 'transaction\.Commit\(static_cast<uint64_t>\(bytes\.size\(\)\)\)'
+        $commands | Should Match 'WriteMakeFileListUtf8File[\s\S]{0,1300}LocalFileTransaction::Create'
+        $commands | Should Match 'CommitGuardedUserFile\(transaction,\s*acceptedVersion,\s*static_cast<uint64_t>\(bytes\.size\(\)\)\)'
+        $transaction | Should Match 'CommitGuarded[\s\S]{0,750}_policy\s*=\s*ExistingTargetPolicy::FailIfExists'
         $commands | Should Not Match 'WriteMakeFileListUtf8File[\s\S]{0,900}CREATE_ALWAYS'
     }
 
@@ -5792,12 +5795,12 @@ Specs\TestRuns\local_scratch
         $messages = Get-RSText -Path 'Common\WindowMessages.h'
         $selftest = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
 
-        $commands | Should Match 'PromptForMakeFileListOutputFile[\s\S]{0,1800}GetSaveFileNameW'
-        $commands | Should Match 'OFN_OVERWRITEPROMPT\s*\|\s*OFN_PATHMUSTEXIST'
+        $commands | Should Match 'PromptForMakeFileListOutputFile[\s\S]{0,4200}ShowGuardedSaveDialog'
+        $commands | Should Match 'FOS_OVERWRITEPROMPT\s*\|\s*FOS_PATHMUSTEXIST'
         $commands | Should Match 'state\.makeFileListThread\s*=\s*std::jthread'
         $commands | Should Match 'CollectMakeFileListEntries[\s\S]{0,600}const std::stop_token& stopToken'
         $commands | Should Match 'RenderMakeFileListOutput[\s\S]{0,420}const std::stop_token& stopToken'
-        $commands | Should Match 'WriteMakeFileListUtf8File[\s\S]{0,850}stopToken\.stop_requested\(\)[\s\S]{0,280}transaction\.Commit'
+        $commands | Should Match 'WriteMakeFileListUtf8File[\s\S]{0,1900}stopToken\.stop_requested\(\)[\s\S]{0,280}CommitGuardedUserFile\(transaction, acceptedVersion'
         $commands | Should Match 'state\.makeFileListThread\.request_stop\(\)'
         $commands | Should Match 'PostMessagePayload\(ownerHwnd,\s*WndMsg::kMakeFileListCompleted'
         $commands | Should Match 'OnMakeFileListCompleted[\s\S]{0,900}Common::Clipboard::TrySetUnicodeText'
@@ -5819,8 +5822,10 @@ Specs\TestRuns\local_scratch
         $commands | Should Match 'BuildArchiveConflictPolicyComboItems[\s\S]{0,260}IDS_ARCHIVE_UNPACK_CONFLICT_SKIP[\s\S]{0,180}IDS_ARCHIVE_UNPACK_CONFLICT_REPLACE'
         $commands | Should Match '_conflictPolicyCombo->SetSelectedIndex\(0u\)'
         $commands | Should Match 'ClassifyArchiveTarget[\s\S]{0,900}ArchiveTargetDecision::Skip'
-        $commands | Should Match 'ExtractStoredZipFileEntry[\s\S]{0,900}LocalFileTransaction::Create'
-        $commands | Should Match 'SevenZipExtractFileOutStream[\s\S]{0,1400}LocalFileTransaction::Create'
+        $commands | Should Match 'ExtractStoredZipFileEntry[\s\S]{0,1000}CreateLocalArchiveOutput\(targetPath, conflictPolicy, transaction, acceptedVersion\)'
+        $commands | Should Match 'SevenZipExtractFileOutStream[\s\S]{0,1600}CreateLocalArchiveOutput\(targetPath, conflictPolicy, transaction, acceptedVersion\)'
+        $commands | Should Match 'CommitGuardedUserFile\(transaction, acceptedVersion, entry\.uncompressedSize\)'
+        $commands | Should Match 'CommitGuardedUserFile\(_transaction, _acceptedVersion, _bytesWritten\)'
         $commands | Should Match 'skippedConflictCount'
 
         $settingsSelftest | Should Match 'Unpack skip-existing policy should preserve existing destination file'
@@ -5842,7 +5847,10 @@ Specs\TestRuns\local_scratch
         $header | Should Match 'SettingsPersistenceState[\s\S]{0,700}std::optional<SettingsFileStamp> expectedFileStamp'
         $header | Should Match 'SaveSettings\(std::wstring_view appId,\s*Settings& settings\)'
         $store | Should Match 'LocalFileTransaction::Create\(path[\s\S]{0,1200}SettingsCommitLock::Acquire'
-        $store | Should Match 'currentStamp\s*!=\s*\*expectedStamp[\s\S]{0,160}ERROR_REVISION_MISMATCH'
+        $store | Should Match 'currentStamp\s*!=\s*\*save\.expected[\s\S]{0,160}ERROR_REVISION_MISMATCH'
+        $store | Should Match 'recordWrite\.Commit\(sizeof\(save\.record\), nullptr, &save\.file\)'
+        $store | Should Match 'RestoreBoundFileIfFree\(backup\.get\(\), target\)'
+        $store | Should Match 'CommitGuarded\(acceptedVersion, retainedBackup, bytes\.size\(\), nullptr, options\)'
         $store | Should Match 'settings\.persistence\.expectedFileStamp\s*=\s*committedStamp'
         $store | Should Not Match 'tmpPath\s*\+=\s*L"\.tmp"'
         $transaction | Should Match 'Commit\(std::optional<uint64_t> expectedSize\s*=\s*std::nullopt,\s*BY_HANDLE_FILE_INFORMATION\* committedFileInformation'
@@ -5860,6 +5868,7 @@ Specs\TestRuns\local_scratch
         $preferences | Should Not Match 'kPreferencesMonitorAppId|RedSalamanderMonitor|workingMonitorSettings'
 
         $tests | Should Match '--settings-store-cas-child'
+        $tests | Should Match '--settings-store-interrupted-save-child'
         $tests | Should Match 'ERROR_REVISION_MISMATCH'
         $tests | Should Match 'ERROR_NO_UNICODE_TRANSLATION'
         $tests | Should Match 'values above UINT32_MAX are rejected instead of truncated'
