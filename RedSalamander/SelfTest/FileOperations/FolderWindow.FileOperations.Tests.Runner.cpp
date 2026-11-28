@@ -14196,20 +14196,20 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
     }
     selection.push_back(source);
     const size_t remoteIndex = selection.size() - 1u;
-    const auto started      = std::chrono::steady_clock::now();
-    const HRESULT admission = operations->AdmitOperation(FILESYSTEM_DELETE,
-                                                         FolderWindow::Pane::Left,
-                                                         std::nullopt,
-                                                         state.fsLocal,
-                                                         selection,
-                                                         {},
-                                                         FILESYSTEM_FLAG_USE_RECYCLE_BIN,
-                                                         false,
-                                                         0u,
-                                                         FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                         false,
-                                                         nullptr,
-                                                         &taskId);
+    const auto started       = std::chrono::steady_clock::now();
+    const HRESULT admission  = operations->AdmitOperation(FILESYSTEM_DELETE,
+                                                          FolderWindow::Pane::Left,
+                                                          std::nullopt,
+                                                          state.fsLocal,
+                                                          selection,
+                                                          {},
+                                                          FILESYSTEM_FLAG_USE_RECYCLE_BIN,
+                                                          false,
+                                                          0u,
+                                                          FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                          false,
+                                                          nullptr,
+                                                          &taskId);
     if (admission != S_OK || taskId == 0u)
         return reject(std::format(L"Delete admission returned 0x{:08X}", static_cast<uint32_t>(admission)));
 
@@ -14221,12 +14221,14 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
         return (prompt.has_value() && prompt.value().buttonsPublishable) || state.completedTasks.contains(taskId);
     },
         {.timeout = SelfTest::Scale(std::chrono::seconds(20)), .operationName = L"SMB Recycle refusal"});
-    auto* const task = operations->FindTask(taskId);
-    const auto plans = task ? task->LoadPlans() : nullptr;
+    auto* const task         = operations->FindTask(taskId);
+    const auto plans         = task ? task->LoadPlans() : nullptr;
     const bool recycleRoutes = plans && plans->size() == selection.size() &&
-                               std::ranges::all_of(selection, [&](const auto& path) noexcept
+                               std::ranges::all_of(selection,
+                                                   [&](const auto& path) noexcept
     {
-        return std::ranges::any_of(*plans, [&](const auto& plan) noexcept
+        return std::ranges::any_of(*plans,
+                                   [&](const auto& plan) noexcept
         {
             const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
             return deletion && deletion->mode == FileOperations::DeleteMode::Recycle && deletion->selectedItems.size() == 1u &&
@@ -14272,7 +14274,7 @@ constexpr int64_t kSelfTestYear2001Ticks = 126'227'808'000'000'000;
         const bool localRecycled = items.front().has_value() && items.front().value().completion == FileOperations::ItemCompletion::Completed &&
                                    items.front().value().sourceDisposition == FileOperations::SourceDisposition::Removed &&
                                    GetFileAttributesW(localSource.c_str()) == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND;
-        const auto purgeFailure = PurgeExpectedRecycledTestItems(1u);
+        const auto purgeFailure  = PurgeExpectedRecycledTestItems(1u);
         if (! purgeFailure.empty())
             return reject(purgeFailure);
         if (! localRecycled)
