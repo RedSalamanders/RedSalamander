@@ -310,7 +310,7 @@ its build to correct the witness. The corrected live Windows SMB case passed on 
   - [x] Land async Create Folder and the responsive name prompt in PRs #261 and #278. The focused worker and desktop checks passed.
   - [x] Land the explicit-start Custom editor and persisted Copy links Apply and Cancel behavior in PRs #259 and #271.
   - [x] Measure Create Folder with a controlled slow provider. Verify it refreshes the original pane when it stays in place and preserves the new location after navigation.
-  - [ ] Finish Pack and Unpack worker and cleanup qualification.
+  - [x] Verify local Pack and Unpack worker and cleanup in x64 Release. The exact ZIP and 7z directory cleanup and refusal cases passed, and the Pack and Unpack round trip passed all three repetitions on the corrected tree. Integrated hosted qualification remains open above. [Exact archive evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-27_080923_restart_qualification/README.md#exact-pack-directory-cleanup)
 - [x] **S8.** Synchronize the integrated workflow with the owning specifications, consistency ledger and user guide. The audit covered fixed destinations, Cut/Paste, repeat decisions, options and queue controls, Rename capability and archive cleanup. The Stopping action list now matches the retained read-only path inspection.
 - [ ] **Closeout.** Complete the walkthrough, native and live-provider gates, document checks and reviewed history
   admission. Move to Done after all required rows have evidence or an accepting owner for the exact transferred gate.
