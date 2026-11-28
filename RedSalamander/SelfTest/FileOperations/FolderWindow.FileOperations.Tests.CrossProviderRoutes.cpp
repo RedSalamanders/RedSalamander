@@ -1000,7 +1000,7 @@ private:
     }, {.timeout = SelfTest::Scale(10s), .operationName = L"virtual Move folder picker listing"});
     if (! listed.conditionMet)
         return reject(listed.timeoutDiagnostic);
-    owner.SetPaneSelectionByDisplayNamePredicate(sourcePane, [leaf](std::wstring_view name) noexcept { return name == leaf; });
+    owner.SetPaneSelectionByDisplayNamePredicate(sourcePane, [](std::wstring_view name) noexcept { return name == leaf; });
     if (owner.DebugGetSelectedCount(sourcePane) != 1u || ! owner.DebugIsItemSelected(sourcePane, leaf))
         return reject(L"the unique virtual source file was not selected");
 
