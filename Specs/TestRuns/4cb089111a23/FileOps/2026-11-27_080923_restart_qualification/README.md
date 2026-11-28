@@ -591,3 +591,37 @@ The corrected Terminal sequence ran lifecycle, catalog, tab reopening and settin
 Exact `594d58373708f05ccc58f2d49efd963f450cd55a` built the test-enabled x64 Release solution with zero warnings and errors, receipt `12cf77b57ea452ab32bdfce24e9472440bf82e0a4a332d496b0496b5e337c502`. The real Windows Cut fixture placed two Local paths with Move effect on its clipboard. It then selected a virtual file and invoked both Copy and Cut through the pane command dispatcher. Each displayed the Local selection warning and preserved the clipboard generation, the two paths and the Move effect. The virtual fixture was removed.
 
 All three repetitions of `cmd_pane_clipboardCut_sets_move_drop_effect` passed with zero failures and skips at 946, 709 and 703 ms. The filtered repository verdict is `NOT_EVALUATED`. Native run `20261128T070433Z-34864-e090bb7e70154097b2c3aa47892cee23`, results SHA-256 `a6aea2b91da64a4f217f9f3e718629866f65a9e2fa33103e41261793b64e990d`. The launcher `20261128T070432Z-80680-bd92df4748fc480eacd1d5f795f26bad` drained at 08:05:41 CET, result SHA-256 `75fb563d01ee83b567618b5468837af8b15cdcaa11c5dacd8e55feb9a75e5c02`. PR #402 merged at `7369f2d95b94aa4bece6c8f1344d3083d05878bf`. [Merged PR](https://github.com/RedSalamanders/RedSalamander/pull/402)
+
+### Live SMB Recycle and scheduled Rename cancellation
+
+Baseline `aad8b5f0a1fa08447425004a8950791510d9dfa2` built the test-enabled x64 Release solution with zero warnings and errors, receipt `5b0c8945242dc3b41cce64f3a8922eedbc6d69ea034411861e79c7afc64e0e38`. All selections ran without activation. The mixed Recycle selection used a fresh owned file on an approved SMB share and a separate Local file in the marked sandbox. The provider returned unknown Recycle availability for the SMB file. The task asked once for that group, Skip retained the exact SMB bytes, the Local Recycle completed, and cleanup purged one journaled test item. The SMB-only control selected a by-name prompt on Samba and an exact-identity prompt on Windows SMB.
+
+| Baseline selection | Passed/failed/skipped | Native run | Results SHA-256 |
+|---|---:|---|---|
+| Samba SMB-only and mixed Recycle | 3/0/0 | `20261128T083418Z-36388-e2c7c82348e4490785ef16e5cf960353` | `d9bc70d21149e73e20056a6b8a1922a6a06d1967b79b0ebb14d1b507296aaf50` |
+| Windows SMB-only and mixed Recycle | 3/0/0 | `20261128T083703Z-57496-be7934272a444ba3a37d49ddf521c649` | `22f4b6d040257223aae4ab179112a0cd20c749cf09b9cd16d8c2a30942d97225` |
+| Windows SMB exact and scheduled Rename | 2/1/0 | `20261128T083748Z-57496-d8464ff837874bc38d9d63acc5a48a35` | `29f0be599160483283013e0b82bcfb42bf2fdb9fd7d6e222ee7b41690a5427cc` |
+
+The mixed Recycle task settled in 126,757 µs on Samba and 56,816 µs on Windows SMB. The initial Windows Recycle selection also passed. After that run, the temporary fixture registry restore failed because the PowerShell call bound an empty backup argument. The original registry was restored from its unchanged backup after verifying both hashes. The repeated selection used the corrected restore and verified the original bytes after exit. The configured resources on both marked local test volumes were verified before the corrected build.
+
+Both normal Windows SMB scheduled Rename origins completed, with measured task times of 36,927 µs for Batch Rename and 30,747 µs for Change Case. Cancellation reached the worker barrier and returned `ERROR_CANCELLED` in 49,391 µs. The case failed its combined assertion for exact retained fixtures and the canceled item result. Trace SHA-256 `4c29c01d6be78928ae897d729a55e06bddb9a0f07f8ba104862ff3e9f403b1c9`. The scheduler marked rows as possibly mutated on entry before its read-only preflight. The correction in #404 moves that transition to the execution handoff and measures the fixture checks and typed result separately. [Live fixture and scheduler PR](https://github.com/RedSalamanders/RedSalamander/pull/404)
+
+Corrected source `48f917d31922c250d0826763aca7acccae7f97a3` built the test-enabled x64 Release solution with zero warnings and errors, receipt `7e62eb656bf4c557d6e9ea96096fc30afb37ad2ef7f0a828f4a09deab2842565`. All corrected selections passed setup, the selected case and cleanup without activation. The C and Z resource files matched their original hashes after the launcher exited. Filtered repository verdict `NOT_EVALUATED`.
+
+| Corrected selection | Passed/failed/skipped | Native run | Results SHA-256 |
+|---|---:|---|---|
+| Windows SMB exact and scheduled Rename | 3/0/0 | `20261128T084929Z-55164-27d8399df0c948ef99cda6217295a1aa` | `6212557ca0e7dfcba8e43c1593bec6018c8ae482d5843c108a05f02d6df4ef90` |
+| Samba SMB-only and mixed Recycle | 3/0/0 | `20261128T085012Z-55164-030270fbbaa247b58b770aefca4c7c06` | `6de231017deffbf21dd88390b12ae9393e6d02a6e89e52e9198fb5b91a0cb0db` |
+| Windows SMB-only and mixed Recycle | 3/0/0 | `20261128T085051Z-55164-193b6279e943409eb84cbafab57537a4` | `414e15d1868ce36c0f67433a0ff898656fc1bf24950aad7c16ed9d844f345566` |
+
+Windows SMB cancellation reached the barrier and returned `ERROR_CANCELLED`. The witness separately confirmed the exact original leaf and bytes, unrelated sibling bytes, and the absence of the requested destination. The one returned item reported `NotAttempted + Retained + Canceled` with the same status. Trace SHA-256 `2b19c6e8ee431abfe46507f43f5e511100401c58afc0b2b36fcc12a0b237245c`. The blocking watcher returned `ERROR_SHARING_VIOLATION` on both builds.
+
+| Same live Windows SMB fixture | Baseline | Corrected |
+|---|---:|---:|
+| One exact Rename with independent rebind verification | 4,075 µs | 5,091 µs |
+| 100 exact Renames with independent rebind verification | 370,381 µs | 333,820 µs |
+| Scheduled Batch Rename | 36,927 µs | 40,555 µs |
+| Scheduled Change Case | 30,747 µs | 30,641 µs |
+| Cancel request to completion callback | 49,391 µs, result assertion failed | 51,410 µs, passed |
+
+The timing observations are one sample per build. The corrected raw performance log SHA-256 is `5a32371d4f29c74ca0365e3fb2f04036bbd72294bd47385d4e4240911b5314fd`. Live legacy fallback and whole-process handle peaks are separate gates. PR #404 merged at `6213ed82ceb665140492f278c86df646a07f0a17`. [Merged PR](https://github.com/RedSalamanders/RedSalamander/pull/404)
