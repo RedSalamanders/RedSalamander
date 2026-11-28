@@ -1,0 +1,1 @@
+- Close Batch Rename and navigate away from the test folder before removing it so later Commands cases can restore the pane.

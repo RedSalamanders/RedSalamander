@@ -6618,7 +6618,8 @@ private:
         state.Require(SUCCEEDED(manager.Refresh(g_settings)), std::format(L"{} initial enabled catalog refresh failed.", fixture.id));
         HRESULT initialHr  = E_PENDING;
         const auto initial = createAfterRetirement(owner, initialHr);
-        state.Require(initial.conditionMet && owner, std::format(L"{} enabled fixture creation failed (hr=0x{:08X}).", fixture.id, initialHr));
+        state.Require(initial.conditionMet && owner,
+                      std::format(L"{} enabled fixture creation failed (hr=0x{:08X}).", fixture.id, static_cast<uint32_t>(initialHr)));
         if (! owner)
             return false;
 

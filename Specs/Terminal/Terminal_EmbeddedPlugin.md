@@ -1272,6 +1272,9 @@ out-of-band follow with exact cwd confirmation, contextual/full/current-folder
 insertion routes, local-to-unsupported generation advance, localized fail-closed
 open behavior, typed archive-plugin backing identity, and immediate child
 removal on nonblocking close.
+The accessibility check resolves the child window through a bounded UI
+Automation client and verifies the Terminal provider's AutomationId. The
+client releases the root before the test continues to window retirement.
 The narrower
 `cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target` case proves a
 terminal-only pane exposes exactly Folder and Terminal headers, keeps Preview
