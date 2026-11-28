@@ -1,0 +1,1 @@
+- Verify that Copy and Cut on a virtual selection preserve the existing Windows clipboard and explain why file-drop data needs a local selection.
