@@ -2689,6 +2689,58 @@ struct ClipboardDropEffectReadStatus
                               effectReadStatus.hasHandle ? 1 : 0,
                               effectReadStatus.locked ? 1 : 0));
     state.Require(effect.value_or(DROPEFFECT_NONE) == DROPEFFECT_MOVE, L"Clipboard Cut should publish Preferred DropEffect = DROPEFFECT_MOVE.");
+    if (! state.failure.empty())
+        return false;
+
+    constexpr auto pane                     = FolderWindow::Pane::Left;
+    constexpr std::wstring_view dummyPlugin = L"builtin/file-system-dummy";
+    if (! state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(pane, dummyPlugin)), L"Switch to the owned virtual pane."))
+        return false;
+    const auto* entry = FileSystemPluginManager::GetInstance().FindPluginById(dummyPlugin);
+    if (! state.Require(entry && ! entry->shortId.empty(), L"A virtual pane is required for the Windows clipboard refusal check."))
+        return false;
+    const auto dummy                        = g_folderWindow.GetFileSystem(pane);
+    const auto io                           = dummy ? dummy.try_query<IFileSystemIO>() : wil::com_ptr<IFileSystemIO>{};
+    const std::filesystem::path virtualRoot = L"/i66-clipboard-" + NewGuidText();
+    const std::wstring rootText             = virtualRoot.generic_wstring();
+    if (! state.Require(EnsureDummyFolderExistsForFileOpsPrompt(dummy.get(), rootText), L"Create the owned virtual clipboard test directory."))
+        return false;
+    const auto removeVirtualFixture = [&]() noexcept
+    { return SUCCEEDED(dummy->DeleteItem(rootText.c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr)); };
+    auto removeOnFailure = wil::scope_exit([&]() noexcept { static_cast<void>(removeVirtualFixture()); });
+    if (! state.Require(WritePatternFileFsIoForFileOpsPrompt(io, virtualRoot / L"inventory.txt", 32u), L"Create the virtual source file."))
+        return false;
+    const auto virtualLocation = NavigationLocation::FormatEditPath(entry->shortId, virtualRoot);
+    g_folderWindow.SetFolderPath(pane, virtualLocation);
+    if (! state.Require(WaitForPanePath(pane, virtualLocation, SelfTest::Scale(3000ms)) && WaitForPaneItems(pane, {L"inventory.txt"}, SelfTest::Scale(3000ms)),
+                        L"The virtual pane must list the owned source file."))
+        return false;
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(pane, [](std::wstring_view name) noexcept { return name == L"inventory.txt"; });
+    if (! state.Require(g_folderWindow.DebugGetSelectedCount(pane) == 1u &&
+                            WaitForFolderViewPaneFocus(pane, g_folderWindow.GetFolderViewHwnd(pane), SelfTest::Scale(1000ms)),
+                        L"Select the virtual source and focus its pane before Copy and Cut."))
+        return false;
+    const DWORD clipboardSequence = GetClipboardSequenceNumber();
+    if (! state.Require(clipboardSequence != 0u, L"The owned Local Cut must have a readable clipboard generation."))
+        return false;
+    const auto dismissAlert = wil::scope_exit([&]() noexcept { g_folderWindow.DismissPaneAlertOverlay(pane); });
+    for (const int command : {IDM_PANE_CLIPBOARD_COPY, IDM_PANE_CLIPBOARD_CUT})
+    {
+        g_folderWindow.DismissPaneAlertOverlay(pane);
+        SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(command, 0), 0);
+        PumpPendingMessages();
+        FolderView::AlertOverlayDebugSnapshot alert{};
+        state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(pane, alert) && alert.visible &&
+                          alert.message == LoadStringResource(nullptr, IDS_MSG_CLIPBOARD_LOCAL_SELECTION_REQUIRED),
+                      L"Virtual Copy and Cut must explain that Windows file-drop data requires a local selection.");
+        state.Require(GetClipboardSequenceNumber() == clipboardSequence, L"Virtual Copy and Cut must preserve the clipboard generation.");
+    }
+    const auto retained = ReadClipboardDropPathsForShellCommandTest(mainWindow);
+    state.Require(retained.size() == 2u && ContainsPathForShellCommandTest(retained, alphaPath) && ContainsPathForShellCommandTest(retained, betaPath) &&
+                      ReadClipboardPreferredDropEffectForShellCommandTest(mainWindow).value_or(DROPEFFECT_NONE) == DROPEFFECT_MOVE,
+                  L"Virtual Copy and Cut must preserve both owned Local Cut paths and the Move effect.");
+    static_cast<void>(removeOnFailure.release());
+    state.Require(removeVirtualFixture(), L"Remove the owned virtual clipboard fixture.");
 
     return state.failure.empty();
 }
