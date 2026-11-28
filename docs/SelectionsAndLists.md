@@ -61,6 +61,8 @@ next step is another program. The dialog remembers its last options; review
 scope, recursion and output destination before reusing them.
 
 The persisted options are described under
+If the output file changes after you confirm an overwrite, Make File List preserves the newer file and reports a conflict.
+
 [Make File List defaults](SettingsFile.md#configure-make-file-list-defaults).
 
 ## Properties, attributes and names

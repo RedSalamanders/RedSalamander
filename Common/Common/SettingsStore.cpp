@@ -13,6 +13,7 @@
 #include <mutex>
 #include <new>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <strsafe.h>
@@ -71,6 +72,7 @@ constexpr wchar_t kRunsDirName[]                 = L"runs";
 constexpr wchar_t kScratchDirName[]              = L"scratch";
 constexpr wchar_t kSettingsStoreScratchDirName[] = L"settings-store";
 std::atomic_bool g_useFixedSettingsBackupTimestampForTest{false};
+thread_local void (*g_afterMissingSettingsNameForTest)(const std::filesystem::path&) noexcept = nullptr;
 
 [[nodiscard]] std::wstring GetEnvironmentString(std::wstring_view name) noexcept
 {
@@ -443,6 +445,20 @@ HRESULT ReadFileBytes(const std::filesystem::path& path,
         return HRESULT_FROM_WIN32(ERROR_FILE_INVALID);
     }
 
+    Common::Settings::SettingsFileStamp initialStamp{};
+    if (sourceStamp)
+    {
+        const HRESULT stampHr = GetFileStampByHandle(file.get(), initialStamp);
+        if (FAILED(stampHr))
+        {
+            return stampHr;
+        }
+        if (initialStamp.fileSize != static_cast<uint64_t>(size.QuadPart))
+        {
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        }
+    }
+
     const size_t length = static_cast<size_t>(size.QuadPart);
     out.resize(length);
 
@@ -477,6 +493,10 @@ HRESULT ReadFileBytes(const std::filesystem::path& path,
         {
             Debug::Error(L"Failed to capture settings source identity for '{}' (hr=0x{:08X})", path.c_str(), static_cast<unsigned long>(stampHr));
             return stampHr;
+        }
+        if (stamp != initialStamp)
+        {
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
         }
         *sourceStamp = stamp;
     }
@@ -542,6 +562,11 @@ public:
     SettingsCommitLock& operator=(const SettingsCommitLock&) = delete;
     SettingsCommitLock& operator=(SettingsCommitLock&&)      = delete;
 
+    void Release() noexcept
+    {
+        _file.reset();
+    }
+
     [[nodiscard]] static HRESULT Acquire(const std::filesystem::path& settingsPath, SettingsCommitLock& out) noexcept
     {
         out._file.reset();
@@ -551,15 +576,26 @@ public:
         const std::wstring extendedLockPath = Common::Paths::ToExtendedWin32Path(lockPath.native());
         wil::unique_hfile file(CreateFileW(extendedLockPath.c_str(),
                                            GENERIC_READ | GENERIC_WRITE,
-                                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                           FILE_SHARE_READ | FILE_SHARE_WRITE,
                                            nullptr,
                                            OPEN_ALWAYS,
-                                           FILE_ATTRIBUTE_HIDDEN,
+                                           FILE_ATTRIBUTE_HIDDEN | FILE_FLAG_OPEN_REPARSE_POINT,
                                            nullptr));
         if (! file)
         {
             const DWORD error = GetLastError();
             return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_OPEN_FAILED : error);
+        }
+
+        FILE_ATTRIBUTE_TAG_INFO attributes{};
+        if (GetFileInformationByHandleEx(file.get(), FileAttributeTagInfo, &attributes, sizeof(attributes)) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_READ_FAULT : error);
+        }
+        if ((attributes.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
 
         OVERLAPPED overlapped{};
@@ -590,6 +626,159 @@ private:
     // Closing the handle releases every byte-range lock owned by it.
     wil::unique_hfile _file;
 };
+
+// The record is versioned and carries no paths. Its GUID names one sibling of the current profile.
+struct SettingsSaveRecord
+{
+    std::array<char, 8> signature{'R', 'S', 'S', 'A', 'V', 'E', '1', '\n'};
+    GUID backupId{};
+    FILE_ID_INFO previousIdentity{};
+    int64_t previousWriteTime = 0;
+    int64_t previousSize      = 0;
+};
+static_assert(sizeof(SettingsSaveRecord) == 64u);
+
+// S_OK is observed presence. Query failures do not grant authority to recover or retire a record.
+[[nodiscard]] HRESULT ProbeSettingsFileName(const std::filesystem::path& path) noexcept
+{
+    const auto extendedPath = Common::Paths::ToExtendedWin32Path(path.native());
+    if (GetFileAttributesW(extendedPath.c_str()) != INVALID_FILE_ATTRIBUTES)
+    {
+        return S_OK;
+    }
+    const DWORD error = GetLastError();
+    return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ? S_FALSE : HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_READ_FAULT : error);
+}
+
+[[nodiscard]] bool IsSettingsFileMissing(const std::filesystem::path& path) noexcept
+{
+    return ProbeSettingsFileName(path) == S_FALSE;
+}
+
+[[nodiscard]] std::filesystem::path SettingsSaveRecordPath(const std::filesystem::path& target) noexcept
+{
+    auto path = target;
+    path += L".save-pending";
+    return path;
+}
+
+[[nodiscard]] std::filesystem::path SettingsSaveBackupPath(const std::filesystem::path& target, const GUID& id) noexcept
+{
+    std::array<wchar_t, 40u> text{};
+    if (StringFromGUID2(id, text.data(), static_cast<int>(text.size())) <= 0)
+    {
+        return {};
+    }
+    auto path = target;
+    path += std::format(L".save-previous-{}.bak", text.data());
+    return path;
+}
+
+void RetireSettingsSaveRecord(HANDLE file, const std::filesystem::path& recordPath) noexcept
+{
+    FILE_DISPOSITION_INFO disposition{.DeleteFile = TRUE};
+    if (SetFileInformationByHandle(file, FileDispositionInfo, &disposition, sizeof(disposition)) == FALSE)
+    {
+        Debug::Warning(L"Could not retire interrupted settings save record '{}' (error={})", recordPath.c_str(), GetLastError());
+    }
+}
+
+// Requires the profile commit lock. Only the exact recorded file can fill a vacant canonical name.
+[[nodiscard]] HRESULT RecoverInterruptedSettingsSave(const std::filesystem::path& target) noexcept
+{
+    const auto recordPath     = SettingsSaveRecordPath(target);
+    const auto extendedRecord = Common::Paths::ToExtendedWin32Path(recordPath.native());
+    constexpr DWORD noFollow  = FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS;
+    wil::unique_hfile record(CreateFileW(extendedRecord.c_str(), GENERIC_READ | DELETE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, noFollow, nullptr));
+    if (! record)
+    {
+        const DWORD error = GetLastError();
+        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ? S_FALSE
+                                                                              : HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_OPEN_FAILED : error);
+    }
+
+    Common::Files::LocalFileVersion recordVersion{};
+    HRESULT hr = Common::Files::QueryLocalFileVersion(record.get(), recordVersion);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    SettingsSaveRecord saved{};
+    if (recordVersion.size != static_cast<int64_t>(sizeof(saved)))
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    hr = Common::HandleIo::ReadExact(record.get(), std::as_writable_bytes(std::span(&saved, 1u)));
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    if (saved.signature != SettingsSaveRecord{}.signature || saved.previousSize < 0)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    const auto backupPath = SettingsSaveBackupPath(target, saved.backupId);
+    if (backupPath.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    const HRESULT targetState = ProbeSettingsFileName(target);
+    if (FAILED(targetState))
+    {
+        return targetState;
+    }
+    if (targetState == S_OK)
+    {
+        // This also handles a stop before displacement or immediately after publication.
+        // Preserve any recovery file when the canonical name already belongs to a writer.
+        if (ProbeSettingsFileName(backupPath) == S_OK)
+        {
+            Debug::Warning(
+                L"An interrupted settings save kept its recovery file at '{}'; the canonical file remains at '{}'.", backupPath.c_str(), target.c_str());
+        }
+        RetireSettingsSaveRecord(record.get(), recordPath);
+        return S_FALSE;
+    }
+
+    const auto extendedBackup = Common::Paths::ToExtendedWin32Path(backupPath.native());
+    wil::unique_hfile backup(CreateFileW(extendedBackup.c_str(), FILE_READ_ATTRIBUTES | DELETE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, noFollow, nullptr));
+    if (! backup)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_OPEN_FAILED : error);
+    }
+
+    Common::Files::LocalFileVersion previous{};
+    hr = Common::Files::QueryLocalFileVersion(backup.get(), previous);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    // A rename changes metadata time. Compare the persistent identity and the data stamp.
+    if (previous.identity.VolumeSerialNumber != saved.previousIdentity.VolumeSerialNumber ||
+        std::memcmp(previous.identity.FileId.Identifier, saved.previousIdentity.FileId.Identifier, sizeof(previous.identity.FileId.Identifier)) != 0 ||
+        previous.writeTime != saved.previousWriteTime || previous.size != saved.previousSize)
+    {
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
+
+    hr = Common::Files::LocalFileTransaction::RestoreBoundFileIfFree(backup.get(), target);
+    if (hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH))
+    {
+        Debug::Warning(L"A settings file appeared at '{}' during restart recovery; the previous file remains at '{}'.", target.c_str(), backupPath.c_str());
+        RetireSettingsSaveRecord(record.get(), recordPath);
+        return S_FALSE;
+    }
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    RetireSettingsSaveRecord(record.get(), recordPath);
+    Debug::Warning(L"Restored the previous settings at '{}' after an interrupted save.", target.c_str());
+    return S_OK;
+}
 
 [[nodiscard]] HRESULT TryGetFileStampForPath(const std::filesystem::path& path, std::optional<Common::Settings::SettingsFileStamp>& out) noexcept
 {
@@ -674,6 +863,11 @@ private:
     if (FAILED(hr))
     {
         return hr;
+    }
+
+    if (! IsSettingsFileMissing(SettingsSaveRecordPath(path)))
+    {
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
     }
 
     Common::Settings::SettingsFileStamp diagnosedStamp{};
@@ -778,111 +972,126 @@ HRESULT WriteFileBytesAtomic(const std::filesystem::path& path,
         *writtenStamp = Common::Settings::SettingsFileStamp{};
     }
 
-    const bool createOnly        = expectedStamp && ! expectedStamp->has_value();
-    const auto targetPolicy      = createOnly ? Common::Files::ExistingTargetPolicy::FailIfExists : Common::Files::ExistingTargetPolicy::Replace;
-    const auto publicationStatus = [createOnly](HRESULT result) noexcept
-    {
-        if (createOnly && (result == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS) || result == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)))
-        {
-            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
-        }
-        return result;
-    };
-
+    const bool createOnly   = expectedStamp && ! expectedStamp->has_value();
+    const auto targetPolicy = createOnly ? Common::Files::ExistingTargetPolicy::FailIfExists : Common::Files::ExistingTargetPolicy::Replace;
     Common::Files::LocalFileTransaction transaction;
-    HRESULT hr = Common::Files::LocalFileTransaction::Create(path, targetPolicy, true, transaction);
+    const auto prefix = expectedStamp ? path.filename().wstring() + L".save-stage-" : std::wstring(L".$rs-transaction-");
+    HRESULT hr        = Common::Files::LocalFileTransaction::Create(path, targetPolicy, true, transaction, prefix);
     if (FAILED(hr))
     {
-        return publicationStatus(hr);
+        return createOnly && hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS) ? HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) : hr;
     }
     hr = transaction.Write(bytes);
     if (FAILED(hr))
     {
         return hr;
     }
-
-    struct TargetGuard
+    if (! expectedStamp)
     {
-        TargetGuard(const std::filesystem::path& targetPath, const std::optional<Common::Settings::SettingsFileStamp>* targetRevision) noexcept :
-            path(targetPath), expected(targetRevision)
-        {
-        }
-        TargetGuard(const TargetGuard&) = delete;
-        TargetGuard& operator=(const TargetGuard&) = delete;
-        TargetGuard(TargetGuard&&) = delete;
-        TargetGuard& operator=(TargetGuard&&) = delete;
-
-        const std::filesystem::path& path;
-        const std::optional<Common::Settings::SettingsFileStamp>* expected;
-        wil::unique_hfile file;
-    };
-    SettingsCommitLock commitLock;
-    if (expectedStamp)
-    {
-        hr = SettingsCommitLock::Acquire(path, commitLock);
-        if (FAILED(hr))
-        {
-            return hr;
-        }
+        return transaction.Commit(bytes.size()); // Generated schema, with no user-settings version.
     }
 
-    TargetGuard guard{path, expectedStamp};
-    Common::Files::TargetRenameCheck targetCheck{};
-    if (expectedStamp && expectedStamp->has_value())
+    SettingsCommitLock commitLock;
+    hr = SettingsCommitLock::Acquire(path, commitLock);
+    if (FAILED(hr))
     {
-        guard.file.reset(CreateFileW(transaction.TargetPath().c_str(),
-                                     FILE_READ_ATTRIBUTES | DELETE,
-                                     FILE_SHARE_READ | FILE_SHARE_DELETE,
-                                     nullptr,
-                                     OPEN_EXISTING,
-                                     FILE_ATTRIBUTE_NORMAL,
-                                     nullptr));
-        if (! guard.file)
+        return hr;
+    }
+    const auto recordPath = SettingsSaveRecordPath(transaction.TargetPath());
+    if (! IsSettingsFileMissing(recordPath))
+    {
+        // A prior save needs cold recovery. In particular, a vacant name is not new here.
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
+
+    std::optional<Common::Files::LocalFileVersion> acceptedVersion;
+    std::filesystem::path backupPath;
+    struct PendingSave
+    {
+        PendingSave(const std::filesystem::path& journalPath, const std::optional<Common::Settings::SettingsFileStamp>& acceptedStamp) noexcept :
+            recordPath(journalPath), expected(acceptedStamp)
         {
-            const DWORD error = GetLastError();
-            if (error == ERROR_SHARING_VIOLATION || error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
-                return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
-            return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_OPEN_FAILED : error);
         }
-        Common::Settings::SettingsFileStamp guardedStamp{};
-        hr = GetFileStampByHandle(guard.file.get(), guardedStamp);
+        PendingSave(const PendingSave&) = delete;
+        PendingSave& operator=(const PendingSave&) = delete;
+        PendingSave(PendingSave&&) = delete;
+        PendingSave& operator=(PendingSave&&) = delete;
+
+        const std::filesystem::path& recordPath;
+        const std::optional<Common::Settings::SettingsFileStamp>& expected;
+        SettingsSaveRecord record{};
+        wil::unique_hfile file;
+    };
+    PendingSave pending{recordPath, *expectedStamp};
+    BY_HANDLE_FILE_INFORMATION committedInformation{};
+    Common::Files::GuardedReplacementOptions options{.committedInformation = writtenStamp ? &committedInformation : nullptr};
+    if (! createOnly)
+    {
+        hr = Common::Files::ObserveLocalFileDestination(transaction.TargetPath(), acceptedVersion);
+        if (FAILED(hr) || ! acceptedVersion.has_value())
+        {
+            return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        }
+        hr = CoCreateGuid(&pending.record.backupId);
         if (FAILED(hr))
         {
             return hr;
         }
-        if (guardedStamp != expectedStamp->value())
+        backupPath = SettingsSaveBackupPath(transaction.TargetPath(), pending.record.backupId);
+        if (backupPath.empty())
         {
-            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+            return E_FAIL;
         }
-        targetCheck = {
-            .context = &guard,
-            .verify  = [](void* context, FILE_INFO_BY_HANDLE_CLASS informationClass) noexcept -> HRESULT
+        options.backupPath    = &backupPath;
+        options.context       = &pending;
+        options.prepareBackup = [](void* context, HANDLE original, const Common::Files::LocalFileVersion& accepted) noexcept -> HRESULT
         {
-            auto& target = *static_cast<TargetGuard*>(context);
-            // Classic rename requires a closed destination handle. Recheck the name after releasing it.
-            if (informationClass == FileRenameInfo)
-                target.file.reset();
-
-            std::optional<Common::Settings::SettingsFileStamp> currentStamp;
-            const HRESULT stampHr = TryGetFileStampForPath(target.path, currentStamp);
+            auto& save = *static_cast<PendingSave*>(context);
+            Common::Settings::SettingsFileStamp currentStamp{};
+            const HRESULT stampHr = GetFileStampByHandle(original, currentStamp);
             if (FAILED(stampHr))
+            {
                 return stampHr;
-            return currentStamp == *target.expected ? S_OK : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
-        },
+            }
+            if (currentStamp != *save.expected)
+            {
+                return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+            }
+
+            save.record.previousIdentity  = accepted.identity;
+            save.record.previousWriteTime = accepted.writeTime;
+            save.record.previousSize      = accepted.size;
+            Common::Files::LocalFileTransaction recordWrite;
+            const HRESULT createHr =
+                Common::Files::LocalFileTransaction::Create(save.recordPath, Common::Files::ExistingTargetPolicy::FailIfExists, false, recordWrite);
+            if (FAILED(createHr))
+            {
+                return createHr;
+            }
+            const HRESULT writeHr = recordWrite.Write(&save.record, sizeof(save.record));
+            if (FAILED(writeHr))
+            {
+                return writeHr;
+            }
+            return recordWrite.Commit(sizeof(save.record), nullptr, &save.file);
         };
     }
 
-    BY_HANDLE_FILE_INFORMATION committedInformation{};
-    hr = transaction.Commit(bytes.size(), writtenStamp ? &committedInformation : nullptr, nullptr, targetCheck);
-    if (FAILED(hr))
+    std::filesystem::path retainedBackup;
+    hr = transaction.CommitGuarded(acceptedVersion, retainedBackup, bytes.size(), nullptr, options);
+    if (pending.file && (SUCCEEDED(hr) || retainedBackup.empty()))
     {
-        return publicationStatus(hr);
+        RetireSettingsSaveRecord(pending.file.get(), recordPath);
     }
-    if (writtenStamp)
+    if (! retainedBackup.empty())
+    {
+        Debug::Warning(L"Settings save retained the previous file at '{}' (hr=0x{:08X}).", retainedBackup.c_str(), static_cast<unsigned long>(hr));
+    }
+    if (SUCCEEDED(hr) && writtenStamp)
     {
         *writtenStamp = FileStampFromInformation(committedInformation);
     }
-    return S_OK;
+    return hr;
 }
 
 bool GetBool(yyjson_val* obj, const char* key, bool& out) noexcept
@@ -5689,17 +5898,6 @@ void MaybeStallSettingsRecoveryBeforeBackupForTest() noexcept
 }
 #endif
 
-[[nodiscard]] bool IsSettingsFileMissing(const std::filesystem::path& path) noexcept
-{
-    const std::wstring extendedPath = Common::Paths::ToExtendedWin32Path(path.native());
-    if (GetFileAttributesW(extendedPath.c_str()) != INVALID_FILE_ATTRIBUTES)
-    {
-        return false;
-    }
-
-    const DWORD error = GetLastError();
-    return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
-}
 } // namespace
 
 std::filesystem::path GetSettingsPath(std::wstring_view appId) noexcept
@@ -5795,6 +5993,26 @@ namespace
     {
         return E_FAIL;
     }
+    if (! IsSettingsFileMissing(outPath))
+    {
+        return S_OK;
+    }
+
+#ifdef ENABLE_TESTS
+    if (const auto afterMissingName = std::exchange(g_afterMissingSettingsNameForTest, nullptr))
+    {
+        afterMissingName(outPath);
+    }
+#endif
+
+    // A two-move save leaves the canonical name vacant only while its record exists.
+    // Live readers preserve the loaded profile instead of adopting a legacy fallback here.
+    if (! IsSettingsFileMissing(SettingsSaveRecordPath(outPath)))
+    {
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
+    // Publication may have filled the name and retired the record since the first probe.
+    // Give that canonical file precedence over any compatibility profile.
     if (! IsSettingsFileMissing(outPath))
     {
         return S_OK;
@@ -5995,14 +6213,27 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     return S_FALSE;
 }
 
-[[nodiscard]] HRESULT LoadSettingsFromResolvedPath(
-    const std::filesystem::path& path, Settings& out, bool backupBadFile, bool fallbackToDefaults, SettingsLoadRecoveryInfo* recovery) noexcept
+[[nodiscard]] HRESULT LoadSettingsFromResolvedPath(const std::filesystem::path& path,
+                                                   Settings& out,
+                                                   bool backupBadFile,
+                                                   bool fallbackToDefaults,
+                                                   SettingsLoadRecoveryInfo* recovery,
+                                                   SettingsCommitLock* readLock = nullptr) noexcept
 {
     std::string bytes;
     std::optional<SettingsFileStamp> sourceStamp;
     wil::unique_hfile sourceFile;
     bool sourceExists    = false;
     const HRESULT readHr = ReadFileBytes(path, bytes, &sourceStamp, std::addressof(sourceFile), &sourceExists);
+    if (readLock)
+    {
+        // Keep the read serialized with cooperative writers. Bad-file recovery takes its own lock.
+        readLock->Release();
+    }
+    if (readHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH))
+    {
+        return readHr;
+    }
     if (FAILED(readHr))
     {
         return RecoverSettingsLoadFailure(
@@ -6277,6 +6508,16 @@ void DebugUseFixedSettingsBackupTimestampForTest(bool enabled) noexcept
 {
     g_useFixedSettingsBackupTimestampForTest.store(enabled, std::memory_order_release);
 }
+
+void DebugSetSettingsGuardedPublishHookForTest(void (*hook)(const std::filesystem::path&) noexcept) noexcept
+{
+    Common::Files::Testing::g_beforeGuardedFilePublish = hook;
+}
+
+void DebugSetSettingsMissingNameHookForTest(void (*hook)(const std::filesystem::path&) noexcept) noexcept
+{
+    g_afterMissingSettingsNameForTest = hook;
+}
 #endif
 
 HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept
@@ -6286,58 +6527,69 @@ HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept
 
 HRESULT LoadSettingsWithRecoveryInfo(std::wstring_view appId, Settings& out, SettingsLoadRecoveryInfo* recovery) noexcept
 {
-    ResetSettingsLoadRecoveryInfo(recovery);
-    out = Settings{};
-
-    std::filesystem::path path;
-    bool canonicalTarget    = false;
-    const HRESULT resolveHr = ResolveSettingsLoadPath(appId, path, &canonicalTarget);
-    if (resolveHr != S_OK)
+    const auto loadAttempt = [&]() noexcept -> HRESULT
     {
-        if (recovery)
-        {
-            recovery->hr           = resolveHr;
-            recovery->settingsPath = path;
-            if (resolveHr == S_FALSE)
-            {
-                recovery->reason       = SettingsLoadRecoveryReason::SettingsFileMissing;
-                recovery->usedDefaults = true;
-            }
-        }
-        return resolveHr;
-    }
-
-    HRESULT loadHr = LoadSettingsFromResolvedPath(path, out, canonicalTarget, true, recovery);
-    if (loadHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH))
-    {
-        // The source changed after it was read but before recovery could back it up. Reload the
-        // new revision once; a second conflict remains an error and leaves the snapshot save-blocked.
         ResetSettingsLoadRecoveryInfo(recovery);
         out = Settings{};
 
-        path.clear();
-        const HRESULT retryResolveHr = ResolveSettingsLoadPath(appId, path, &canonicalTarget);
-        if (retryResolveHr != S_OK)
+        auto canonical = GetSettingsPath(appId);
+        if (canonical.empty())
+        {
+            return E_FAIL;
+        }
+
+        SettingsCommitLock readLock;
+        const HRESULT lockHr = SettingsCommitLock::Acquire(canonical, readLock);
+        // A cold reader can still read a healthy canonical file on a read-only directory.
+        // An unresolved record blocks fallback and any attempt to back up the canonical file.
+        const HRESULT interruptedHr = SUCCEEDED(lockHr)                                          ? RecoverInterruptedSettingsSave(canonical)
+                                      : IsSettingsFileMissing(SettingsSaveRecordPath(canonical)) ? S_FALSE
+                                                                                                 : lockHr;
+        if (FAILED(interruptedHr))
+        {
+            Debug::Warning(
+                L"Could not recover interrupted settings save for '{}' (hr=0x{:08X}).", canonical.c_str(), static_cast<unsigned long>(interruptedHr));
+            if (IsSettingsFileMissing(canonical))
+            {
+                if (recovery)
+                {
+                    recovery->hr           = interruptedHr;
+                    recovery->reason       = SettingsLoadRecoveryReason::ReadFailed;
+                    recovery->settingsPath = std::move(canonical);
+                }
+                return interruptedHr;
+            }
+        }
+
+        std::filesystem::path path;
+        bool canonicalTarget    = false;
+        const HRESULT resolveHr = ResolveSettingsLoadPath(appId, path, &canonicalTarget);
+        if (resolveHr != S_OK)
         {
             if (recovery)
             {
-                recovery->hr           = retryResolveHr;
+                recovery->hr           = resolveHr;
                 recovery->settingsPath = path;
-                if (retryResolveHr == S_FALSE)
+                if (resolveHr == S_FALSE)
                 {
                     recovery->reason       = SettingsLoadRecoveryReason::SettingsFileMissing;
                     recovery->usedDefaults = true;
                 }
             }
-            return retryResolveHr;
+            return resolveHr;
         }
-        loadHr = LoadSettingsFromResolvedPath(path, out, canonicalTarget, true, recovery);
-    }
-    if (SUCCEEDED(loadHr))
-    {
-        PrepareLoadedSettingsForSaveTarget(appId, path, out);
-    }
-    return loadHr;
+
+        const HRESULT loadHr = LoadSettingsFromResolvedPath(path, out, canonicalTarget && SUCCEEDED(interruptedHr), true, recovery, &readLock);
+        if (SUCCEEDED(loadHr))
+        {
+            PrepareLoadedSettingsForSaveTarget(appId, path, out);
+        }
+        return loadHr;
+    };
+
+    const HRESULT loadHr = loadAttempt();
+    // The file changed between reading and recovery. Resolve the current name once.
+    return loadHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) ? loadAttempt() : loadHr;
 }
 
 HRESULT TryLoadSettingsNoRecovery(std::wstring_view appId, Settings& out) noexcept

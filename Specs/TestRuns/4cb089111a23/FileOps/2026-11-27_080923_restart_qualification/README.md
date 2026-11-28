@@ -591,3 +591,68 @@ The corrected Terminal sequence ran lifecycle, catalog, tab reopening and settin
 Exact `594d58373708f05ccc58f2d49efd963f450cd55a` built the test-enabled x64 Release solution with zero warnings and errors, receipt `12cf77b57ea452ab32bdfce24e9472440bf82e0a4a332d496b0496b5e337c502`. The real Windows Cut fixture placed two Local paths with Move effect on its clipboard. It then selected a virtual file and invoked both Copy and Cut through the pane command dispatcher. Each displayed the Local selection warning and preserved the clipboard generation, the two paths and the Move effect. The virtual fixture was removed.
 
 All three repetitions of `cmd_pane_clipboardCut_sets_move_drop_effect` passed with zero failures and skips at 946, 709 and 703 ms. The filtered repository verdict is `NOT_EVALUATED`. Native run `20261128T070433Z-34864-e090bb7e70154097b2c3aa47892cee23`, results SHA-256 `a6aea2b91da64a4f217f9f3e718629866f65a9e2fa33103e41261793b64e990d`. The launcher `20261128T070432Z-80680-bd92df4748fc480eacd1d5f795f26bad` drained at 08:05:41 CET, result SHA-256 `75fb563d01ee83b567618b5468837af8b15cdcaa11c5dacd8e55feb9a75e5c02`. PR #402 merged at `7369f2d95b94aa4bece6c8f1344d3083d05878bf`. [Merged PR](https://github.com/RedSalamanders/RedSalamander/pull/402)
+
+### Live SMB Recycle and scheduled Rename cancellation
+
+Baseline `aad8b5f0a1fa08447425004a8950791510d9dfa2` built the test-enabled x64 Release solution with zero warnings and errors, receipt `5b0c8945242dc3b41cce64f3a8922eedbc6d69ea034411861e79c7afc64e0e38`. All selections ran without activation. The mixed Recycle selection used a fresh owned file on an approved SMB share and a separate Local file in the marked sandbox. The provider returned unknown Recycle availability for the SMB file. The task asked once for that group, Skip retained the exact SMB bytes, the Local Recycle completed, and cleanup purged one journaled test item. The SMB-only control selected a by-name prompt on Samba and an exact-identity prompt on Windows SMB.
+
+| Baseline selection | Passed/failed/skipped | Native run | Results SHA-256 |
+|---|---:|---|---|
+| Samba SMB-only and mixed Recycle | 3/0/0 | `20261128T083418Z-36388-e2c7c82348e4490785ef16e5cf960353` | `d9bc70d21149e73e20056a6b8a1922a6a06d1967b79b0ebb14d1b507296aaf50` |
+| Windows SMB-only and mixed Recycle | 3/0/0 | `20261128T083703Z-57496-be7934272a444ba3a37d49ddf521c649` | `22f4b6d040257223aae4ab179112a0cd20c749cf09b9cd16d8c2a30942d97225` |
+| Windows SMB exact and scheduled Rename | 2/1/0 | `20261128T083748Z-57496-d8464ff837874bc38d9d63acc5a48a35` | `29f0be599160483283013e0b82bcfb42bf2fdb9fd7d6e222ee7b41690a5427cc` |
+
+The mixed Recycle task settled in 126,757 µs on Samba and 56,816 µs on Windows SMB. The initial Windows Recycle selection also passed. After that run, the temporary fixture registry restore failed because the PowerShell call bound an empty backup argument. The original registry was restored from its unchanged backup after verifying both hashes. The repeated selection used the corrected restore and verified the original bytes after exit. The configured resources on both marked local test volumes were verified before the corrected build.
+
+Both normal Windows SMB scheduled Rename origins completed, with measured task times of 36,927 µs for Batch Rename and 30,747 µs for Change Case. Cancellation reached the worker barrier and returned `ERROR_CANCELLED` in 49,391 µs. The case failed its combined assertion for exact retained fixtures and the canceled item result. Trace SHA-256 `4c29c01d6be78928ae897d729a55e06bddb9a0f07f8ba104862ff3e9f403b1c9`. The scheduler marked rows as possibly mutated on entry before its read-only preflight. The correction in #404 moves that transition to the execution handoff and measures the fixture checks and typed result separately. [Live fixture and scheduler PR](https://github.com/RedSalamanders/RedSalamander/pull/404)
+
+Corrected source `48f917d31922c250d0826763aca7acccae7f97a3` built the test-enabled x64 Release solution with zero warnings and errors, receipt `7e62eb656bf4c557d6e9ea96096fc30afb37ad2ef7f0a828f4a09deab2842565`. All corrected selections passed setup, the selected case and cleanup without activation. The C and Z resource files matched their original hashes after the launcher exited. Filtered repository verdict `NOT_EVALUATED`.
+
+| Corrected selection | Passed/failed/skipped | Native run | Results SHA-256 |
+|---|---:|---|---|
+| Windows SMB exact and scheduled Rename | 3/0/0 | `20261128T084929Z-55164-27d8399df0c948ef99cda6217295a1aa` | `6212557ca0e7dfcba8e43c1593bec6018c8ae482d5843c108a05f02d6df4ef90` |
+| Samba SMB-only and mixed Recycle | 3/0/0 | `20261128T085012Z-55164-030270fbbaa247b58b770aefca4c7c06` | `6de231017deffbf21dd88390b12ae9393e6d02a6e89e52e9198fb5b91a0cb0db` |
+| Windows SMB-only and mixed Recycle | 3/0/0 | `20261128T085051Z-55164-193b6279e943409eb84cbafab57537a4` | `414e15d1868ce36c0f67433a0ff898656fc1bf24950aad7c16ed9d844f345566` |
+
+Windows SMB cancellation reached the barrier and returned `ERROR_CANCELLED`. The witness separately confirmed the exact original leaf and bytes, unrelated sibling bytes, and the absence of the requested destination. The one returned item reported `NotAttempted + Retained + Canceled` with the same status. Trace SHA-256 `2b19c6e8ee431abfe46507f43f5e511100401c58afc0b2b36fcc12a0b237245c`. The blocking watcher returned `ERROR_SHARING_VIOLATION` on both builds.
+
+| Same live Windows SMB fixture | Baseline | Corrected |
+|---|---:|---:|
+| One exact Rename with independent rebind verification | 4,075 µs | 5,091 µs |
+| 100 exact Renames with independent rebind verification | 370,381 µs | 333,820 µs |
+| Scheduled Batch Rename | 36,927 µs | 40,555 µs |
+| Scheduled Change Case | 30,747 µs | 30,641 µs |
+| Cancel request to completion callback | 49,391 µs, result assertion failed | 51,410 µs, passed |
+
+The timing observations are one sample per build. The corrected raw performance log SHA-256 is `5a32371d4f29c74ca0365e3fb2f04036bbd72294bd47385d4e4240911b5314fd`. Live legacy fallback and whole-process handle peaks are separate gates. PR #404 merged at `6213ed82ceb665140492f278c86df646a07f0a17`. [Merged PR](https://github.com/RedSalamanders/RedSalamander/pull/404)
+
+### Integrated x64 Commands replay
+
+The full Commands entry used exact PR #404 source `48f917d31922c250d0826763aca7acccae7f97a3` and x64 Release receipt `7e62eb656bf4c557d6e9ea96096fc30afb37ad2ef7f0a828f4a09deab2842565`. It used the earlier ARM64 shuffle seed `253058945` and included all three merged Compare, Batch Rename and Terminal repairs. The 970 cases returned 965 passes, zero failures and five opt-in ViewerSpace performance skips. The canonical runner reported no failure classifications and returned its scoped `NOT_EVALUATED` verdict with exit 2.
+
+Native run `20261128T085225Z-65844-b52e0fcf7ccd4839a72403d8e8200038`, results SHA-256 `3de4ba8151c46e86eb6f4c09850620168deccd4e0339d60fbf277e6cf95446e1`. Contained launcher `20261128T085223Z-60992-56721d9950464adf86846cf9c0b08102` ended at 10:15:50 CET after its process group and output drained. Launcher record SHA-256 `a8979d2599ef9a1b107e8e1f7a668ecffc4128ab9c62d0d98779bcdd3f48674a`. This x64 replay used the earlier seed. The later hosted ARM64 attempts below used their own orders.
+
+### Hosted ARM64 result on the corrected Pack tree
+
+Hosted run `46089888885` built the test-enabled ARM64 Release profile on exact `73c70e33037273b3727835d9b61a265883f15470`, receipt `a6ab5c44ad473f4ae55770a8460092fadae2361bb08898a200219cf73c47e179`. ARM64 job `140881818883` failed and finished at 10:15:51 CET. Native run `20261128T062815Z-9560-f3f1fa1e96aa4c638ee888c5f332f6d3` promoted 11 entries, including Tooling and the Pack source guard. Commands remained marked running when evidence was captured, and seven entries remained pending, including File Operations and the four later desktop entries. Both Pack and Unpack command cases passed in the original and both shuffled attempts. [Hosted ARM64 job](https://github.com/RedSalamanders/RedSalamander/actions/runs/46089888885/job/140881818883)
+
+| Commands attempt | Passed/failed/skipped | Recorded failure | Results SHA-256 |
+|---|---:|---|---|
+| Original | 963/2/5 | A console took foreground during the resource-format case's input settling. The two-pending-task disclosure case reached the expected action and state while its actual focus and foreground checks failed. | `6561a91d628854571e26ef43be3152412e2a04ee3694239822e1c2bd1e7f0661` |
+| First shuffle | 960/5/5 | Two Connection Manager close cases, Preferences backdrop Apply, File Operations Preferences Apply, and ViewerSpace hover. A console owned the pointer during the hover failure. | `ba09a70ff0c621283567a0741e9ec28da03170d6ef911ff141c9ea0b5e2e3347` |
+| Second shuffle | 964/1/5 | ViewerSpace hover again observed the pointer over a console instead of its test viewer. | `0043b31d1e7b5533c0eb56c8c57f03aa30d69650e1c7988717cd53f4fdfdc927` |
+
+Both original failed cases passed their isolated ARM64 retries. The last shuffle child exited 1 and its process group drained. The retirement guard saw a new `ConsoleWindowClass` foreground and refused to replace it. The final hosted desktop snapshot identified WSL in the foreground, with a different PID from the earlier retirement observation. The logs leave the creator and the four first-shuffle UI Automation failures' causes unresolved. Production packaging was skipped.
+
+Artifact `15257430951` and the original job log were retained in archive `20261128T091645Z-81340-359fb13819e34143a0cb4d56a0936518`. Job log SHA-256 `6b4f21ac5121a23e88b6bab292c7a9ac4bbfc5a26bb48c88f3f8d82c82ea078a`. Run-state SHA-256 `d05d43a3f35e286fef97dfcc44cf09a1c124786fe8ea01414113804ef9b8f914`. The later #406 and #404 workflows concluded at admission and skipped both native branches after main advanced. [#406 admission](https://github.com/RedSalamanders/RedSalamander/actions/runs/46126299605) [#404 admission](https://github.com/RedSalamanders/RedSalamander/actions/runs/46128227489) [Newer main candidate](https://github.com/RedSalamanders/RedSalamander/actions/runs/46129343995)
+
+### Local scheduled Rename result replay
+
+The first non-activating selection reported File Operations as `PENDING_INTERACTIVE` and ran no cases. The two focused Local controls then ran with the desktop lease on the same x64 Release receipt as the full Commands replay. The first checked the exact mutation's conflict and authoritative result after the preflight barrier. The second checked that rows the engine never reached remain `NotAttempted` with retained sources when an earlier operation stops the schedule.
+
+| Selection | Passed/failed/skipped | Native run | Results SHA-256 |
+|---|---:|---|---|
+| `FileOps_BatchRenameExactResultCarrier` | 3/0/0 | `20261128T091923Z-49844-fcb79a14ad35404fbf6c5a329da2215a` | `cced19818ca13d31085b9cac2179a75136e1921bbb85873588ecfe1c8008cb38` |
+| `FileOps_BatchRenameNeverRunRowsNotAttempted` | 3/0/0 | `20261128T092020Z-72380-196fb1aa3cfa4d91a0015dd9a3e6f416` | `6ef121a7219f1cf3933b02b31a47f90162349d2f9a2988bbec772e5fa5faa5a8` |
+
+Both runners drained at 10:21:10 CET. The scoped repository verdict was `NOT_EVALUATED`.
