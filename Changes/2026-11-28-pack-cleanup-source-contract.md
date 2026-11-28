@@ -1,0 +1,1 @@
+- Check the separate Pack cleanup paths for regular files and exact directory trees.
