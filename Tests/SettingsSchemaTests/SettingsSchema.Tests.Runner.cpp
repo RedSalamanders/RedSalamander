@@ -833,7 +833,7 @@ void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
     {
         struct RenameVisits
         {
-            const std::filesystem::path& target;
+            std::filesystem::path target;
             bool preferred = false;
             bool classic   = false;
         };

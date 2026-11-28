@@ -803,6 +803,15 @@ HRESULT WriteFileBytesAtomic(const std::filesystem::path& path,
 
     struct TargetGuard
     {
+        TargetGuard(const std::filesystem::path& targetPath, const std::optional<Common::Settings::SettingsFileStamp>* targetRevision) noexcept :
+            path(targetPath), expected(targetRevision)
+        {
+        }
+        TargetGuard(const TargetGuard&) = delete;
+        TargetGuard& operator=(const TargetGuard&) = delete;
+        TargetGuard(TargetGuard&&) = delete;
+        TargetGuard& operator=(TargetGuard&&) = delete;
+
         const std::filesystem::path& path;
         const std::optional<Common::Settings::SettingsFileStamp>* expected;
         wil::unique_hfile file;
@@ -817,7 +826,7 @@ HRESULT WriteFileBytesAtomic(const std::filesystem::path& path,
         }
     }
 
-    TargetGuard guard{path, expectedStamp, {}};
+    TargetGuard guard{path, expectedStamp};
     Common::Files::TargetRenameCheck targetCheck{};
     if (expectedStamp && expectedStamp->has_value())
     {
