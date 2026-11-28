@@ -698,3 +698,9 @@ Native run `20261128T095900Z-83640-223ac72abeb34d8baf9f7a53055878aa`, results SH
 ### Guarded Pack and Unpack recheck
 
 The exact guarded-output x64 Release build `b618093c4` passed all three non-activating repetitions of `cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation`, at 2,729, 2,456 and 2,469 ms. Native run `20261128T094906Z-73864-a1e648b9179b43fcbf68697962c261c0`, results SHA-256 `facd9964db574b58d1bb41909c084837028e0d30b662e166eacd3efacc724795`. The scoped repository verdict was `NOT_EVALUATED`.
+
+### Hosted guarded-settings build gate
+
+Run `46129343995` admitted exact `1e05fafbc7ee8f97083df6c6cc1d89f7f67f6903`. Its ARM64 Release job stopped at the build gate with seven warnings and zero errors. The settings publish guard triggered four warnings for implicitly deleted construction and assignment. Its legacy-fallback fixture triggered three more. The job stopped before native regression. [Hosted ARM64 build](https://github.com/RedSalamanders/RedSalamander/actions/runs/46129343995/job/140933400142)
+
+The local build had reproduced those warnings. The subsequent guarded-output main merge replaced the old settings guard. The corrected x64 Release candidate explicitly constructs the newer save and displacement state, passes the owning WIL wrapper address and gives the test fixture its own path. That build completed with zero warnings and errors. Raw original ARM64 job log archive `20261128T100456Z-13664-0fefc9a123ef4ebd907e7fc0f2e29dd9`, SHA-256 `42bc90c807c071d556069c91c46054ed3c11a3a0fb4d496c8d842c025f29a49f`.
