@@ -7280,7 +7280,17 @@ public:
     state.Require(fileOps != nullptr, L"Accepted options require the live operation state.");
     if (! state.failure.empty())
         return false;
-    const bool priorAutoAccept = HostGetAutoAcceptPrompts();
+    const auto idle = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept { return ! fileOps->HasActiveOperations(); },
+                                                                    {.timeout = SelfTest::Scale(3000ms), .operationName = L"idle options admission"});
+    if (! state.Require(idle.conditionMet, idle.timeoutDiagnostic))
+        return false;
+    const bool originalQueueMode = fileOps->GetQueueNewTasks();
+    const auto restoreQueueMode  = wil::scope_exit([fileOps, originalQueueMode]() noexcept { fileOps->SetQueueNewTasks(originalQueueMode); });
+    fileOps->SetQueueNewTasks(true);
+    const auto savedQueueMode = []() noexcept
+    { return g_settings.fileOperations.transform([](const auto& settings) noexcept { return settings.queueNewTasks; }); };
+    const auto originalSavedQueueMode = savedQueueMode();
+    const bool priorAutoAccept        = HostGetAutoAcceptPrompts();
     HostSetAutoAcceptPrompts(false);
     auto restoreAutoAccept = wil::scope_exit([&]() noexcept { HostSetAutoAcceptPrompts(priorAutoAccept); });
     HostClearTestPromptResultOverride();
@@ -7650,6 +7660,9 @@ public:
                           TextFileEqualsForFileOpsPrompt(destDir / name, "pane-transfer-options") &&
                           waitForPathState(sourceDir / name, operation == FILESYSTEM_COPY, SelfTest::Scale(500ms)),
                       L"Accepted Copy/Move options must finish with exact destination bytes and correct source disposition.");
+        state.Require(observed->execution == HOST_FILE_OPERATION_EXECUTION_PARALLEL && fileOps->GetQueueNewTasks() &&
+                          savedQueueMode() == originalSavedQueueMode,
+                      L"Starting one Copy or Move in the opposite mode must preserve the current and saved Queue/Parallel default.");
         if (! state.failure.empty())
             return false;
         completedAcceptedTask = true;
