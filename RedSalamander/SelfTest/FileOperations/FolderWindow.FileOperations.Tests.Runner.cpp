@@ -15839,21 +15839,20 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
                 SetFileOpsBatchRenameBeforeExecutionPauseForSelfTest(false);
             }
         });
-        const auto started          = std::chrono::steady_clock::now();
-        const HRESULT admitted      = operations->AdmitScheduledRename(pane, paneFileSystem, origin, {std::move(row)}, {}, {}, &taskId);
+        const auto started      = std::chrono::steady_clock::now();
+        const HRESULT admitted  = operations->AdmitScheduledRename(pane, paneFileSystem, origin, {std::move(row)}, {}, {}, &taskId);
         if (admitted != S_OK || taskId == 0u)
             return reject(std::format(L"scheduled Rename admission failed (0x{:08X})", static_cast<unsigned long>(admitted)));
-        auto cancelStarted = started;
+        auto cancelStarted     = started;
         bool canceledAtBarrier = false;
         if (testCancellation)
         {
             const auto paused = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
                 return HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest() || completion.has_value();
             }, {.timeout = SelfTest::Scale(std::chrono::seconds(4)), .operationName = L"SMB Rename before dispatch"});
-            auto* const task = operations->FindTask(taskId);
-            canceledAtBarrier = paused.conditionMet && ! completion.has_value() && task &&
-                                HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest();
-            cancelStarted = std::chrono::steady_clock::now();
+            auto* const task  = operations->FindTask(taskId);
+            canceledAtBarrier = paused.conditionMet && ! completion.has_value() && task && HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest();
+            cancelStarted     = std::chrono::steady_clock::now();
             if (task)
                 task->RequestCancel();
             ReleaseFileOpsBatchRenameBeforeExecutionPauseForSelfTest();
@@ -15875,13 +15874,12 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
 
         if (testCancellation)
         {
-            const auto elapsed = Debug::Perf::ElapsedUs(cancelStarted);
-            const bool unchanged =
-                canceledAtBarrier && completion->hr == kCanceled && completion->operation == FILESYSTEM_RENAME &&
-                std::ranges::all_of(completion->itemOutcomes,
-                                    [](const FolderWindow::FileOperationItemOutcome& outcome) noexcept
-                { return outcome.publication == FileOperations::PublicationState::NotAttempted; }) &&
-                leafMatches(from, true) && leafMatches(to, false) && hasBytes(from, kSourceBytes) && hasBytes(occupied, kOccupantBytes);
+            const auto elapsed   = Debug::Perf::ElapsedUs(cancelStarted);
+            const bool unchanged = canceledAtBarrier && completion->hr == kCanceled && completion->operation == FILESYSTEM_RENAME &&
+                                   std::ranges::all_of(completion->itemOutcomes,
+                                                       [](const FolderWindow::FileOperationItemOutcome& outcome) noexcept
+            { return outcome.publication == FileOperations::PublicationState::NotAttempted; }) &&
+                                   leafMatches(from, true) && leafMatches(to, false) && hasBytes(from, kSourceBytes) && hasBytes(occupied, kOccupantBytes);
             Debug::Perf::Emit(L"FileOps.Smb.SharedRenameCancelUs", detail, elapsed, 1u, 0u, unchanged ? S_OK : E_FAIL);
             AppendLog(std::format(L"SMB Rename: Cancel result=0x{:08X}, at barrier={}, fixtures unchanged={}, settled in {} us.",
                                   static_cast<uint32_t>(completion->hr),
