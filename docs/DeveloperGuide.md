@@ -405,7 +405,7 @@ RedSalamander persists all per-user state as a single JSON5 file under `%LocalAp
 
 #### Data and control flow
 
-Load: `LoadSettings`/`LoadSettingsWithRecoveryInfo` call `ResolveSettingsLoadPath` (debug build prefers `<AppId>-debug.settings.json`, then versioned `<AppId>-<Major>.<Minor>.settings.json`, then legacy `<AppId>.settings.json`), then `LoadSettingsFromResolvedPath` parses JSON5 via yyjson and dispatches per-section `Parse*` helpers. Save goes through `SaveSettings` → `WriteFileBytesAtomic`, which writes `<file>.tmp`, `FlushFileBuffers`, then `MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)` — never a partial in-place write.
+`LoadSettings` and `LoadSettingsWithRecoveryInfo` resolve the selected profile, then parse JSON5 through `LoadSettingsFromResolvedPath`. Debug prefers `<AppId>-debug.settings.json`, followed by the canonical Release `<AppId>.settings.json` and the prior versioned file. Release prefers its own canonical file and falls back to the prior versioned file. `SaveSettings` publishes a flushed sibling through `LocalFileTransaction`. A snapshot imported from another profile can only create a missing canonical file. [Settings contract](../Specs/Core/Core_Settings.md#storage-location-windows)
 
 Hot reload: `SettingsHotReload::Start(hwnd, appId)` spawns a `std::jthread` running `WatchSettingsDirectoryThread`, which uses `FindFirstChangeNotificationW` on the settings directory (filters: file name, last write, size). On a change it posts `WndMsg::kSettingsFileChanged` to the main window. The UI-thread handler `OnMainWindowSettingsFileChanged` (in `RedSalamander.cpp`) calls `TryLoadChangedSettings`, which compares a `SettingsFileStamp` (volume serial + file index + last-write + size) against `lastAppliedStamp`/`lastRejectedStamp` to ignore self-writes, retries up to 6× on sharing/lock errors via `TryLoadSettingsNoRecovery`, then `MergeDiskSettingsWithRuntimeSession` overlays live window placement and pane folders before `ApplyCurrentSettingsToRunningApp` and `NotifyParticipants` (posts `WndMsg::kSettingsReloadedFromDisk` to registered dialogs).
 
@@ -415,7 +415,7 @@ Hot reload: `SettingsHotReload::Start(hwnd, appId)` spawns a `std::jthread` runn
 
 #### Migration
 
-There is no field upgrader: `schemaVersion` must equal `16` exactly. Any other value yields `SettingsLoadRecoveryReason::UnsupportedSchemaVersion`; on the cold-start recovery path the bad file is renamed `*.bad.<UTC>` and defaults are restored (see `Specs/Core/Core_SettingsStore.md`). A v16 file still carrying legacy `viewers`/`editors` keys is rejected as `LegacyShape`. Legacy plugin IDs are normalized at parse time.
+There is no field upgrader: `schemaVersion` must equal `16` exactly. Any other value yields `SettingsLoadRecoveryReason::UnsupportedSchemaVersion`; on the cold-start recovery path the bad file is renamed `*.bad.<UTC>` and defaults are restored (see `Specs/Core/Core_Settings.md`). A v16 file still carrying legacy `viewers`/`editors` keys is rejected as `LegacyShape`. Legacy plugin IDs are normalized at parse time.
 
 #### Threading, invariants, gotchas
 
@@ -615,7 +615,7 @@ Static and event-time sources resolve on theme application or the relevant syste
 
 #### Threading, invariants, gotchas
 
-Theme application and event-time system-color resolution are **UI-thread only**. Theme resources held in state (`backgroundBrush`, `cardBrush`, `inputBrush`…) are `wil::unique_hbrush` (RAII). Never retain a stale `AppTheme&` or a pointer into a prior `ResolvedThemeColors` across selection/hot reload. Paint consumers may read only the immutable compiled program owned by the atomically installed theme. Semantic keys must be real runtime keys recognized by all intended adapters; preview-only aliases are forbidden. See `Specs/Core/Core_SettingsStore.md`, `Specs/Core/Core_RedConfigure.md`, `Specs/UI/UI_VisualStyle.md`, and `Specs/UI/UI_PreferencesDialog.md`.
+Theme application and event-time system-color resolution are **UI-thread only**. Theme resources held in state (`backgroundBrush`, `cardBrush`, `inputBrush`…) are `wil::unique_hbrush` (RAII). Never retain a stale `AppTheme&` or a pointer into a prior `ResolvedThemeColors` across selection/hot reload. Paint consumers may read only the immutable compiled program owned by the atomically installed theme. Semantic keys must be real runtime keys recognized by all intended adapters; preview-only aliases are forbidden. See `Specs/Core/Core_Settings.md`, `Specs/Core/Core_RedConfigure.md`, `Specs/UI/UI_VisualStyle.md`, and `Specs/UI/UI_PreferencesDialog.md`.
 
 ### Diagnostics: ETW/TraceLogging, Debug logging and RedMonitor
 
@@ -698,7 +698,7 @@ Satellite resources must never duplicate language-neutral IDs (it breaks the par
 - `Specs/UI/UI_DxUiSharedGrid.md`
 - `Specs/UI/UI_DxUiWinUIDesign.md`
 - `Specs/UI/UI_VisualStyle.md`
-- `Specs/Core/Core_SettingsStore.md`
+- `Specs/Core/Core_Settings.md`
 - `Specs/Testing/Testing_PerformanceValidation.md`
 - `Specs/Testing/Testing_TestCoverage.md`
 

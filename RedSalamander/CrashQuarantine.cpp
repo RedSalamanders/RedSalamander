@@ -2,37 +2,26 @@
 
 #include "Framework.h"
 
-#include <filesystem>
+#include <exception>
 #include <string>
 #include <string_view>
-#include <system_error>
+#include <vector>
 
-#include "AppDataPaths.h"
+#include <commctrl.h>
+#include <shellapi.h>
+
+#include "CrashHandler.h"
 #include "Helpers.h"
-#include "HostServices.h"
 #include "SessionState.h"
 #include "SettingsStore.h"
 #include "resource.h"
+
+#pragma comment(lib, "Comctl32.lib")
 
 namespace CrashQuarantine
 {
 namespace
 {
-constexpr wchar_t kCompanyDirName[] = L"RedSalamander";
-constexpr wchar_t kCrashDirName[]   = L"Crashes";
-constexpr wchar_t kMarkerFileName[] = L"last_crash.txt";
-
-[[nodiscard]] std::filesystem::path GetCrashMarkerPath() noexcept
-{
-    const std::filesystem::path base = AppDataPaths::GetLocalAppDataPath();
-    if (base.empty())
-    {
-        return {};
-    }
-
-    return base / kCompanyDirName / kCrashDirName / kMarkerFileName;
-}
-
 [[nodiscard]] bool IsDisabledPluginId(std::wstring_view pluginId, const Common::Settings::Settings& settings) noexcept
 {
     for (const std::wstring& disabled : settings.plugins.disabledPluginIds)
@@ -104,66 +93,63 @@ void DisablePluginIdInSettingsForTest(std::wstring_view pluginId, Common::Settin
 }
 #endif
 
-void OfferPluginDisableIfPreviousCrashDetected(Common::Settings::Settings& settings) noexcept
+void OfferPreviousCrashRecovery(Common::Settings::Settings& settings) noexcept
 {
-    const std::filesystem::path markerPath = GetCrashMarkerPath();
-    if (markerPath.empty())
+    try
     {
-        return;
-    }
+        const auto report = CrashHandler::TakePendingReport();
+        if (! report)
+            return;
 
-    std::error_code ec;
-    if (! std::filesystem::exists(markerPath, ec))
-    {
-        return;
-    }
-
-    const auto stateOpt = SessionState::TryRead();
-    if (! stateOpt.has_value() || stateOpt->activeFileSystemPluginIds.empty())
-    {
-        return;
-    }
-
-    const std::vector<std::wstring> toDisable = ComputePluginsToDisable(true, stateOpt->activeFileSystemPluginIds, settings);
-    if (toDisable.empty())
-    {
-        return;
-    }
-
-    const std::wstring title = LoadStringResource(nullptr, IDS_CRASH_QUARANTINE_TITLE);
-    std::wstring pluginList;
-    for (size_t i = 0; i < toDisable.size(); ++i)
-    {
-        if (i != 0)
+        const auto state         = SessionState::TryRead();
+        const auto toDisable     = state ? ComputePluginsToDisable(true, state->activeFileSystemPluginIds, settings) : std::vector<std::wstring>{};
+        const std::wstring title = LoadStringResource(nullptr, toDisable.empty() ? IDS_CRASH_DETECTED_TITLE : IDS_CRASH_QUARANTINE_TITLE);
+        std::wstring content     = report->dumpPath.empty() ? LoadStringResource(nullptr, IDS_CRASH_DETECTED_MESSAGE)
+                                                            : FormatStringResource(nullptr, IDS_CRASH_DETECTED_MESSAGE_FMT, report->dumpPath);
+        if (! toDisable.empty())
         {
-            pluginList.append(L"\r\n");
+            std::wstring pluginList;
+            for (const auto& id : toDisable)
+            {
+                if (! pluginList.empty())
+                    pluginList.append(L"\r\n");
+                pluginList.append(id);
+            }
+            const UINT warningId = toDisable.size() > 1 ? IDS_CRASH_QUARANTINE_MESSAGE_PLURAL_FMT : IDS_CRASH_QUARANTINE_MESSAGE_FMT;
+            content.append(L"\r\n\r\n");
+            content.append(FormatStringResource(nullptr, warningId, pluginList));
         }
-        pluginList.append(toDisable[i]);
+
+        const std::wstring openFolderLabel = LoadStringResource(nullptr, IDS_CRASH_OPEN_FOLDER_OPTION);
+        const std::wstring acceptLabel     = LoadStringResource(nullptr, toDisable.empty() ? IDS_BTN_OK : IDS_BTN_YES);
+        const std::wstring keepLabel       = toDisable.empty() ? std::wstring{} : LoadStringResource(nullptr, IDS_BTN_NO);
+        const TASKDIALOG_BUTTON buttons[]  = {{toDisable.empty() ? IDOK : IDYES, acceptLabel.c_str()}, {IDNO, keepLabel.c_str()}};
+        TASKDIALOGCONFIG dialog{};
+        dialog.cbSize              = sizeof(dialog);
+        dialog.dwFlags             = TDF_ALLOW_DIALOG_CANCELLATION;
+        dialog.cButtons            = toDisable.empty() ? 1u : 2u;
+        dialog.pButtons            = buttons;
+        dialog.nDefaultButton      = buttons[0].nButtonID;
+        dialog.pszWindowTitle      = title.c_str();
+        dialog.pszMainIcon         = TD_WARNING_ICON;
+        dialog.pszContent          = content.c_str();
+        dialog.pszVerificationText = openFolderLabel.c_str();
+
+        int choice      = 0;
+        BOOL openFolder = FALSE;
+        if (FAILED(TaskDialogIndirect(&dialog, &choice, nullptr, &openFolder)) || choice == IDCANCEL)
+            return;
+        if (choice == IDYES)
+        {
+            for (const auto& id : toDisable)
+                DisablePluginIdInSettings(id, settings);
+        }
+        if (openFolder)
+            static_cast<void>(ShellExecuteW(nullptr, L"open", report->directory.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
     }
-
-    const UINT messageId       = (toDisable.size() > 1u) ? IDS_CRASH_QUARANTINE_MESSAGE_PLURAL_FMT : IDS_CRASH_QUARANTINE_MESSAGE_FMT;
-    const std::wstring message = FormatStringResource(nullptr, messageId, pluginList);
-
-    HostPromptRequest prompt{};
-    prompt.sizeBytes     = sizeof(prompt);
-    prompt.scope         = HOST_ALERT_SCOPE_APPLICATION;
-    prompt.severity      = HOST_ALERT_WARNING;
-    prompt.buttons       = HOST_PROMPT_BUTTONS_YES_NO;
-    prompt.targetWindow  = nullptr;
-    prompt.title         = title.empty() ? nullptr : title.c_str();
-    prompt.message       = message.empty() ? nullptr : message.c_str();
-    prompt.defaultResult = HOST_PROMPT_RESULT_YES;
-
-    HostPromptResult result = HOST_PROMPT_RESULT_NONE;
-    const HRESULT hrPrompt  = HostShowPrompt(prompt, nullptr, &result);
-    if (FAILED(hrPrompt) || result != HOST_PROMPT_RESULT_YES)
+    catch (const std::exception&)
     {
-        return;
-    }
-
-    for (const std::wstring_view id : toDisable)
-    {
-        DisablePluginIdInSettings(id, settings);
+        // Recovery is a healthy-start action. A failure here leaves the local report intact.
     }
 }
 } // namespace CrashQuarantine

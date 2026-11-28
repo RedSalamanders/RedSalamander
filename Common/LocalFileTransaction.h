@@ -33,6 +33,13 @@ enum class ExistingTargetPolicy : uint8_t
     Replace,
 };
 
+// Runs after the staged file is finalized, immediately before each rename attempt.
+struct TargetRenameCheck
+{
+    void* context                                                = nullptr;
+    HRESULT (*verify)(void*, FILE_INFO_BY_HANDLE_CLASS) noexcept = nullptr;
+};
+
 #ifdef ENABLE_TESTS
 namespace Testing
 {
@@ -257,7 +264,8 @@ public:
 
     [[nodiscard]] HRESULT Commit(std::optional<uint64_t> expectedSize                 = std::nullopt,
                                  BY_HANDLE_FILE_INFORMATION* committedFileInformation = nullptr,
-                                 wil::unique_hfile* retainedPublishedFile             = nullptr) noexcept
+                                 wil::unique_hfile* retainedPublishedFile             = nullptr,
+                                 TargetRenameCheck targetCheck                        = {}) noexcept
     {
         if (! _file || _temporaryPath.empty() || _targetPath.empty() || _committed)
         {
@@ -326,6 +334,12 @@ public:
         rename->RootDirectory  = nullptr;
         rename->FileNameLength = static_cast<DWORD>(fileNameBytes);
         std::memcpy(rename->FileName, targetNative.data(), fileNameBytes);
+
+        const auto verifyTarget = [&](FILE_INFO_BY_HANDLE_CLASS informationClass) noexcept
+        { return targetCheck.verify ? targetCheck.verify(targetCheck.context, informationClass) : S_OK; };
+        if (const HRESULT targetHr = verifyTarget(FileRenameInfoEx); FAILED(targetHr))
+            return targetHr;
+
         HRESULT renameHr = RenameOwnedFile(FileRenameInfoEx, rename, static_cast<DWORD>(renameStorage.size()));
         if (renameHr == HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER) || renameHr == HRESULT_FROM_WIN32(ERROR_INVALID_FUNCTION) ||
             renameHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || renameHr == HRESULT_FROM_WIN32(ERROR_CALL_NOT_IMPLEMENTED) || renameHr == E_ACCESSDENIED)
@@ -334,7 +348,9 @@ public:
             // Closing and using a pathname here could publish a replacement of our private stage.
             rename->Flags           = 0u;
             rename->ReplaceIfExists = static_cast<BOOLEAN>(replace);
-            renameHr                = RenameOwnedFile(FileRenameInfo, rename, static_cast<DWORD>(renameStorage.size()));
+            if (const HRESULT targetHr = verifyTarget(FileRenameInfo); FAILED(targetHr))
+                return targetHr;
+            renameHr = RenameOwnedFile(FileRenameInfo, rename, static_cast<DWORD>(renameStorage.size()));
         }
         if (FAILED(renameHr))
             return renameHr;

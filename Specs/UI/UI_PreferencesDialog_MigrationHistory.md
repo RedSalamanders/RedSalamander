@@ -14,7 +14,7 @@ Current authority:
 - `Specs/UI/UI_PreferencesDialog.md` — Preferences behavior and integration;
 - `Specs/UI/UI_DxUiSharedGrid.md` — shared DxUi controls, accessibility, and
   migrated-window acceptance;
-- `Specs/Core/Core_SettingsStore.md` and
+- `Specs/Core/Core_Settings.md` and
   `Specs/SettingsStore.schema.json` — settings persistence and schema;
 - `Specs/Plans/WIP/Operation_Atlas_RemainingSpecificationDecisions_2026-08-04.md`
   — unresolved optional product choices recovered during retirement.

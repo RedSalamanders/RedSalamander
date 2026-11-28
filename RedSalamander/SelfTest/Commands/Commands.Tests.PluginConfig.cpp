@@ -6362,7 +6362,7 @@ private:
     requireSpecTokens(L"Specs/UI/UI_PreferencesDialog.md",
                       L"Preferences spec",
                       {"exactly `Preserve links` and `Skip links`", "configurationByPluginId", "never displays or accepts Follow"});
-    requireSpecTokens(L"Specs/Core/Core_SettingsStore.md",
+    requireSpecTokens(L"Specs/Core/Core_Settings.md",
                       L"SettingsStore spec",
                       {"configurationByPluginId[builtin/file-system].reparsePointPolicy", "not a\n`fileOperations` setting"});
     requireSpecTokens(L"Specs/FileSystem/FileSystem_S3.md",

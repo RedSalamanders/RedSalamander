@@ -1,0 +1,6 @@
+- Protect settings publication and keep the newest ten owned crash reports.
+  - Preserve a competing first creation and recheck the accepted settings revision at both rename paths.
+  - Use an unversioned Release settings profile and retain the previous versioned file for migration.
+  - Keep the associated crash sidecars and preserve legacy and unrelated reports.
+  - Leave pending notices and plugin recovery available for interactive startup after a self-test.
+  - Route fatal entry points through one local dump writer and offer the dump folder and plugin recovery in one restart dialog.
