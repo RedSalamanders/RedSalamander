@@ -504,3 +504,15 @@ The original Commands entry reported 964 passes, one failure and five skips. The
 The original File Operations result reported 292 passes, one failure and 37 skips. `FileOps_PopupStableHostedTree` retained the routed press, avoided full tree rebuilds and reported a change in native focus or foreground ownership. The trace gives no identity for the new foreground. Results SHA-256 `585d84017532651b8cfca440084d50e39bfe41b9b3974f2765521cac2adab40d` and trace SHA-256 `c996984deb776bb8127434f542b570d3f0f6110bf10c0a48784d583a75af16e2`. The retained viewer dump is from the expected crash-capture negative control, which passed. It does not account for the timeout.
 
 The raw log and native artifact were archived locally in `20261128T054209Z-76168-dbb2940b26694021b1dfcb50c9120eff`. Raw job log SHA-256 `e63f2892466989668b52b538a79181627b299de16812071b261df81e6a2ace67`. The corrected Pack-bearing follow-up on `73c70e33037273b3727835d9b61a265883f15470` was admitted and has started both native jobs. [ARM64 artifact](https://github.com/RedSalamanders/RedSalamander/actions/runs/46085203828/artifacts/15251080129) [Corrected native qualification](https://github.com/RedSalamanders/RedSalamander/actions/runs/46089888885)
+
+### Focused replay after the ARM64 timeout
+
+The corrected Pack tree `c092f3a60d8509bbc861eb68583b1f7e5600ac16` used its re-attested x64 Release receipt `f77916da01c53b838f912968a3ba82bb0138ec24e07fac9e1edc60cf8b989c1a`. Three focused selections passed all nine repetitions with zero failures and skips. Each filtered runner retained the repository verdict `NOT_EVALUATED`. The desktop window ran from 06:47:26 to 06:50:07 CET and the contained launcher drained.
+
+| Native case | Durations | Run ID | Native result SHA-256 |
+|---|---|---|---|
+| `cmd_pane_fileops_completed_group_and_navigation` | 1,073, 937 and 951 ms | `20261128T054727Z-82264-8fb75abf50a44a4083e603896f2c53f7` | `1aa74a9805b386313b5b083c7aaffe96a80f18a0d08045705e34a3c67c05e59d` |
+| `FileOps_PopupStableHostedTree` | 1,735, 1,734 and 1,719 ms | `20261128T054822Z-77756-028207fc8fa94ae5b1410d1f3ba2410f` | `a35630cdc0630b991bbfa6d8ba7b5983236b3f958623135268a9401e9d7c4ac0` |
+| `settings_terminal_plugin_roundtrip` | 99, 95 and 94 ms | `20261128T054916Z-67720-6a4f172136154f0a830b48bde5efe3f3` | `4a76c606a351e82ebde5b47dbc5cd38cc8a7d8498d82d641c12f02a7a9239ea9` |
+
+The Z sandbox retained the launcher archive `20261128T054726Z-73492-130671ecea544ba2bec8888b10f2c058`. Its results digest is `373cd6fad8e87442db01e2f6ff7688bd061196b85875750339e6a09317b7b733`. These isolated x64 passes leave the hosted ARM64 focus and Terminal outcomes open.
