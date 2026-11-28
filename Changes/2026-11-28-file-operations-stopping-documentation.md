@@ -1,0 +1,1 @@
+- Document which File Operations actions remain available while a task stops.
