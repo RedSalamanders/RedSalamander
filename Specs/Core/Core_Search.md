@@ -10,7 +10,7 @@ Related normative documents:
 - `Specs/Plugins/Plugins_VirtualFileSystem.md` for the `IFileSystemSearch` ABI and capability JSON.
 - `Specs/UI/UI_CommandMenuKeyboard.md` for `cmd/pane/find` command routing and shortcut defaults.
 - `Specs/UI/UI_FolderWindow.md` for pane ownership, focus routing, and modeless window integration.
-- `Specs/Core/Core_SettingsStore.md` for persisted Find dialog state.
+- `Specs/Core/Core_Settings.md` for persisted Find dialog state.
 - `Specs/Testing/Testing_SelfTests.md` for self-test result and skip semantics.
 - `Specs/Testing/Testing_PerformanceValidation.md` for mandatory performance-validation requirements.
 

@@ -91,6 +91,7 @@
 #include "ShortcutsWindow.h"
 #include "SplashScreen.h"
 #include "StartupMetrics.h"
+#include "TestSupport/TestSupport.Tests.Runner.h"
 #include "Ui/AnimationDispatcher.h"
 #include "Ui/ThemeCycleOverlayWindow.h"
 #include "ViewerPluginManager.h"
@@ -7143,7 +7144,8 @@ constexpr wchar_t kRedSalamanderHelpText[] =
     L"\r\n"
     L"Options:\r\n"
     L"  -h, --help, /?                 Show this help.\r\n"
-    L"  --crash-test                    Trigger crash handler test.\r\n"
+    L"  --crash-probe                   Write a dump in the governed test run. --crash-test is an alias.\r\n"
+    L"  --crash-probe-worker            Exercise competing faults in the governed test run.\r\n"
     L"  --etw                           Enable RedSalamander Info/Perf/Debug ETW diagnostics in Release; Debug and ASan Debug enable them by default.\r\n"
     L"  --perf                          Write RedSalamander perf metrics to the default JSONL path in Release; Debug and ASan Debug enable it by default.\r\n"
     L"  --perf=PATH                     Write RedSalamander perf metrics to a custom JSONL path.\r\n"
@@ -7358,8 +7360,6 @@ bool DebugIsRedSalamanderDiagnosticsEnabledByDefault() noexcept
 // Separate function with C++ objects (cannot use __try/__except)
 static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 {
-    ConfigureHostServices(g_folderWindow, g_hFolderWindow, g_settings);
-
     const auto hasArg = [](PCWSTR needle) noexcept -> bool
     {
         if (! needle || needle[0] == L'\0')
@@ -7431,29 +7431,15 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         return false;
     };
 
+    const bool selfTestRequested = hasArg(L"--selftest") || hasArg(L"--compare-selftest") || hasArg(L"--commands-selftest") || hasArg(L"--fileops-selftest");
 #ifdef ENABLE_TESTS
     // An assertion or failed STL check in a self-test exits with code 3 and sends its report to stderr.
     // Interactive Debug runs retain their debugger dialogs.
-    if (hasArg(L"--selftest") || hasArg(L"--compare-selftest") || hasArg(L"--commands-selftest") || hasArg(L"--fileops-selftest"))
+    if (selfTestRequested)
     {
         RedSalamander::TestSupport::RouteFailureReportsAwayFromDialogs();
     }
 #endif
-
-    if (hasArg(L"--etw"))
-    {
-        Debug::detail::SetRuntimeMonitorDiagnosticsEnabled(true);
-        static_cast<void>(::SetEnvironmentVariableW(L"REDSALAMANDER_DIAGNOSTICS_ETW", L"1"));
-    }
-
-    std::wstring perfJsonlPath;
-    const bool customPerfPath = getArgValue(L"--perf=", perfJsonlPath);
-    if (customPerfPath || hasArg(L"--perf") || IsRedSalamanderDiagnosticsEnabledByDefault())
-    {
-        const std::filesystem::path perfPath =
-            (customPerfPath && ! perfJsonlPath.empty()) ? std::filesystem::path(perfJsonlPath) : GetDefaultPerfJsonlPath(L"RedSalamander");
-        Debug::Perf::ConfigureJsonlOutput(perfPath, L"RedSalamander", kRedSalamanderBuildFlavor);
-    }
 
     const auto writeHelpText = [](std::wstring_view text) -> void
     {
@@ -7515,6 +7501,64 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         return 0;
     }
 
+#ifndef ENABLE_TESTS
+    std::wstring unsupportedSelfTestArg;
+    if (selfTestRequested || hasArg(L"--selftest-fail-fast") || hasArg(L"--selftest-list-cases") || hasArg(L"--selftest-no-activate") ||
+        getArgValue(L"--selftest-case=", unsupportedSelfTestArg) || getArgValue(L"--selftest-family=", unsupportedSelfTestArg) ||
+        getArgValue(L"--selftest-crash-case=", unsupportedSelfTestArg) || getArgValue(L"--selftest-repeat=", unsupportedSelfTestArg) ||
+        getArgValue(L"--selftest-shuffle=", unsupportedSelfTestArg) || getArgValue(L"--selftest-flaky-proof-case=", unsupportedSelfTestArg) ||
+        getArgValue(L"--selftest-order-proof-case=", unsupportedSelfTestArg) || getArgValue(L"--selftest-perf-budget=", unsupportedSelfTestArg) ||
+        hasArg(L"--selftest-require-perf-budgets") || getArgValue(L"--selftest-timeout-multiplier=", unsupportedSelfTestArg))
+    {
+        Debug::Error(L"Self-test command-line arguments require ENABLE_TESTS.");
+        return 2;
+    }
+#endif
+
+    const bool workerCrashProbe = hasArg(L"--crash-probe-worker");
+    if (workerCrashProbe || hasArg(L"--crash-probe") || hasArg(L"--crash-test"))
+    {
+        if (selfTestRequested)
+            return 2;
+        std::error_code error;
+        const auto leaf           = std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64());
+        const auto probeDirectory = RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = L"crash-probe",
+                                                                                      .leafSegment         = leaf,
+                                                                                      .fallbackRunIdPrefix = L"crash-probe",
+                                                                                      .kind          = RedSalamander::TestSupport::TestDirectoryKind::Artifacts,
+                                                                                      .cleanExisting = false},
+                                                                                     error);
+        if (error || probeDirectory.empty() || FAILED(CrashHandler::InstallForProbe(probeDirectory)))
+            return 2;
+        CrashHandler::TriggerCrashTest(workerCrashProbe);
+    }
+    // A test-owned process retains its isolated failure-reporting path and leaves the product crash store alone.
+    const bool interactiveStartup = ! selfTestRequested;
+    if (interactiveStartup)
+    {
+        const HRESULT crashHr = CrashHandler::Install();
+        if (FAILED(crashHr))
+        {
+            Debug::Error(L"Failed to initialize crash reporting: 0x{:08X}", static_cast<unsigned>(crashHr));
+            return 2;
+        }
+    }
+
+    ConfigureHostServices(g_folderWindow, g_hFolderWindow, g_settings);
+    if (hasArg(L"--etw"))
+    {
+        Debug::detail::SetRuntimeMonitorDiagnosticsEnabled(true);
+        static_cast<void>(::SetEnvironmentVariableW(L"REDSALAMANDER_DIAGNOSTICS_ETW", L"1"));
+    }
+    std::wstring perfJsonlPath;
+    const bool customPerfPath = getArgValue(L"--perf=", perfJsonlPath);
+    if (customPerfPath || hasArg(L"--perf") || IsRedSalamanderDiagnosticsEnabledByDefault())
+    {
+        const std::filesystem::path perfPath =
+            (customPerfPath && ! perfJsonlPath.empty()) ? std::filesystem::path(perfJsonlPath) : GetDefaultPerfJsonlPath(L"RedSalamander");
+        Debug::Perf::ConfigureJsonlOutput(perfPath, L"RedSalamander", kRedSalamanderBuildFlavor);
+    }
+
     std::optional<Debug::Perf::Scope> startupPerf;
     startupPerf.emplace(L"App.Startup.UntilMessageLoop");
     startupPerf->SetDetail(kAppId);
@@ -7569,26 +7613,6 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         }
     }
 
-#endif
-
-    if (hasArg(L"--crash-test"))
-    {
-        CrashHandler::TriggerCrashTest();
-    }
-
-#ifndef ENABLE_TESTS
-    std::wstring unsupportedSelfTestArg;
-    if (hasArg(L"--selftest") || hasArg(L"--compare-selftest") || hasArg(L"--commands-selftest") || hasArg(L"--fileops-selftest") ||
-        hasArg(L"--selftest-fail-fast") || hasArg(L"--selftest-list-cases") || hasArg(L"--selftest-no-activate") ||
-        getArgValue(L"--selftest-case=", unsupportedSelfTestArg) || getArgValue(L"--selftest-family=", unsupportedSelfTestArg) ||
-        getArgValue(L"--selftest-crash-case=", unsupportedSelfTestArg) || getArgValue(L"--selftest-repeat=", unsupportedSelfTestArg) ||
-        getArgValue(L"--selftest-shuffle=", unsupportedSelfTestArg) || getArgValue(L"--selftest-flaky-proof-case=", unsupportedSelfTestArg) ||
-        getArgValue(L"--selftest-order-proof-case=", unsupportedSelfTestArg) || getArgValue(L"--selftest-perf-budget=", unsupportedSelfTestArg) ||
-        hasArg(L"--selftest-require-perf-budgets") || getArgValue(L"--selftest-timeout-multiplier=", unsupportedSelfTestArg))
-    {
-        Debug::Error(L"Self-test command-line arguments require ENABLE_TESTS.");
-        return 2;
-    }
 #endif
 
 #ifdef ENABLE_TESTS
@@ -7847,7 +7871,10 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         g_settings.theme.currentThemeId = ThemeIdFromThemeMode(envTheme);
     }
 
-    CrashQuarantine::OfferPluginDisableIfPreviousCrashDetected(g_settings);
+    if (interactiveStartup)
+    {
+        CrashQuarantine::OfferPreviousCrashRecovery(g_settings);
+    }
 
 #ifdef ENABLE_TESTS
     const bool runHeadlessCompareSelfTest = g_runCompareDirectoriesSelfTest && ! g_runFileOpsSelfTest && ! g_runCommandsSelfTest &&
@@ -8439,7 +8466,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, [[maybe_unused]] _In_opt_ HINSTA
         return monitorCommand;
 
     // Use SEH to catch all exceptions (no C++ objects in this scope)
-    CrashHandler::Install();
     __try
     {
         return RunApplication(hInstance, nCmdShow);
@@ -11590,7 +11616,6 @@ LRESULT OnMainWindowStartupInputReady([[maybe_unused]] HWND hWnd)
     {
         SplashScreen::RequestCloseIfExist();
     }
-    CrashHandler::ShowPreviousCrashUiIfPresent(hWnd);
     return 0;
 }
 

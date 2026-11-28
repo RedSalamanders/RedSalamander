@@ -8,11 +8,9 @@ RedSalamander stores per-user settings under:
 
 Typical filenames:
 
-- Release: `RedSalamander-<Major>.<Minor>.settings.json`
-- Debug: `RedSalamander-debug.settings.json`
-- Legacy (older builds): `RedSalamander.settings.json`
-
-Note: Debug builds may fall back to the versioned/legacy settings file if the debug settings file does not exist.
+- Release uses `RedSalamander.settings.json`.
+- Debug uses `RedSalamander-debug.settings.json`.
+- Previous releases used `RedSalamander-<Major>.<Minor>.settings.json`. A missing profile may read this file. [Settings filenames](SettingsFile.md)
 
 A schema file is written next to it for reference:
 

@@ -37,7 +37,7 @@ Related specs:
 
 - `Specs/UI/UI_DxUiSharedGrid.md`
 - `Specs/UI/UI_TopLevelToolWindows.md`
-- `Specs/Core/Core_SettingsStore.md`
+- `Specs/Core/Core_Settings.md`
 - `Specs/Core/Core_CompareDirectories.md`
 - `Specs/UI/UI_CommandMenuKeyboard.md`
 - `Specs/UI/UI_ManagePluginsDialog.md`
