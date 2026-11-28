@@ -11167,15 +11167,18 @@ struct OwnedMenuSessionEscapeResult
     };
 
     constexpr uint32_t kTimeoutMs = 3000u;
-    auto probe = std::make_shared<Probe>();
+    auto probe                    = std::make_shared<Probe>();
     std::jthread worker([probe, hwnd](const std::stop_token stopToken) noexcept
     {
-        ExecuteBoundedUiaWorker(probe, stopToken, kTimeoutMs, [&]() noexcept
+        ExecuteBoundedUiaWorker(probe,
+                                stopToken,
+                                kTimeoutMs,
+                                [&]() noexcept
         {
             wil::com_ptr<IUIAutomationElement> root;
             wil::unique_bstr automationId;
-            probe->hasTerminalRoot = TryGetUiAutomationRootElement(hwnd, root) && SUCCEEDED(root->get_CurrentAutomationId(&automationId)) &&
-                                     automationId && std::wstring_view(automationId.get()) == L"RedSalamander.EmbeddedTerminal";
+            probe->hasTerminalRoot = TryGetUiAutomationRootElement(hwnd, root) && SUCCEEDED(root->get_CurrentAutomationId(&automationId)) && automationId &&
+                                     std::wstring_view(automationId.get()) == L"RedSalamander.EmbeddedTerminal";
         });
     });
     return WaitForBoundedUiaWorker(worker, probe->lifetime, kTimeoutMs, L"UI Automation root read", L"embedded Terminal provider") && probe->hasTerminalRoot;
