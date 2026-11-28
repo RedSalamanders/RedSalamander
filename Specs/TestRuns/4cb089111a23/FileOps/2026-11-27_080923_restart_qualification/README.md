@@ -440,3 +440,9 @@ The case required both exact paths in a controlled Local mixed Recycle selection
 ### Upstream ARM64 runner image evidence
 
 The GitHub runner-images tracker records the same recurring WSL prompt on the native Windows 11 ARM64 image. Another project's process-start capture traced its prompt to the hosted compute agent. The image maintainers' open PR proposes preinstalling the native WSL package. This is a plausible explanation for the matching WSL image and unavailable parent on this run. The RedSalamander artifacts still lack the arguments and parent launch chain required to establish attribution for this instance. [Runner image issue](https://github.com/actions/runner-images/issues/14264) [Upstream image PR](https://github.com/actions/runner-images/pull/15362)
+
+### Commands evidence from the local Pack Full run
+
+The x64 Release Commands entry on `05252ae38332641222c55ba1fb11a9f1abf264ae` passed 965 cases with zero failures and five skips in 1,279,206 ms. The native result SHA-256 is `23f04ec980182e56abc702efdfbd7dd57a9d9919797726136e4e49fc69ca5e23` in run `20261127T231106Z-58756-cb5c3c7c52a1429aa066841fab1ae55b` at `artifacts/archive/4cb089111a23/Commands/2026-11-28_013004/commands_results.json`.
+
+Both cases from the preceding ARM64 Commands run passed locally. Conflict-inspection teardown took 154 ms and ViewerSpace hover took 76,817 ms. The Pack and Unpack round trip, Find result shortcuts and file actions, Cut and Paste, and the host queue paste route also passed. These are local x64 results. The broader Full sequence continued to File Operations and the ARM64 gate stayed open.
