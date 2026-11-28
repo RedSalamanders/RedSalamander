@@ -4192,6 +4192,26 @@ struct BatchRenameLocalStampParts final
     return state.failure.empty();
 }
 
+// The next Commands case can capture the current pane directory for its own
+// teardown. Leave this fixture before removing it, including on assertion failures.
+void RetireBatchRenamePaneFixture(const std::filesystem::path& root, CaseState& state) noexcept
+{
+    CloseBatchRenameWindowIfOpen();
+    constexpr auto pane = FolderWindow::Pane::Left;
+    const auto path = g_folderWindow.GetCurrentPath(pane);
+    if (path.has_value() && OrdinalString::EqualsNoCasePath(path.value(), root))
+    {
+        const auto parent = root.parent_path();
+        g_folderWindow.SetFolderPath(pane, parent);
+        if (! state.Require(WaitForPanePath(pane, parent, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                            L"Batch Rename teardown must leave the fixture directory before removing it."))
+        {
+            return;
+        }
+    }
+    state.Require(SelfTest::RemoveAll(root), L"Batch Rename teardown could not remove its fixture directory.");
+}
+
 [[nodiscard]] bool TestBatchRenameWindowRefreshesPaneAfterSuccess([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
 {
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
@@ -4202,17 +4222,11 @@ struct BatchRenameLocalStampParts final
     }
 
     const std::filesystem::path root = suiteRoot / L"work" / (L"batch_rename_pane_refresh_" + NewGuidText());
+    const auto retire = wil::scope_exit([&]() noexcept { RetireBatchRenamePaneFixture(root, state); });
     if (! SetupBatchRenamePaneFixture(state, root, {L"pane-alpha.batch", L"pane-beta.batch"}, {}))
     {
         return false;
     }
-
-    const auto cleanupBatchWindow = wil::scope_exit([]() noexcept { CloseBatchRenameWindowIfOpen(); });
-    const auto cleanupFiles       = wil::scope_exit([root]() noexcept
-    {
-        std::error_code removeEc;
-        std::filesystem::remove_all(root, removeEc);
-    });
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"pane-alpha.batch"),
                   L"Failed to focus first file for pane refresh Batch Rename test.");
@@ -4273,17 +4287,11 @@ struct BatchRenameLocalStampParts final
     }
 
     const std::filesystem::path root = suiteRoot / L"work" / (L"batch_rename_source_replacement_" + NewGuidText());
+    const auto retire = wil::scope_exit([&]() noexcept { RetireBatchRenamePaneFixture(root, state); });
     if (! SetupBatchRenamePaneFixture(state, root, {L"source.batch"}, {}))
     {
         return false;
     }
-
-    const auto cleanupBatchWindow = wil::scope_exit([]() noexcept { CloseBatchRenameWindowIfOpen(); });
-    const auto cleanupFiles       = wil::scope_exit([root]() noexcept
-    {
-        std::error_code removeEc;
-        std::filesystem::remove_all(root, removeEc);
-    });
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"source.batch"),
                   L"Failed to focus the source-replacement Batch Rename input.");
