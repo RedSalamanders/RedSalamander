@@ -1,0 +1,1 @@
+- Read Compare Directories edit and command-button accessibility properties through the owned options window during baseline and open/close checks.
