@@ -12,8 +12,8 @@
 #include <CommCtrl.h>
 #include <CommonControls.h>
 #include <KnownFolders.h>
-#include <shellapi.h>
 #include <ShlObj.h>
+#include <shellapi.h>
 #pragma comment(lib, "Comctl32.lib")
 
 #pragma warning(push)
