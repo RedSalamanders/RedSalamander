@@ -6,7 +6,9 @@ Last reviewed: 2026-11-20
 ## Compiler and linker policy
 
 First-party C++ projects use MSVC 14.52.x/v145, Unicode, stdcpplatest, SDL and
-conformance mode. WarningLevel is EnableAllWarnings (/Wall) and
+conformance mode. `Directory.Build.props` also enables the standard MSVC preprocessor with
+`/Zc:preprocessor` and defines `WIN32_LEAN_AND_MEAN` and `NOMINMAX` with empty replacement lists.
+Source and SDK consumers use the same first-party definitions. WarningLevel is EnableAllWarnings (/Wall) and
 TreatWarningAsError is false (/WX disabled), in every supported profile.
 The build must finish with **zero warnings and zero errors** before a successful
 receipt or green result is published. Disabling /WX allows collection of all
@@ -36,8 +38,10 @@ dependency fingerprints; an old archive cannot reuse the changed policy's output
 
 `Build/BuildConsole.psm1` binds the result, diagnostic, and link implementation to the exact clean CI engine checkout.
 The diagnostic gate also refuses structured MSVC tool exception dumps.
-A native success summary is green only after native exit success, zero logged
-warnings/errors and the entrypoint's existing provenance/attestation checks.
+A native success summary requires native exit success, the final MSBuild footer
+with explicit zero warning and error counts, and the entrypoint's existing
+provenance and attestation checks. Direct console mode asks the file logger for
+the footer. Streamed execution asks the console logger for it.
 Failed builds remain failures. Clean/package-only operations preserve their
 existing meaning and do not pretend to be native compilation.
 

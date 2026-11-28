@@ -162,12 +162,17 @@ Describe 'Pinned cold-runner vcpkg provisioning' {
         foreach ($file in @('vcpkg.props','vcpkg.targets')) { [IO.File]::WriteAllText((Join-Path $integration $file),'<Project/>') }
         $oldCL = $env:CL
         foreach ($platform in @('x64','ARM64')) {
-            $triplet = if ($platform -eq 'ARM64') { 'arm64-windows' } else { 'x64-windows' }
-            $installed = Join-Path $fixture.Consumer ('.build/vcpkg_installed/' + $platform.ToLowerInvariant() + '/' + $triplet)
-            foreach ($path in @('include','lib/manual-link','bin','debug/lib/manual-link','debug/bin')) {
-                [void][IO.Directory]::CreateDirectory((Join-Path $installed $path))
-            }
+            $normal = $platform.ToLowerInvariant() + '-windows'
             foreach ($configuration in @('Release','Debug','ASan Debug')) {
+                $triplet = if ($configuration -eq 'ASan Debug') { "$normal-asan" } else { $normal }
+                $installed = Join-Path $fixture.Consumer ('.build/vcpkg_installed/' + $platform.ToLowerInvariant() + '/' + $triplet)
+                if ($configuration -eq 'ASan Debug') {
+                    Get-BootstrapFailure { Get-RSVcpkgBuildEnvironment -RepoRoot $fixture.Consumer -ToolRoot $tool -Platform $platform -Configuration $configuration -RuntimeOnly } |
+                        Should Match "vcpkg-install.ps1 -Platform $platform -Asan"
+                }
+                foreach ($path in @('include','lib/manual-link','bin','debug/lib/manual-link','debug/bin')) {
+                    [void][IO.Directory]::CreateDirectory((Join-Path $installed $path))
+                }
                 $environment = Get-RSVcpkgBuildEnvironment -RepoRoot $fixture.Consumer -ToolRoot $tool -Platform $platform -Configuration $configuration
                 $expected = if ($configuration -like '*Debug*') { 'Debug' } else { 'Release' }
                 $environment.VcpkgConfiguration | Should Be $expected

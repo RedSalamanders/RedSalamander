@@ -1,0 +1,1 @@
+- Add a manual paired benchmark for the native Local and Dummy bridge small-file Copy paths.

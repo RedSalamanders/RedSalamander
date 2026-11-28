@@ -114,7 +114,9 @@ if ($Phase -ne 'Qualification') { $Configuration = 'Release' }
 Import-Module (Join-Path $root 'Tools/Modules/Build/VcpkgInstallSafety.psm1')
 if ($Phase -in @('ReleaseTestBuild','Production','Qualification')) {
     $vcpkg = Initialize-RSVcpkgToolContext -RepoRoot $root
-    Run 'vcpkg-install.ps1' @('-Platform',$Platform,'-VcpkgExe',$vcpkg.Executable,'-VcpkgRoot',$vcpkg.RegistryRoot,'-ReuseCurrent')
+    $installArguments = @('-Platform',$Platform,'-VcpkgExe',$vcpkg.Executable,'-VcpkgRoot',$vcpkg.RegistryRoot,'-ReuseCurrent')
+    if ($Configuration -eq 'ASan Debug') { $installArguments += '-Asan' }
+    Run 'vcpkg-install.ps1' $installArguments
 }
 # The test step must retain the build's environment identity without reinstalling.
 $toolRoot = Resolve-RSVcpkgSafeChildPath -Root $root -Child '.build/vcpkg-tool'

@@ -4,7 +4,7 @@ Restores the pinned RedSalamander, DxUi and RedMonitor client dependencies.
 .PARAMETER Platform
 Target x64 or ARM64 architecture. Defaults to x64.
 .PARAMETER Configuration
-Selects the DxUi toolchain configuration. Defaults to Debug.
+Selects the DxUi profile and vcpkg triplet. Defaults to Debug.
 .OUTPUTS
 Dependency restore output from the existing product commands.
 .NOTES
@@ -36,5 +36,5 @@ if (-not $?) { exit $LASTEXITCODE }
 
 Import-Module (Join-Path $PSScriptRoot 'Tools/Modules/Build/VcpkgInstallSafety.psm1') -ErrorAction Stop
 $tool = Initialize-RSVcpkgToolContext -RepoRoot $PSScriptRoot
-& (Join-Path $PSScriptRoot 'vcpkg-install.ps1') -Platform $Platform -VcpkgExe $tool.Executable -VcpkgRoot $tool.RegistryRoot -ReuseCurrent
+& (Join-Path $PSScriptRoot 'vcpkg-install.ps1') -Platform $Platform -Asan:($Configuration -eq 'ASan Debug') -VcpkgExe $tool.Executable -VcpkgRoot $tool.RegistryRoot -ReuseCurrent
 if (-not $?) { exit $LASTEXITCODE }
