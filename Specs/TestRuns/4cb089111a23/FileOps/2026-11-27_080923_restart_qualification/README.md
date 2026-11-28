@@ -440,3 +440,79 @@ The case required both exact paths in a controlled Local mixed Recycle selection
 ### Upstream ARM64 runner image evidence
 
 The GitHub runner-images tracker records the same recurring WSL prompt on the native Windows 11 ARM64 image. Another project's process-start capture traced its prompt to the hosted compute agent. The image maintainers' open PR proposes preinstalling the native WSL package. This is a plausible explanation for the matching WSL image and unavailable parent on this run. The RedSalamander artifacts still lack the arguments and parent launch chain required to establish attribution for this instance. [Runner image issue](https://github.com/actions/runner-images/issues/14264) [Upstream image PR](https://github.com/actions/runner-images/pull/15362)
+
+### Commands evidence from the local Pack Full run
+
+The x64 Release Commands entry on `05252ae38332641222c55ba1fb11a9f1abf264ae` passed 965 cases with zero failures and five skips in 1,279,206 ms. The native result SHA-256 is `23f04ec980182e56abc702efdfbd7dd57a9d9919797726136e4e49fc69ca5e23` in run `20261127T231106Z-58756-cb5c3c7c52a1429aa066841fab1ae55b` at `artifacts/archive/4cb089111a23/Commands/2026-11-28_013004/commands_results.json`.
+
+Both cases from the preceding ARM64 Commands run passed locally. Conflict-inspection teardown took 154 ms and ViewerSpace hover took 76,817 ms. The Pack and Unpack round trip, Find result shortcuts and file actions, Cut and Paste, and the host queue paste route also passed. These are local x64 results. The broader Full sequence continued to File Operations and the ARM64 gate stayed open.
+
+### Pack cleanup source-contract follow-up
+
+The canonical x64 Release Tooling Pester selection on `f8e90684f5099d93491dc47ea4625cd715898d29` had 1,518 passes, one failure and zero skips. The HWND factory, target and brush check passed. The failing Observatory Pack source guard expected the previous pane-only cleanup dispatch. Exact Pack directory cleanup now runs in the Pack worker, and regular files still use the receipt-bound Delete request. The focused gate rejected `tooling.pester`. Run `20261128T000631Z-58780-a5e96683c36d488982248a59600ab07d`. Legacy result SHA-256 `08ffa0cbf078eac797b026dab321c2ae7d4be2102cd5191b5b5c4f5080d6b558`.
+
+Candidate `c092f3a60d8509bbc861eb68583b1f7e5600ac16` scopes the static checks to the Pack completion and worker paths. The source contract checks publication, instance and receipt binding before the regular-file Delete request. It also checks that tree removal is conditioned on published output, approval and successful strict rebind. The focused Pester 3.4.0 run `20261128T003626Z-62128-8af469d17c83462e9b9a2666f2926de5` passed all 244 cases with zero failures or skips. Result SHA-256 `96e9248c0249dc0d44672db2afabdb05018abc6bab3c93c3922d6a747a2c3738`. The exact specification inventory and changelog checks passed. A first build-free Tooling launch stopped before execution because its receipt belonged to the earlier revision. Interrupted run `20261128T003802Z-80852-d75ce95db7e447e2bd7f195277b1182b`. The exact x64 Release solution build passed with zero warnings and errors in 7 minutes 31 seconds. Receipt `40b6b04330edf92a2ceb6034311fcfe788fca998d538f8e37028136c6109c0b3`. Its fresh Tooling selection `20261128T003926Z-53672-4f18d26075944d2fbb5fb76efb94521a` promoted `tooling.pester` with all 1,519 cases passed, zero failures and zero skips. The selected entry took 1,361.32 seconds. The filtered repository verdict is `NOT_EVALUATED`. Results SHA-256 `30bed50b012d52b0f6c3ced2d50a654d3fc5ad95962bdabae37c1030a05d4756` and promotion evidence digest `4bee2e3e8b425317e36d63831b0933c513bbf28c1dc03db6177e089a095f454d`. PR #395 merged at `73c70e33037273b3727835d9b61a265883f15470` after the required checks passed. Hosted run `46085203828` is still on the source that reproduced the old Pack guard locally. Run `46089888885` on the merged repair is queued. [Hosted follow-up](https://github.com/RedSalamanders/RedSalamander/actions/runs/46089888885) [Repair PR](https://github.com/RedSalamanders/RedSalamander/pull/395)
+
+### Non-activating rechecks on the merged Pack repair tree
+
+The reviewed source `c092f3a60d8509bbc861eb68583b1f7e5600ac16` has the same tree as merge `73c70e33037273b3727835d9b61a265883f15470`. Both selections verified x64 Release receipt `40b6b04330edf92a2ceb6034311fcfe788fca998d538f8e37028136c6109c0b3` and retained repository verdict `NOT_EVALUATED`.
+
+- The Pack and Unpack Commands case passed three repetitions at 2,632, 2,549 and 2,555 ms. Run `20261128T011207Z-80416-2cffd106732d4d30b7b8f62c29b8e3df`. Native results SHA-256 `22717aca1b5d9ae3f9758981772c4a76a96bb26a62d8a613782a6e9435882896` and archive metrics SHA-256 `4b0571438442ffbdf0fcb22329bf5de4be8bb7448a19f23ead96103a55063081`.
+- The non-interactive Viewer PE entry promoted with one pass, zero failures and zero skips. WebView2 created its controller and completed navigation at the exact expected private URL. Run `20261128T011325Z-38820-242b04608cfc41d9bd6dd4694073e27d`, console SHA-256 `c2cb263adf14c7344929bb4371573d5e09f5c566605a6fc2b1e81ab0004fde30`.
+
+### Local Pack Full terminal result
+
+The fresh x64 Release Full run on `05252ae38332641222c55ba1fb11a9f1abf264ae` finished with 3,091 passes, two failures and 58 skips. Both failures were in Tooling Pester. The HWND ownership assertion and the original Pack finish-layout assertion were corrected in PRs #389 and #395 and passed the later exact-build Tooling entry. The older Full verdict remains `FAILED`. Its final artifact receipt was `c4d1306bb2cbfd63c3ccc4a4783a5d58f50552bfcc899bd4417df2d3b4a7873f`, following its initial receipt `7288592462615c8e6b2b35ca6b172faae671e88d108e0fad517ada685a855bdb`.
+
+File Operations passed 306 cases with zero failures and 24 skips in 2,663,900 ms. The independent C and Z volume case, guarded SMB Recycle, SMB mixed Move, deferred consent, clipboard admission and remediation matrix passed. The isolated SFTP and OneDrive Personal Rename cases skipped because the Full profile lacked their registered connections. File Operations results SHA-256 `0bf96e6dca676b1223303e52f70788238354e3b522dbe89f8359aebb18102ab9`.
+
+Commands, File Operations and Viewer PE Interactive passed. The Release SQLite interactive entry exited successfully and reported zero compiled interactive cases. The previously recorded x64 Debug SQLite Tab result remains the interaction witness. Compare Directories passed 255 with 29 skips. Seventeen entries promoted and Tooling remained incomplete.
+
+The contained runner drained at 02:21:38 CET after roughly 130 minutes. The original C machine-resource manifest was restored and independently rehashed to `1779448ad25c15b19c41f1cd0a1c81d68c7711cfe834df2b9ee7599a3bbd7a22`. The inner archive `20261127T231106Z-58756-cb5c3c7c52a1429aa066841fab1ae55b` stores the canonical result with SHA-256 `c13fd5dfdde6f86756b4e6d0cacc7c4557b6b2d5a7d7632aea513e736acac33f` and the detailed result with SHA-256 `cedb364430091a423b41ddd60a3ebd138afe09d2a5de637de28224e6baf9d5cb`. The launcher archive `20261127T231104Z-35576-a767e8721c16434087f1f522b7f6b3dc` stores the original console with SHA-256 `9e89c1d99a7a334b1c5ad3f607506ccf626312c45006eb6201b6c1380236f3df`.
+
+### Focused replay on the merged Pack repair tree
+
+The replay on the exact x64 Release tree `c092f3a60d8509bbc861eb68583b1f7e5600ac16` used receipt `40b6b04330edf92a2ceb6034311fcfe788fca998d538f8e37028136c6109c0b3`. The desktop interval ran from 02:23:20 to 02:28:51 CET. Both Commands selections passed all three repetitions with zero failures and skips, and retained the scoped repository verdict `NOT_EVALUATED`. The native ARM64 gate remains open.
+
+| Case | Durations | Run ID | Native result SHA-256 |
+|---|---|---|---|
+| Late conflict-inspection teardown | 154, 140 and 139 ms | `20261128T012321Z-63660-4c03b154a87243a69dee3b28932daeac` | `4548dc92b00cb2e900430fd5dacd48cb1bed12e2be6337581f744df565b81be3` |
+| ViewerSpace hover and static-cache reuse | 74,356, 75,031 and 74,961 ms | `20261128T012415Z-59792-36856b46fff94bd68860feecdf030885` | `d152ab9c1b8a3bcd6a718837e84be37f4fbf7dd878e48c00eed5a7be9cea4660` |
+
+Launcher archive `20261128T012320Z-83620-ac6af69b045d4678887c892de1ad796a`, result SHA-256 `98534fdb8f741ba9e0c31e8e31314391060f8eeebb13922931e79cc8a208be67`. A fresh corrected Full run started after the replay drained. The native runner is `20261128T013006Z-46208-de4321aec9534bfabbec57a5e7d4e641` and the timed launcher is `20261128T013004Z-67052-fa4ead283b86415b99ac7c9578fd104e`. Its build re-attestation passed with zero warnings and errors, receipt `f77916da01c53b838f912968a3ba82bb0138ec24e07fac9e1edc60cf8b989c1a`. All 1,519 Tooling cases passed during Full. Commands began at 03:18 CET and passed 965 cases with five skips and zero failures. Native Commands result SHA-256 `370232025248e1b4bd13842fdbb94da3bb99ea3db7f3d0dfaab1e5702aaa20dd`. File Operations started after Commands retired.
+
+### Hosted x64 result on the ViewerWeb follow-up tree
+
+The hosted x64 Release regression job on `ae26292aee7c36f2a40e4dcce9b589d89426b085` finished with 3,045 passes, one failure and 72 skips. The HWND ownership assertion passed. The stale Pack source guard failed in both attempts and was the only blocking regression. The ViewerWeb witness observed the exact private URL, and the non-interactive Viewer PE entry passed. Commands passed 965 with five skips and File Operations passed 293 with 37 skips. Viewer PE Interactive, the Release SQLite entry, and ViewerText Find and Go To all exited successfully. [Hosted x64 job](https://github.com/RedSalamanders/RedSalamander/actions/runs/46085203828/job/140793216069)
+
+Native evidence was downloaded as `20261128T023227Z-21272-1448c113c8f442f2aa441f8207ef10d9`. Raw job log SHA-256 `a3063ba7f955ca008e124d7cd6346ccf3d97d478b6b13f9a5373701d20274447`. The queued follow-up contains the merged Pack source-contract repair and still needs both native verdicts. [Hosted x64 artifact](https://github.com/RedSalamanders/RedSalamander/actions/runs/46085203828/artifacts/15244621114) [Corrected native follow-up](https://github.com/RedSalamanders/RedSalamander/actions/runs/46089888885)
+
+### Corrected x64 Release Full terminal result
+
+Fresh Full on `c092f3a60d8509bbc861eb68583b1f7e5600ac16`, the tree merged by PR #395, passed 3,093 cases with zero failures and 58 skips. All 18 entries promoted and the repository verdict is `PASSED` for this x64 Release Full run. The artifact receipt at completion was `f77916da01c53b838f912968a3ba82bb0138ec24e07fac9e1edc60cf8b989c1a`.
+
+Tooling passed all 1,519 checks. Commands passed 965 with five skips. File Operations passed 306 with 24 skips, including the independent C and Z volume case. Viewer PE passed in both activation classes. The Release SQLite interactive entry again reported zero compiled cases. The earlier approved x64 Debug run supplies the SQLite Tab interaction evidence.
+
+The runner drained at 04:29:37 CET after 7,174 seconds. The C machine-resource manifest matched its original SHA-256 `1779448ad25c15b19c41f1cd0a1c81d68c7711cfe834df2b9ee7599a3bbd7a22` after restoration. Canonical result SHA-256 `13a2306094b12ed615eb253d0b41931b1142507435b777a756c752023c3318eb` and detailed result SHA-256 `d2d43134b85f431cca9c20925a561b2690c3f8caaaf5ada9dc0db19d2f809193` are retained in `20261128T013006Z-46208-de4321aec9534bfabbec57a5e7d4e641`. Launcher archive `20261128T013004Z-67052-fa4ead283b86415b99ac7c9578fd104e` has result SHA-256 `4da2c186e2f095d01108ca70c9ea49fd870e9cfffc3cd260e7d3e39f3e31baf6` and original console SHA-256 `d031d7a3e878a8b03960a192d75cf6e8e2a57b6afb32e6eb0d5a845761b3a117`.
+
+### Hosted ARM64 timeout on the ViewerWeb follow-up tree
+
+The ARM64 Release build succeeded on `ae26292aee7c36f2a40e4dcce9b589d89426b085`. The native regression step ended when the owned PowerShell invocation reached its 18,000-second limit. The preserved run state for `20261128T003926Z-3616-b491431d3e6745b097cd8ab83094c6eb` has promoted non-interactive Viewer PE, failed Tooling and Commands, and File Operations still marked running. All four later viewer desktop entries remained pending. Run-state SHA-256 `ff1bd514c4c916c147818cb1438affaa5ea3ff7a382ac7e6f3592c94b1235460`. [ARM64 job](https://github.com/RedSalamanders/RedSalamander/actions/runs/46085203828/job/140793216128)
+
+The original Commands entry reported 964 passes, one failure and five skips. The Completed group case captured `paintGeneration=0` for the re-expanded success card while layout, auto-resize and group motion were active. It observed zero published actions and failed the Dismiss assertion. The isolated replay passed. Three shuffle attempts retained three, six and seven failures. These included interrupted Move presentation, ViewerSpace hover over a console and several Terminal creation failures with `0x800700AA`. The original Commands result SHA-256 is `9eb0df3134740492b829339443758807fcc031fb1263d420686c4705daa1cc97`.
+
+The original File Operations result reported 292 passes, one failure and 37 skips. `FileOps_PopupStableHostedTree` retained the routed press, avoided full tree rebuilds and reported a change in native focus or foreground ownership. The trace gives no identity for the new foreground. Results SHA-256 `585d84017532651b8cfca440084d50e39bfe41b9b3974f2765521cac2adab40d` and trace SHA-256 `c996984deb776bb8127434f542b570d3f0f6110bf10c0a48784d583a75af16e2`. The retained viewer dump is from the expected crash-capture negative control, which passed. It does not account for the timeout.
+
+The raw log and native artifact were archived locally in `20261128T054209Z-76168-dbb2940b26694021b1dfcb50c9120eff`. Raw job log SHA-256 `e63f2892466989668b52b538a79181627b299de16812071b261df81e6a2ace67`. The corrected Pack-bearing follow-up on `73c70e33037273b3727835d9b61a265883f15470` was admitted and has started both native jobs. [ARM64 artifact](https://github.com/RedSalamanders/RedSalamander/actions/runs/46085203828/artifacts/15251080129) [Corrected native qualification](https://github.com/RedSalamanders/RedSalamander/actions/runs/46089888885)
+
+### Focused replay after the ARM64 timeout
+
+The corrected Pack tree `c092f3a60d8509bbc861eb68583b1f7e5600ac16` used its re-attested x64 Release receipt `f77916da01c53b838f912968a3ba82bb0138ec24e07fac9e1edc60cf8b989c1a`. Three focused selections passed all nine repetitions with zero failures and skips. Each filtered runner retained the repository verdict `NOT_EVALUATED`. The desktop window ran from 06:47:26 to 06:50:07 CET and the contained launcher drained.
+
+| Native case | Durations | Run ID | Native result SHA-256 |
+|---|---|---|---|
+| `cmd_pane_fileops_completed_group_and_navigation` | 1,073, 937 and 951 ms | `20261128T054727Z-82264-8fb75abf50a44a4083e603896f2c53f7` | `1aa74a9805b386313b5b083c7aaffe96a80f18a0d08045705e34a3c67c05e59d` |
+| `FileOps_PopupStableHostedTree` | 1,735, 1,734 and 1,719 ms | `20261128T054822Z-77756-028207fc8fa94ae5b1410d1f3ba2410f` | `a35630cdc0630b991bbfa6d8ba7b5983236b3f958623135268a9401e9d7c4ac0` |
+| `settings_terminal_plugin_roundtrip` | 99, 95 and 94 ms | `20261128T054916Z-67720-6a4f172136154f0a830b48bde5efe3f3` | `4a76c606a351e82ebde5b47dbc5cd38cc8a7d8498d82d641c12f02a7a9239ea9` |
+
+The Z sandbox retained the launcher archive `20261128T054726Z-73492-130671ecea544ba2bec8888b10f2c058`. Its results digest is `373cd6fad8e87442db01e2f6ff7688bd061196b85875750339e6a09317b7b733`. These isolated x64 passes leave the hosted ARM64 focus and Terminal outcomes open.
