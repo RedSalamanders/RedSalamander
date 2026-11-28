@@ -13471,21 +13471,33 @@ template <size_t TaskCount>
         return false;
     }
 
+    // The disclosure state can update before the expanded body and its actions are painted.
     successLayout        = {};
     successLayout.taskId = successTaskId;
-    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, successLayout), L"Failed to capture expanded completed destination action layout snapshot.");
+    RedSalamander::TestSupport::MessagePumpWaitOptions paintWait{};
+    paintWait.timeout            = SelfTest::Scale(3000ms);
+    paintWait.maxMessagesPerPump = 16u;
+    const bool paintedExpandedCard = RedSalamander::TestSupport::PumpMessagesUntil(
+                                          [&]() noexcept
+    {
+        return DebugGetFileOperationsPopupLayoutSnapshot(popup, successLayout) && successLayout.completedGroupExpanded &&
+               ! successLayout.taskHiddenByCompletedGroup && ! successLayout.taskCompactRow && successLayout.taskPaintedBodyBoundsValid;
+    },
+                                          paintWait)
+                                          .conditionMet;
+    state.Require(paintedExpandedCard, L"The expanded completed success card did not publish its painted body.");
     state.Require(successLayout.completedVisibleActionCount <= 2u,
                   std::format(L"Completed success task should expose at most 2 actions; saw {}.", successLayout.completedVisibleActionCount));
     state.Require(successLayout.completedDismissVisible, L"Completed success task should keep Dismiss as the primary action.");
-    if (! successLayout.completedDismissVisible)
+    if (! paintedExpandedCard || ! successLayout.completedDismissVisible)
     {
-        // Preserve the failed assertion and its exact observed frame. Diagnostics
-        // never pump, paint, scroll, or wait for a later action to become ready.
-        Trace(std::format(L"Completed success Dismiss assertion snapshot: task={} found={} paintGeneration={} compact={} autoCollapsed={} "
+        // Preserve the last observed frame without pumping again after the assertion.
+        Trace(std::format(L"Completed success Dismiss assertion snapshot: task={} found={} bodyPainted={} paintGeneration={} compact={} autoCollapsed={} "
                           L"groupVisible={} groupExpanded={} hiddenByGroup={} footerOnly={} actions={} dismiss={} more={} rowFits={} "
                           L"openDestination={} revealDestination={} overlap={}.",
                           successLayout.taskId,
                           successLayout.found,
+                          successLayout.taskPaintedBodyBoundsValid,
                           successLayout.taskPaintGeneration,
                           successLayout.taskCompactRow,
                           successLayout.taskAutoCollapsedOnCompletion,

@@ -1931,6 +1931,8 @@ button measures its actual ellipsis plus dropdown chrome and exposes the full lo
 direct command button measures its own caption with the ordinary padding and exposes that caption
 as its name. Its automation ID keeps the `FileOperations.Action.<kind>.<taskId>.<data>` shape with
 its own kind and the command as data.
+The Commands Completed-group check observes the expanded card's painted body before sampling
+its actions. The paint check uses card geometry independently of the action labels or count.
 Current correctness and interaction qualification is recorded in I26, including its explicit limits.
 The completed-card command set includes `Open destination`, `Reveal item`, `Show log`,
 and `Export issues`, as well as applicable retained-source recovery commands.
